@@ -227,6 +227,48 @@ class SyncNowTest {
         assertEquals(ExitCode.FAILURE, printed.code)
         assertContains(printed.err, "no-such-key")
     }
+
+    @Test
+    fun `a brand new remote skill is staged, with its added file listed in the review`() {
+        cli.config(signedInConfig())
+        cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+        assertEquals(0, cli("sync", "enable").code)
+        server.enqueue(
+            fakeResponse {
+                body(
+                    """{"changes": [{"seq": 1, "area": "skill", "kind": "global", "id": "my-skill", "rev": "rev-1",
+                        "deleted": false}], "cursor": 1, "more": false}""",
+                )
+            },
+            "/sync/changes",
+        )
+        server.enqueue(
+            fakeResponse {
+                body(
+                    """{"rev": "rev-1", "files": [{"path": "SKILL.md", "encoding": "utf8", "content": "# Hi"}]}""",
+                )
+            },
+            "/skills/global/my-skill",
+        )
+        server.enqueue(fakeResponse { body("""{"rev": "rev-1"}""") }, "/config/provider/pleochroic%2Fdefault")
+
+        val printed = cli("sync", "now")
+
+        assertEquals(0, printed.code, printed.err)
+        assertContains(printed.out, "held back for review")
+        assertNull(file().at("skills"))
+
+        val review = cli("sync", "review", "--json")
+        val pendingFile = Json.parseToJsonElement(review.out).jsonObject["pending"]!!.jsonArray.single().jsonObject
+        assertContains(pendingFile["reasons"]!!.jsonArray.toString(), "skill")
+        val skillFile = pendingFile["files"]!!.jsonArray.single().jsonObject
+        assertEquals("SKILL.md", skillFile["path"]!!.jsonPrimitive.content)
+        assertEquals("added", skillFile["status"]!!.jsonPrimitive.content)
+
+        val reviewText = cli("sync", "review")
+        assertContains(reviewText.out, "SKILL.md")
+        assertContains(reviewText.out, "added")
+    }
 }
 
 /** Appends a `NAME=value` line to [file], creating it if it does not exist yet. */

@@ -117,13 +117,15 @@ turned on; nothing is synced before `sync enable` runs.
 - `alexandrite sync discard [--all] [<key>...]` — dismiss held-back changes without applying them; the same
   version is not held back again, but a further change at the service still will be.
 
-A pull is held back for review rather than applied when it is one of: a change to an mcp server or a provider
-endpoint; a change to an instructions file (`AGENTS.md`, `PERSONA.md`); a change to an agent's `permission`,
-`sandbox`, `tools`, `channels`, `workspace` or inline `instructions`; a settings value that is a URL or a secret
-reference; a secret that would overwrite a value already held locally; or overwriting or deleting a local item
-that was never synced before (including every local item on the very first sync). This is because the account's
-server could be compromised or impersonated, and a pull must never be able to change what an agent is allowed to
-do, where it reads or writes, or which secret a provider or tool uses, without the owner seeing it first.
+A pull is held back for review rather than applied when it is one of: any create, change or delete of a skill
+(its files are executable content, so every one is held, not only a risky-looking one; pushing a local-only skill
+still syncs automatically) or an mcp server; a change to a provider endpoint; a change to an instructions file
+(`AGENTS.md`, `PERSONA.md`); a change to an agent's `permission`, `sandbox`, `tools`, `channels`, `workspace` or
+inline `instructions`; a settings value that is a URL or a secret reference; a secret that would overwrite a value
+already held locally; or overwriting or deleting a local item that was never synced before (including every local
+item on the very first sync). This is because the account's server could be compromised or impersonated, and a
+pull must never be able to run something new on this machine, change what an agent is allowed to do, where it
+reads or writes, or which secret a provider or tool uses, without the owner seeing it first.
 
 ## The manual
 

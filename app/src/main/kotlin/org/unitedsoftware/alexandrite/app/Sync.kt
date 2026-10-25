@@ -12,6 +12,8 @@ import org.unitedsoftware.alexandrite.account.pleochroic.HostConfigSyncLocal
 import org.unitedsoftware.alexandrite.account.pleochroic.HttpSyncTransport
 import org.unitedsoftware.alexandrite.account.pleochroic.PendingReview
 import org.unitedsoftware.alexandrite.account.pleochroic.PendingSync
+import org.unitedsoftware.alexandrite.account.pleochroic.SkillFileChange
+import org.unitedsoftware.alexandrite.account.pleochroic.SkillFileStatus
 import org.unitedsoftware.alexandrite.account.pleochroic.SyncConflictException
 import org.unitedsoftware.alexandrite.account.pleochroic.SyncPolicy
 import org.unitedsoftware.alexandrite.account.pleochroic.SyncReport
@@ -125,16 +127,22 @@ internal fun syncReview(cli: Cli, json: Boolean): Int = withPendingSync(cli) { p
     }
     if (reviews.isEmpty()) return@withPendingSync cli.done(cli.t("sync.review_none"))
     for (review in reviews) {
-        cli.ui.summary(
-            review.key,
-            listOfNotNull(
-                cli.t("sync.review_summary") to review.summary,
-                review.changedKeys.takeIf { it.isNotEmpty() }
-                    ?.let { cli.t("sync.review_changed") to it.joinToString(", ") },
-            ),
-        )
+        val rows = mutableListOf(cli.t("sync.review_summary") to review.summary)
+        review.changedKeys.takeIf { it.isNotEmpty() }
+            ?.let { rows += cli.t("sync.review_changed") to it.joinToString(", ") }
+        for (file in review.skillFiles) {
+            rows += file.path to skillFileLine(cli, file)
+            file.textDiff?.let { rows += "" to it }
+        }
+        cli.ui.summary(review.key, rows)
     }
     ExitCode.OK
+}
+
+private fun skillFileLine(cli: Cli, file: SkillFileChange): String = when (file.status) {
+    SkillFileStatus.ADDED -> cli.t("sync.skill_added", "size" to file.sizeAfter)
+    SkillFileStatus.REMOVED -> cli.t("sync.skill_removed", "size" to file.sizeBefore)
+    SkillFileStatus.CHANGED -> cli.t("sync.skill_changed", "before" to file.sizeBefore, "after" to file.sizeAfter)
 }
 
 /** `sync apply [--all] [<key>...]`: applies the pending changes named, re-deciding each against current local
@@ -201,6 +209,22 @@ private fun reviewJson(review: PendingReview): JsonObject = buildJsonObject {
     put("deleted", review.change.deleted)
     put("reasons", buildJsonArray { review.change.reasons.forEach { add(JsonPrimitive(it)) } })
     put("changedKeys", buildJsonArray { review.changedKeys.forEach { add(JsonPrimitive(it)) } })
+    if (review.skillFiles.isNotEmpty()) {
+        put(
+            "files",
+            buildJsonArray {
+                review.skillFiles.forEach { add(skillFileJson(it)) }
+            },
+        )
+    }
+}
+
+private fun skillFileJson(file: SkillFileChange): JsonObject = buildJsonObject {
+    put("path", file.path)
+    put("status", file.status.name.lowercase())
+    file.sizeBefore?.let { put("sizeBefore", it) }
+    file.sizeAfter?.let { put("sizeAfter", it) }
+    file.textDiff?.let { put("textDiff", it) }
 }
 
 private fun printReport(cli: Cli, report: SyncReport, dryRun: Boolean = false) {

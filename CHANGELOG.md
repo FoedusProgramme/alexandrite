@@ -31,17 +31,20 @@
   `merge` keeps the remote's keys the local side never touched. Skills sync to `skills/<name>` (shared) and
   `agents/<id>/skills/<name>` (per agent) beside the config file. Sub-agent profiles are not synced yet.
 - Sync's threat model: the account's server may be compromised or impersonated, so a pull must never be able to
-  harm the local machine on its own. A pulled change to an mcp server, a provider endpoint, an instructions file, an
-  agent's permission, sandbox, tools, channels, workspace or inline instructions, a settings value that is a URL or
-  secret reference, or a secret that would overwrite an existing local value, is held for the owner to review rather
-  than applied; so is overwriting or deleting a local item that was never synced before (including on the first
-  sync). `alexandrite sync review [--json]` lists what is held, with why and a diff against current local content;
-  `sync apply [--all] [<key>...]` applies it (re-deciding against current local content, so a local edit made since
-  it was staged is not lost); `sync discard [--all] [<key>...]` dismisses it without applying it. A pulled config
-  document's secret reference (`${secret:NAME}`) is only accepted for one of the account's own synced secrets; any
-  other reference, including the local `${env:NAME}` form, is never applied silently. Skill names, scopes, agent
-  ids and file paths a pull names are validated and resolved strictly under their own directory, never following a
-  symlink or a traversal segment, with caps on a skill's file count and total size.
+  harm the local machine on its own. A pulled change to a skill (its files are executable content, so any create,
+  change or delete of one is held, never just a risky-looking one; pushing a local-only skill stays automatic), an
+  mcp server, a provider endpoint, an instructions file, an agent's permission, sandbox, tools, channels, workspace
+  or inline instructions, a settings value that is a URL or secret reference, or a secret that would overwrite an
+  existing local value, is held for the owner to review rather than applied; so is overwriting or deleting a local
+  item that was never synced before (including on the first sync). `alexandrite sync review [--json]` lists what is
+  held, with why, a diff against current local content, and, for a skill, every file added, changed or removed
+  (with its size and, for a small text file such as `SKILL.md`, a line diff); `sync apply [--all] [<key>...]`
+  applies it (re-deciding against current local content, so a local edit made since it was staged is not lost);
+  `sync discard [--all] [<key>...]` dismisses it without applying it. A pulled config document's secret reference
+  (`${secret:NAME}`) is only accepted for one of the account's own synced secrets; any other reference, including
+  the local `${env:NAME}` form, is never applied silently. Skill names, scopes, agent ids and file paths a pull
+  names are validated and resolved strictly under their own directory, never following a symlink or a traversal
+  segment, with caps on a skill's file count and total size.
 - The Pleochroic account's sign-in, status and two-way sync moved into a published library,
   `libraries/accounts/pleochroic` (Maven coordinates `org.unitedsoftware.alexandrite:alexandrite-account-pleochroic`),
   so a host other than `app` (the alx terminal front end, for one) can embed the same device login, self-hosted
