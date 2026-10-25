@@ -34,6 +34,9 @@ enum class Layer {
     /** Storage back ends. */
     STORE,
 
+    /** Service accounts a host can sign in to, and what they sync. */
+    ACCOUNT,
+
     /** Timed turns: scheduled tasks and heartbeats. */
     AUTOMATION,
 
@@ -180,6 +183,12 @@ object AlexandriteLayout {
             packagePrefix = "$PACKAGE.store.",
         ),
         Location.Family(
+            "libraries/accounts",
+            Layer.ACCOUNT,
+            jarPrefix = "alexandrite-account-",
+            packagePrefix = "$PACKAGE.account.",
+        ),
+        Location.Family(
             "libraries/automations",
             Layer.AUTOMATION,
             jarPrefix = "alexandrite-automation-",
@@ -226,6 +235,7 @@ object AlexandriteLayout {
         Layer.PROVIDER to setOf(Layer.SDK, Layer.INTERNAL, Layer.PROVIDER_COMMON),
         Layer.PROVIDER_COMMON to setOf(Layer.SDK, Layer.INTERNAL),
         Layer.STORE to setOf(Layer.SDK, Layer.INTERNAL),
+        Layer.ACCOUNT to setOf(Layer.SDK, Layer.INTERNAL),
         Layer.AUTOMATION to setOf(Layer.SDK, Layer.INTERNAL, Layer.AUTOMATION_COMMON),
         Layer.AUTOMATION_COMMON to emptySet(),
         Layer.SANDBOX to setOf(Layer.SDK, Layer.INTERNAL),
@@ -244,6 +254,7 @@ object AlexandriteLayout {
             Layer.PROVIDER,
             Layer.PROVIDER_COMMON,
             Layer.STORE,
+            Layer.ACCOUNT,
             Layer.AUTOMATION,
             Layer.AUTOMATION_COMMON,
             Layer.SANDBOX,
@@ -259,6 +270,7 @@ object AlexandriteLayout {
         Layer.PROVIDER to setOf(Layer.TESTKIT),
         Layer.PROVIDER_COMMON to setOf(Layer.TESTKIT),
         Layer.STORE to setOf(Layer.TESTKIT),
+        Layer.ACCOUNT to setOf(Layer.TESTKIT),
         Layer.AUTOMATION to setOf(Layer.TESTKIT),
         Layer.SANDBOX to setOf(Layer.TESTKIT),
         Layer.KSP to setOf(Layer.SDK),

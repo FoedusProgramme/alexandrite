@@ -924,8 +924,8 @@ class AlexandriteLayoutTest {
         assertContains(
             assertNotNull(violation(app, ksp)),
             ":libraries:channels:*, $channelCommon, :libraries:providers:*, :libraries:provider-common, " +
-                ":libraries:stores:*, :libraries:automations:*, $automationCommon, :libraries:sandboxes:*; " +
-                "$testkit, :examples:* only from configurations named test*;",
+                ":libraries:stores:*, :libraries:accounts:*, :libraries:automations:*, $automationCommon, " +
+                ":libraries:sandboxes:*; $testkit, :examples:* only from configurations named test*;",
         )
         assertContains(
             assertNotNull(violation(notes, internals)),
