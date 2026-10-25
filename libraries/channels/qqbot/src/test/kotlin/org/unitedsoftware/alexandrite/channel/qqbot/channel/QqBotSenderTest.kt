@@ -75,7 +75,7 @@ class QqBotSenderTest {
     }
 
     @Test
-    fun `a message with a file uploads it and sends the file alone`() = runBlocking {
+    fun `a message with a file sends its caption and the file as separate messages`() = runBlocking {
         val platform = Platform()
         platform.server.on(UPLOAD_GROUP, """{"file_info":"FI","ttl":300}""")
         platform.server.on(SEND_GROUP) { request ->
@@ -87,20 +87,41 @@ class QqBotSenderTest {
 
             val delivery = assertIs<Delivery.Delivered>(platform.sender.send(group, message))
 
-            assertEquals(listOf("media1"), delivery.messages.map { it.id })
+            assertEquals(listOf("text1", "media1"), delivery.messages.map { it.id })
             val upload = platform.server.calls(UPLOAD_GROUP).single()
             assertTrue("\"file_type\":1" in upload.body, upload.body)
             assertTrue("\"file_data\":\"aGVsbG8=\"" in upload.body, upload.body)
             val messages = platform.server.calls(SEND_GROUP)
             assertEquals(
-                1,
+                2,
                 messages.size,
-                "the caption was sent as a message beside the file: ${messages.map {
+                "the platform has no caption on a media message: ${messages.map {
                     it.body
                 }}",
             )
+            assertTrue("\"content\":\"a caption\"" in messages[0].body, messages[0].body)
+            assertTrue("\"msg_type\":7" in messages[1].body, messages[1].body)
+            assertTrue("\"file_info\":\"FI\"" in messages[1].body, messages[1].body)
+        } finally {
+            platform.close()
+        }
+    }
+
+    @Test
+    fun `a message with a file and no caption sends the file alone`() = runBlocking {
+        val platform = Platform()
+        platform.server.on(UPLOAD_GROUP, """{"file_info":"FI","ttl":300}""")
+        platform.server.on(SEND_GROUP, """{"id":"media1"}""")
+        try {
+            val file = OutboundFile.builder("a.png", "image/png", "hello".toByteArray()).build()
+            val message = OutboundMessage.builder("", MessageKind.REPLY).files(listOf(file)).build()
+
+            val delivery = assertIs<Delivery.Delivered>(platform.sender.send(group, message))
+
+            assertEquals(listOf("media1"), delivery.messages.map { it.id })
+            val messages = platform.server.calls(SEND_GROUP)
+            assertEquals(1, messages.size, "a blank caption sends no text message: ${messages.map { it.body }}")
             assertTrue("\"msg_type\":7" in messages[0].body, messages[0].body)
-            assertTrue("\"file_info\":\"FI\"" in messages[0].body, messages[0].body)
         } finally {
             platform.close()
         }

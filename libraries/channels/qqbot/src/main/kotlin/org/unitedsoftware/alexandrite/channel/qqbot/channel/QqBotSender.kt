@@ -76,6 +76,11 @@ internal class QqBotSender(
             }
         }
         val refs = mutableListOf<ChannelMessageRef>()
+        if (message.text.isNotBlank()) {
+            val delivery = sendText(path, chat, message)
+            if (delivery !is Delivery.Delivered) return delivery
+            refs += delivery.messages
+        }
         val replyTo = message.replyTo?.id?.takeIf { it.isNotEmpty() }
         for (fileInfo in uploaded) {
             val delivery = sendMedia(path, chat, fileInfo, replyTo)
