@@ -93,6 +93,55 @@ class QqBotGatewayTest {
     }
 
     @Test
+    fun `an authentication failure buys a new token before the gateway reconnects`() = runBlocking {
+        val api = FakeApiServer()
+        val bought = AtomicInteger()
+        api.on(TOKEN_PATH) {
+            PlatformAnswer(200, """{"access_token":"access${bought.incrementAndGet()}","expires_in":"7200"}""")
+        }
+        val platform = FakeGatewayServer().startAndAwait()
+        val config = testConfig(api.base, gatewayUrl = platform.url)
+        val http = QqBotHttp(config)
+        try {
+            val tokens = QqBotTokens(config, http, clock)
+            val gateway = QqBotGateway(config, QqBotApi(http, tokens), tokens)
+            gateway.onStart()
+
+            val first = assertNotNull(platform.awaitFrame(predicate = { it.contains("\"op\":2") }))
+            assertTrue("access1" in first, first)
+            assertEquals(1, bought.get())
+
+            platform.closeConnection(4004, "bad token")
+
+            val second = assertNotNull(platform.awaitFrame(predicate = { it.contains("\"op\":2") }))
+            assertTrue("access2" in second, second)
+            assertEquals(2, bought.get(), "the stale token was not refreshed after the platform rejected it")
+
+            gateway.onStop()
+        } finally {
+            platform.stop()
+            http.close()
+            api.close()
+        }
+    }
+
+    @Test
+    fun `the gateway's backoff grows and caps as failures repeat`() {
+        val config = testConfig("http://127.0.0.1:1")
+        val http = QqBotHttp(config)
+        try {
+            val tokens = QqBotTokens(config, http, clock)
+            val gateway = QqBotGateway(config, QqBotApi(http, tokens), tokens)
+            assertEquals(200L, gateway.backOff(1))
+            assertEquals(400L, gateway.backOff(2))
+            assertEquals(800L, gateway.backOff(3))
+            assertEquals(4_000L, gateway.backOff(20))
+        } finally {
+            http.close()
+        }
+    }
+
+    @Test
     fun `a close code that ends the session is not resumed`() {
         assertTrue(dropsSession(4006))
         assertTrue(dropsSession(4007))

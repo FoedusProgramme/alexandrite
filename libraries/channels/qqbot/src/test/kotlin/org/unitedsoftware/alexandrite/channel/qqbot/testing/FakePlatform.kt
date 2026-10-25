@@ -133,6 +133,11 @@ internal class FakeGatewayServer : WebSocketServer(InetSocketAddress("127.0.0.1"
         clients.forEach { it.send(frame) }
     }
 
+    /** Closes the most recently opened connection with [code] and [reason], as the platform itself would. */
+    fun closeConnection(code: Int, reason: String = "") {
+        clients.lastOrNull()?.close(code, reason)
+    }
+
     override fun onStart() {
         started.countDown()
     }

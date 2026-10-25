@@ -79,6 +79,10 @@ internal class QqBotGateway(
     var botId: String? = null
         private set
 
+    /** Whether the platform closed the last connection for a token it would not take, so the next one buys a new one. */
+    @Volatile
+    private var authFailed = false
+
     override suspend fun onStart() {
         check(scope == null) { "The gateway is already open." }
         val opened = CompletableDeferred<Throwable?>()
@@ -113,6 +117,9 @@ internal class QqBotGateway(
         // How often naming the gateway failed before the runtime was ready, which the startup retries before it gives
         // up: the platform may be briefly unreachable, and one blip must not fail the start.
         var unnamed = 0
+
+        // How many connections in a row ended without becoming ready, which grows the pause before the next try.
+        var failures = 0
         while (scope != null) {
             // Naming the gateway asks the platform, which may be unreachable: that is a reconnect, not the end of the
             // loop, so that a single failed call never leaves the bot without its gateway until the runtime restarts.
@@ -126,7 +133,8 @@ internal class QqBotGateway(
                     return
                 }
                 logger.warn("{}: the gateway could not be named: {}; trying again", PLUGIN, e.toString())
-                delay(config.reconnectIntervalMillis)
+                failures++
+                delay(backOff(failures))
                 continue
             }
             if (url == null) {
@@ -138,18 +146,20 @@ internal class QqBotGateway(
                     }
                 }
                 logger.warn("{}: the platform named no gateway; trying again", PLUGIN)
-                delay(config.reconnectIntervalMillis)
+                failures++
+                delay(backOff(failures))
                 continue
             }
             val token = try {
-                tokens.token()
+                tokens.token(refresh = authFailed.also { authFailed = false })
             } catch (e: Exception) {
                 if (!opened.isCompleted) {
                     opened.complete(e)
                     return
                 }
                 logger.warn("{}: no token for the gateway: {}; trying again", PLUGIN, e.toString())
-                delay(config.reconnectIntervalMillis)
+                failures++
+                delay(backOff(failures))
                 continue
             }
             val ended = CompletableDeferred<Unit>()
@@ -186,14 +196,23 @@ internal class QqBotGateway(
                     }
                     logger.warn("{}: the gateway did not become ready: {}; trying again", PLUGIN, failure.message)
                 } else {
+                    failures = 0
                     if (!opened.isCompleted) opened.complete(null)
                     ended.await()
                 }
             }
             client = null
             if (scope == null) return
-            delay(config.reconnectIntervalMillis)
+            failures++
+            delay(backOff(failures))
         }
+    }
+
+    /** The pause after the [failures]th connection in a row that failed or ended, doubling up to 20 times the interval. */
+    internal fun backOff(failures: Int): Long {
+        val base = config.reconnectIntervalMillis
+        val grown = base * (1L shl (failures - 1).coerceAtMost(MAX_SHIFT))
+        return grown.coerceAtMost(base * MAX_BACKOFF_MULTIPLIER)
     }
 
     /** The address of the gateway, from the config or from the platform. */
@@ -352,7 +371,9 @@ internal class QqBotGateway(
         override fun onClose(code: Int, reason: String, remote: Boolean) {
             heartbeat?.cancel()
             heartbeat = null
-            if (dropsSession(code)) {
+            // A session resume would carry the same token the platform just refused, so the next attempt identifies
+            // fresh with the token bought again, as it does for a session the platform dropped on its own.
+            if (dropsSession(code) || code == AUTH_FAILED_CODE) {
                 sessionId = null
                 lastSeq = null
             }
@@ -360,6 +381,7 @@ internal class QqBotGateway(
             if (!ready.isCompleted) {
                 ready.complete(IllegalStateException("The gateway closed while starting: $code $reason"))
             }
+            if (code == AUTH_FAILED_CODE) authFailed = true
             if (code in FATAL_CODES) {
                 logger.error("{}: the gateway refuses this bot: {} {}", PLUGIN, code, reason)
                 // Nothing this connection does makes the platform take the bot, so no reconnect is tried again.
@@ -401,6 +423,12 @@ internal class QqBotGateway(
 
         /** The codes the platform closes the connection with when the bot itself may not connect. */
         val FATAL_CODES = setOf(4001, 4002, 4010, 4011, 4012, 4013, 4014, 4914, 4915)
+
+        /** The code the platform closes the connection with when the token it was sent is not one it takes. */
+        const val AUTH_FAILED_CODE = 4004
+
+        const val MAX_BACKOFF_MULTIPLIER = 20L
+        const val MAX_SHIFT = 10
 
         val logger = LoggerFactory.getLogger(QqBotGateway::class.java)
     }
