@@ -25,10 +25,15 @@
   the account is entitled; a `not_entitled`, `quota_exceeded` or `insufficient_credits` answer is told to the model
   as a clear refusal rather than a generic failure.
 - Two-way sync of config documents (providers' endpoints, agents, mcp servers, the app's settings, instructions
-  files) and secrets with a Pleochroic account's or a self-hosted standalone-service's sync API: `alexandrite sync
-  enable [--prefer local|remote|merge]` (off until run), `sync disable`, `sync now` and `sync status`. A later
+  files), secrets and skills with a Pleochroic account's or a self-hosted standalone-service's sync API: `alexandrite
+  sync enable [--prefer local|remote|merge]` (off until run), `sync disable`, `sync now` and `sync status`. A later
   change on both sides is a conflict, resolved by the chosen policy; an object document under `merge` keeps the
-  remote's keys the local side never touched. Sub-agent profiles are not synced yet.
+  remote's keys the local side never touched. Skills sync to `skills/<name>` (shared) and
+  `agents/<id>/skills/<name>` (per agent) beside the config file. Sub-agent profiles are not synced yet.
+- The Pleochroic account's sign-in, status and two-way sync moved into a published library,
+  `libraries/accounts/pleochroic` (Maven coordinates `org.unitedsoftware.alexandrite:alexandrite-account-pleochroic`),
+  so a host other than `app` (the alx terminal front end, for one) can embed the same device login, self-hosted
+  sign-in and sync engine without reimplementing them.
 
 ## 1.0.0-alpha.2
 

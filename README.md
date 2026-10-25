@@ -20,5 +20,7 @@ For hosts that embed Alexandrite, the implementation modules: `alexandrite-runti
 `alexandrite-provider-openai-responses`, `alexandrite-provider-openrouter`, `alexandrite-provider-pleochroic`,
 `alexandrite-store-sqlite`,
 `alexandrite-automation-common`, `alexandrite-automation-heartbeat`, `alexandrite-automation-schedule`,
-`alexandrite-sandbox-bubblewrap` and `alexandrite-sandbox-seatbelt`. Their API may change in any release, so a plugin
-builds on the libraries for plugin authors only.
+`alexandrite-sandbox-bubblewrap`, `alexandrite-sandbox-seatbelt` and `alexandrite-account-pleochroic` (a Pleochroic
+account's device login, self-hosted sign-in, status and two-way config/secret/skill sync, that `app`'s own CLI
+commands are a thin wrapper over). Their API may change in any release, so a plugin builds on the libraries for
+plugin authors only.

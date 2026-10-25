@@ -1,8 +1,8 @@
 package org.unitedsoftware.alexandrite.app
 
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncPolicy
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
 import org.unitedsoftware.alexandrite.app.control.ControlRequest
-import org.unitedsoftware.alexandrite.app.sync.SyncPolicy
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 
 private const val JSON = "--json"

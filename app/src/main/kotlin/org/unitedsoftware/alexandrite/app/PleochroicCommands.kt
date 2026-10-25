@@ -1,49 +1,104 @@
 package org.unitedsoftware.alexandrite.app
 
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.unitedsoftware.alexandrite.account.pleochroic.AccountSummary
+import org.unitedsoftware.alexandrite.account.pleochroic.DeviceCode
+import org.unitedsoftware.alexandrite.account.pleochroic.DevicePoll
+import org.unitedsoftware.alexandrite.account.pleochroic.Granted
+import org.unitedsoftware.alexandrite.account.pleochroic.PLEOCHROIC_PORTAL_URL
+import org.unitedsoftware.alexandrite.account.pleochroic.PLEOCHROIC_SLOW_DOWN
+import org.unitedsoftware.alexandrite.account.pleochroic.PleochroicApiException
+import org.unitedsoftware.alexandrite.account.pleochroic.beginDeviceLogin
+import org.unitedsoftware.alexandrite.account.pleochroic.entitled
+import org.unitedsoftware.alexandrite.account.pleochroic.fetchServiceStatus
+import org.unitedsoftware.alexandrite.account.pleochroic.pollDeviceLogin
+import org.unitedsoftware.alexandrite.account.pleochroic.revokeKey
+import org.unitedsoftware.alexandrite.account.pleochroic.serviceAccount
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
+import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
+import org.unitedsoftware.alexandrite.internal.http.HttpTransport
 import org.unitedsoftware.alexandrite.runtime.config.EnvReferences
 import org.unitedsoftware.alexandrite.runtime.config.writtenConfig
 import java.io.IOException
+import java.net.InetAddress
 import java.nio.file.Files
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
+private const val PLEOCHROIC_ENDPOINT = "default"
 private const val PLEOCHROIC_PROVIDER = "providers.pleochroic.endpoints.$PLEOCHROIC_ENDPOINT"
 private const val SEARCH_BACKEND = "tools.web.searchBackend"
 private const val FETCH_BACKEND = "tools.web.fetchBackend"
 private const val WEB_API_BASE = "tools.web.pleochroicApiBase"
 private const val WEB_API_KEY = "tools.web.pleochroicApiKey"
 private const val PLEOCHROIC_ID = "pleochroic"
+private const val CLIENT = "alexandrite"
+
+/** The timeouts every Pleochroic account HTTP call uses. */
+private fun pleochroicHttp() = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds))
+
+/** The `X-Client` header's value, as the service API's convention asks for it. */
+private fun clientHeader(deviceName: String?): String =
+    "$CLIENT/$alexandriteVersion".let { if (deviceName == null) it else "$it $deviceName" }
+
+/** The local machine's name, best used as the device login's `deviceName`, null when it cannot be told. */
+private fun defaultDeviceName(): String? = try {
+    InetAddress.getLocalHost().hostName.takeIf { it.isNotBlank() }
+} catch (e: IOException) {
+    null
+}
 
 /**
- * Logs in to a Pleochroic account: a device login at the portal, or, with [serviceUrl] and [serviceToken] both given,
- * a self-hosted standalone-service taken as is. Writes `providers.pleochroic.endpoints.default` (the key through the
- * secrets file, never as a plain value) and, where the account is entitled for them, `tools.web.searchBackend` /
- * `fetchBackend`, unless an operator already chose another backend there.
+ * Logs in to a Pleochroic account through the `libraries/accounts/pleochroic` library: a device login at
+ * [portalBaseUrl] (fixed in production; a parameter only so a test can point it at a fake), or, with [serviceUrl]
+ * and [serviceToken] both given, a self-hosted standalone-service taken as is. Writes
+ * `providers.pleochroic.endpoints.default` (the key through the secrets file, never as a plain value) and, where the
+ * account is entitled for them, `tools.web.searchBackend` / `fetchBackend`, unless an operator already chose another
+ * backend there.
  */
-internal fun pleochroicLogin(cli: Cli, serviceUrl: String?, serviceToken: String?, deviceName: String?): Int {
+internal fun pleochroicLogin(
+    cli: Cli,
+    serviceUrl: String?,
+    serviceToken: String?,
+    deviceName: String?,
+    portalBaseUrl: String = PLEOCHROIC_PORTAL_URL,
+): Int = pleochroicHttp().use { http ->
     val apiBase: String
     val key: String
     val account: AccountSummary
     val status: JsonObject?
     if (serviceUrl != null && serviceToken != null) {
-        val fetched = fetchServiceStatus(cli, serviceUrl, serviceToken, deviceName) ?: return ExitCode.FAILURE
+        status = try {
+            runBlocking { fetchServiceStatus(http, serviceUrl, serviceToken, clientHeader(deviceName)) }
+        } catch (e: PleochroicApiException) {
+            return@use unreachable(cli, e)
+        }
         apiBase = serviceUrl
         key = serviceToken
-        account = accountOf(fetched["account"] as? JsonObject)
-        status = fetched
+        account = serviceAccount(status)
     } else {
-        val code = requestDeviceCode(cli, deviceName ?: defaultDeviceName()) ?: return ExitCode.FAILURE
-        val granted = awaitDeviceLogin(cli, code) ?: return ExitCode.FAILURE
+        val code = try {
+            runBlocking {
+                beginDeviceLogin(http, CLIENT, alexandriteVersion, deviceName ?: defaultDeviceName(), portalBaseUrl)
+            }
+        } catch (e: PleochroicApiException) {
+            return@use unreachable(cli, e)
+        }
+        val granted = awaitDeviceLogin(cli, http, code, portalBaseUrl) ?: return@use ExitCode.FAILURE
         apiBase = granted.apiBase
         key = granted.key
         account = granted.account
-        status = fetchServiceStatus(cli, apiBase, key, deviceName)
+        status = try {
+            runBlocking { fetchServiceStatus(http, apiBase, key, clientHeader(deviceName)) }
+        } catch (e: PleochroicApiException) {
+            null
+        }
     }
     val current = currentConfig(cli)
     val changes = mutableListOf(
@@ -61,9 +116,9 @@ internal fun pleochroicLogin(cli: Cli, serviceUrl: String?, serviceToken: String
             changes += ConfigChangeView(WEB_API_KEY, JsonPrimitive(key))
         }
     }
-    val written = writeChanges(cli, changes) ?: return ExitCode.FAILURE
+    val written = writeChanges(cli, changes) ?: return@use ExitCode.FAILURE
     cli.ui.good(cli.t("pleochroic.logged_in", "account" to (account.label ?: cli.t("pleochroic.unnamed"))))
-    return cli.reporting(false)(written)
+    cli.reporting(false)(written)
 }
 
 /** Signs out: `DELETE /v1/key` at the account's own `apiBase` (best effort), then forgets it locally. */
@@ -73,7 +128,13 @@ internal fun pleochroicLogout(cli: Cli): Int {
     val rawKey = current?.at("$PLEOCHROIC_PROVIDER.apiKey").text
     if (baseUrl == null || rawKey == null) return cli.done(cli.t("pleochroic.not_signed_in"))
     resolvedSecret(cli, rawKey)?.let { key ->
-        if (!revokeKey(cli, baseUrl, key)) cli.say(cli.t("pleochroic.revoke_failed"))
+        val revoked = try {
+            pleochroicHttp().use { http -> runBlocking { revokeKey(http, baseUrl, key) } }
+            true
+        } catch (e: PleochroicApiException) {
+            false
+        }
+        if (!revoked) cli.say(cli.t("pleochroic.revoke_failed"))
     }
     val changes = mutableListOf(ConfigChangeView(PLEOCHROIC_PROVIDER, remove = true))
     if (current?.at(SEARCH_BACKEND).text == PLEOCHROIC_ID) changes += ConfigChangeView(SEARCH_BACKEND, remove = true)
@@ -100,7 +161,11 @@ internal fun pleochroicAccountStatus(cli: Cli, json: Boolean): Int {
     }
     val key = resolvedSecret(cli, rawKey)
         ?: return cli.fail(cli.t("pleochroic.secret_missing", "file" to "${cli.secrets}"))
-    val status = fetchServiceStatus(cli, baseUrl, key) ?: return ExitCode.FAILURE
+    val status = try {
+        pleochroicHttp().use { http -> runBlocking { fetchServiceStatus(http, baseUrl, key) } }
+    } catch (e: PleochroicApiException) {
+        return unreachable(cli, e)
+    }
     if (json) {
         cli.printJson(status)
         return ExitCode.OK
@@ -109,15 +174,71 @@ internal fun pleochroicAccountStatus(cli: Cli, json: Boolean): Int {
     return ExitCode.OK
 }
 
+/**
+ * Shows [code]'s user code and link, then polls [http] until the person allows or denies it, or it expires; null
+ * after printing why nobody granted it.
+ */
+private fun awaitDeviceLogin(cli: Cli, http: HttpTransport, code: DeviceCode, portalBaseUrl: String): Granted? {
+    val ui = cli.ui
+    if (ui.rich) {
+        ui.say(cli.t("pleochroic.open", "url" to code.verificationUri))
+        ui.code(code.userCode)
+    } else {
+        ui.say(cli.t("pleochroic.open_complete", "url" to code.verificationUriComplete))
+    }
+    val deadline = System.nanoTime() + code.expiresIn.inWholeNanoseconds
+    var interval = code.interval
+    val (result, failure) = ui.busy({ cli.t("pleochroic.waiting") }) {
+        var granted: Granted? = null
+        var reason: Text? = null
+        while (System.nanoTime() < deadline) {
+            cli.machine.sleep(interval)
+            val poll = try {
+                runBlocking { pollDeviceLogin(http, code.deviceCode, portalBaseUrl) }
+            } catch (e: PleochroicApiException) {
+                reason = Text("pleochroic.unreachable", "reason" to (e.message ?: "$e"))
+                break
+            }
+            when (poll) {
+                is DevicePoll.Done -> {
+                    granted = poll.granted
+                    break
+                }
+
+                DevicePoll.Pending -> continue
+
+                DevicePoll.SlowDown -> interval += PLEOCHROIC_SLOW_DOWN
+
+                DevicePoll.Denied -> {
+                    reason = Text("pleochroic.denied")
+                    break
+                }
+
+                DevicePoll.Expired -> {
+                    reason = Text("pleochroic.expired")
+                    break
+                }
+            }
+        }
+        granted to reason
+    }
+    if (result != null) return result
+    cli.fail(cli.texts(failure ?: Text("pleochroic.timeout")))
+    return null
+}
+
+private fun unreachable(cli: Cli, e: PleochroicApiException): Int =
+    cli.fail(cli.t("pleochroic.unreachable", "reason" to (e.message ?: "$e")))
+
 private fun printStatus(cli: Cli, status: JsonObject) {
-    val summary = accountOf(status["account"] as? JsonObject)
+    val summary = serviceAccount(status)
     val scopes = (status["scopes"] as? JsonArray)?.joinToString(", ") { (it as? JsonPrimitive)?.content.orEmpty() }
     val credits = (status.at("credits.balanceMicros") as? JsonPrimitive)?.content?.toLongOrNull()
     cli.ui.summary(
         cli.t("pleochroic.status_title"),
         listOfNotNull(
             summary.label?.let { cli.t("pleochroic.account") to it },
-            summary.plan?.let { cli.t("pleochroic.plan") to it },
+            summary.plan?.label?.let { cli.t("pleochroic.plan") to it },
             scopes?.let { cli.t("pleochroic.scopes") to it },
             credits?.let { cli.t("pleochroic.credits") to microDollars(it) },
         ) + servicesRows(cli, status),

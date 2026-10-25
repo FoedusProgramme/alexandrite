@@ -2,26 +2,39 @@ package org.unitedsoftware.alexandrite.app
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import org.unitedsoftware.alexandrite.app.sync.HttpSyncTransport
-import org.unitedsoftware.alexandrite.app.sync.SyncPolicy
-import org.unitedsoftware.alexandrite.app.sync.SyncReport
-import org.unitedsoftware.alexandrite.app.sync.SyncRunner
-import org.unitedsoftware.alexandrite.app.sync.SyncState
-import org.unitedsoftware.alexandrite.app.sync.decodeSyncState
-import org.unitedsoftware.alexandrite.app.sync.encodeSyncState
+import org.unitedsoftware.alexandrite.account.pleochroic.HostConfigSyncLocal
+import org.unitedsoftware.alexandrite.account.pleochroic.HttpSyncTransport
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncConflictException
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncPolicy
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncReport
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncRunner
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncServiceException
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncState
+import org.unitedsoftware.alexandrite.account.pleochroic.decodeSyncState
+import org.unitedsoftware.alexandrite.account.pleochroic.encodeSyncState
+import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
 import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
 import org.unitedsoftware.alexandrite.internal.http.HttpTransport
 import org.unitedsoftware.alexandrite.internal.path.writeAtomically
 import org.unitedsoftware.alexandrite.runtime.config.EnvReferences
+import org.unitedsoftware.alexandrite.runtime.config.writtenConfig
+import org.unitedsoftware.alexandrite.sdk.InternalAlexandriteApi
+import org.unitedsoftware.alexandrite.sdk.config.ConfigChanges
+import org.unitedsoftware.alexandrite.sdk.config.ConfigEdit
+import org.unitedsoftware.alexandrite.sdk.config.ConfigEditException
+import org.unitedsoftware.alexandrite.sdk.config.ConfigEditRefusal
+import org.unitedsoftware.alexandrite.sdk.config.ConfigPath
+import org.unitedsoftware.alexandrite.sdk.config.HostConfig
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import kotlin.time.Duration.Companion.seconds
 
-/** The id of the one Pleochroic endpoint `pleochroic login`/`logout` manage (`PleochroicAccount.kt`). */
+/** The id of the one Pleochroic endpoint `pleochroic login`/`logout` manage (`PleochroicCommands.kt`). */
 private const val SIGNED_IN_ENDPOINT = "default"
 private const val PROVIDERS_PATH = "providers.pleochroic.endpoints"
 
@@ -49,13 +62,18 @@ internal fun syncNow(cli: Cli, json: Boolean): Int {
     val (apiBase, key) = credentials(cli) ?: return cli.fail(cli.t("sync.not_signed_in"))
     val state = readSyncState(cli)
     if (!state.enabled) return cli.fail(cli.t("sync.not_enabled"))
+    val local = HostConfigSyncLocal(CliHostConfig(cli), cli.locations.configFile, cli.secrets)
     val http = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds))
     val (report, next) = try {
         http.use { transport ->
-            runBlocking { SyncRunner(cli, HttpSyncTransport(transport, apiBase, key)).run(state) }
+            runBlocking { SyncRunner(local, HttpSyncTransport(transport, apiBase, key)).run(state) }
         }
-    } catch (e: IOException) {
-        return cli.fail(cli.t("sync.unreachable", "reason" to (e.message ?: "$e")))
+    } catch (e: SyncServiceException) {
+        return cli.fail(cli.t("sync.unreachable", "reason" to e.message))
+    } catch (e: SyncConflictException) {
+        return cli.fail(cli.t("sync.unreachable", "reason" to "conflict"))
+    } catch (e: ConfigEditException) {
+        return cli.fail(cli.t("sync.config_unwritable"))
     }
     writeSyncState(cli, next)
     if (json) {
@@ -163,4 +181,66 @@ internal fun writeSyncState(cli: Cli, state: SyncState) {
     } catch (e: IOException) {
         cli.say(cli.t("sync.state_unwritable", "file" to "$file", "reason" to (e.message ?: "$e")))
     }
+}
+
+/**
+ * The [HostConfig] the library's sync runs through: every write goes through [writeChanges], the same path
+ * `alexandrite config set` uses, so a running app takes a sync's config changes live and a secret value is still
+ * never written in place of a `${'$'}{env:NAME}` reference (a pulled document already names one, same as a local one).
+ */
+@OptIn(InternalAlexandriteApi::class)
+private class CliHostConfig(private val cli: Cli) : HostConfig {
+    override suspend fun get(path: String): JsonElement? {
+        val config = quietConfig() ?: return null
+        return if (path.isEmpty()) config else config.at(path)
+    }
+
+    override suspend fun edit(block: ConfigEdit.() -> Unit): ConfigChanges {
+        val recorder = Recorder(quietConfig() ?: JsonObject(emptyMap()))
+        recorder.block()
+        if (recorder.changes.isEmpty()) return ConfigChanges(emptyList(), emptyList())
+        val written = writeChanges(cli, recorder.changes)
+            ?: throw ConfigEditException(ConfigEditRefusal.IO_ERROR, "The config file refused a sync change.")
+        return written.changes
+    }
+
+    override suspend fun replace(text: String): ConfigChanges = localConfig(cli).replace(text)
+
+    private fun quietConfig(): JsonObject? = try {
+        writtenConfig(Files.readString(cli.locations.configFile))
+    } catch (e: IOException) {
+        null
+    }
+
+    /** Records what [block] does against a snapshot, as the [ConfigChangeView]s [writeChanges] takes. */
+    private class Recorder(initial: JsonObject) : ConfigEdit {
+        private var current: JsonObject = initial
+        val changes = mutableListOf<ConfigChangeView>()
+
+        override fun get(path: String): JsonElement? = current.at(path)
+
+        override fun set(path: String, value: JsonElement) {
+            current = setAt(current, ConfigPath.parse(path), value)
+            changes += ConfigChangeView(path, value)
+        }
+
+        override fun remove(path: String) {
+            current = removeAt(current, ConfigPath.parse(path))
+            changes += ConfigChangeView(path, remove = true)
+        }
+    }
+}
+
+private fun setAt(root: JsonObject, keys: List<String>, value: JsonElement): JsonObject {
+    val key = keys.first()
+    if (keys.size == 1) return JsonObject(root + (key to value))
+    val child = root[key] as? JsonObject ?: JsonObject(emptyMap())
+    return JsonObject(root + (key to setAt(child, keys.drop(1), value)))
+}
+
+private fun removeAt(root: JsonObject, keys: List<String>): JsonObject {
+    val key = keys.first()
+    if (keys.size == 1) return JsonObject(root - key)
+    val child = root[key] as? JsonObject ?: return root
+    return JsonObject(root + (key to removeAt(child, keys.drop(1))))
 }

@@ -95,9 +95,9 @@ A change goes through the running Alexandrite, which checks it as a start would 
 
 ## Sync
 
-Two-way sync of providers' endpoints, agents, mcp servers, the `app` settings, instructions files and secrets
-against the signed-in Pleochroic account or self-hosted standalone-service. Off until turned on; nothing is synced
-before `sync enable` runs.
+Two-way sync of providers' endpoints, agents, mcp servers, the `app` settings, instructions files, secrets and
+skills (shared and per agent) against the signed-in Pleochroic account or self-hosted standalone-service. Off until
+turned on; nothing is synced before `sync enable` runs.
 
 - `alexandrite sync enable [--prefer local|remote|merge]` — turn sync on. `--prefer` sets the policy a later
   conflict (both sides changed the same item since the last sync) is resolved by: `local` or `remote` always keeps

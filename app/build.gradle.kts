@@ -7,6 +7,7 @@ dependencies {
     implementation(project(":libraries:plugin-sdk"))
     implementation(project(":libraries:internal"))
     implementation(project(":libraries:runtime"))
+    implementation(project(":libraries:accounts:pleochroic"))
     implementation(project(":libraries:agent"))
     implementation(project(":libraries:tools"))
     implementation(project(":libraries:mcp"))
