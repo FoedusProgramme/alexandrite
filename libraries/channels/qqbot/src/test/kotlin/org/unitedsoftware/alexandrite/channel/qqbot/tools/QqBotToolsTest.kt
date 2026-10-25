@@ -11,8 +11,10 @@ import org.unitedsoftware.alexandrite.channel.qqbot.testing.FakeApiServer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.MutableClock
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.testConfig
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
+import org.unitedsoftware.alexandrite.sdk.chat.ChannelMessageRef
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
+import org.unitedsoftware.alexandrite.sdk.tool.ToolContext
 import org.unitedsoftware.alexandrite.testkit.TestToolContext
 import org.unitedsoftware.alexandrite.testkit.testToolContext
 import org.unitedsoftware.alexandrite.testkit.testTurn
@@ -102,6 +104,27 @@ class QqBotToolsTest {
             assertTrue(!result.isError, result.content.toString())
             val call = platform.server.calls("/v2/groups/g1/messages/m1").single()
             assertEquals("DELETE", call.method)
+        } finally {
+            platform.close()
+        }
+    }
+
+    @Test
+    fun `a recall without an id takes back the message the trigger quotes`() = runBlocking {
+        val platform = Platform()
+        platform.server.on("/v2/groups/g1/messages/quoted1") {
+            org.unitedsoftware.alexandrite.channel.qqbot.testing.PlatformAnswer(200, "{}")
+        }
+        platform.index.recordQuote(group, "trigger1", "quoted1")
+        try {
+            val withTrigger = object : ToolContext by context() {
+                override val trigger = ChannelMessageRef(group, "trigger1")
+            }
+
+            val result = platform.act.execute(action("recall"), withTrigger)
+
+            assertTrue(!result.isError, result.content.toString())
+            assertEquals("DELETE", platform.server.calls("/v2/groups/g1/messages/quoted1").single().method)
         } finally {
             platform.close()
         }
