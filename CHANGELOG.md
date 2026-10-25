@@ -12,6 +12,23 @@
   agent delegates a new run that goes on from the run's conversation, and ends with its report, which the agent reads
   in its next turn.
 - Breaking SDK change: `Submission` gains the subtype `ToRun`.
+- A Pleochroic account: `alexandrite login pleochroic` signs in by device login, or with `--service-url` and
+  `--service-token` for a self-hosted standalone-service; `alexandrite logout pleochroic` revokes the key at the
+  service and forgets it; `alexandrite account` shows the signed-in account's plan, scopes, credits and
+  entitlements (`GET /v1/service`). The key is kept in `secrets.env` like any other secret, never in the config
+  file, and signing in turns on `tools.web.searchBackend` / `fetchBackend` where the account is entitled for them.
+- A new `libraries/providers/pleochroic` model provider: the signed-in (or self-hosted) account's Chat Completions
+  API, with model listing and capabilities (context window, max output, image input, reasoning effort) read the way
+  OpenRouter's are, and thinking read from `reasoning_content`.
+- `web.search` and `web.fetch` gain a Pleochroic backend (`tools.web.searchBackend` / `fetchBackend` = `pleochroic`,
+  `tools.web.pleochroicApiBase` / `pleochroicApiKey`), which `alexandrite login pleochroic` turns on by itself where
+  the account is entitled; a `not_entitled`, `quota_exceeded` or `insufficient_credits` answer is told to the model
+  as a clear refusal rather than a generic failure.
+- Two-way sync of config documents (providers' endpoints, agents, mcp servers, the app's settings, instructions
+  files) and secrets with a Pleochroic account's or a self-hosted standalone-service's sync API: `alexandrite sync
+  enable [--prefer local|remote|merge]` (off until run), `sync disable`, `sync now` and `sync status`. A later
+  change on both sides is a conflict, resolved by the chosen policy; an object document under `merge` keeps the
+  remote's keys the local side never touched. Sub-agent profiles are not synced yet.
 
 ## 1.0.0-alpha.2
 

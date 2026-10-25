@@ -81,6 +81,33 @@ A change goes through the running Alexandrite, which checks it as a start would 
 - `alexandrite unpair <chat>` — unpair a chat, such as `telegram:main:123456789`.
 - `alexandrite chats` — the paired chats and the agent that serves each.
 
+## Pleochroic account
+
+- `alexandrite login pleochroic [--device-name <name>]` — sign in by device login: it shows a code and a link,
+  waits until it is approved at the portal, then writes `providers.pleochroic.endpoints.default` (the key through
+  `secrets.env`, never the config file) and, where the account is entitled for them, `tools.web.searchBackend` and
+  `tools.web.fetchBackend`, unless an operator already chose another backend there.
+- `alexandrite login pleochroic --service-url <url> --service-token <token>` — use a self-hosted standalone-service
+  instead of the hosted portal: no device login, the URL and token are taken as given.
+- `alexandrite logout pleochroic` — revoke the key at the service and forget it locally.
+- `alexandrite account [--json]` — the signed-in account: its plan, scopes, credits and which services (sync,
+  search, fetch, browser, graph, embeddings, memoryModel) it is entitled for, from `GET /v1/service`.
+
+## Sync
+
+Two-way sync of providers' endpoints, agents, mcp servers, the `app` settings, instructions files and secrets
+against the signed-in Pleochroic account or self-hosted standalone-service. Off until turned on; nothing is synced
+before `sync enable` runs.
+
+- `alexandrite sync enable [--prefer local|remote|merge]` — turn sync on. `--prefer` sets the policy a later
+  conflict (both sides changed the same item since the last sync) is resolved by: `local` or `remote` always keeps
+  that side's content; `merge` (the default) takes the union of an object document's keys, the locally-changed
+  value winning on a key both sides hold.
+- `alexandrite sync disable` — turn sync off; what was already synced is left as it is.
+- `alexandrite sync now [--json]` — sync once: pulls the change feed since the last sync, pushes what changed
+  locally, and resolves anything that changed on both sides by the enabled policy.
+- `alexandrite sync status [--json]` — whether sync is on, its policy, and how many items it tracks.
+
 ## The manual
 
 - `alexandrite manual` — the pages of this manual; `alexandrite manual <topic>` prints one;

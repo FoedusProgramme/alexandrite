@@ -2,12 +2,16 @@ package org.unitedsoftware.alexandrite.app
 
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
 import org.unitedsoftware.alexandrite.app.control.ControlRequest
+import org.unitedsoftware.alexandrite.app.sync.SyncPolicy
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 
 private const val JSON = "--json"
 private const val RESTART = "--restart"
 private const val AGENT = "--agent"
 private const val EXAMPLE_CHAT = "telegram:work:123456789"
+private const val SERVICE_URL = "--service-url"
+private const val SERVICE_TOKEN = "--service-token"
+private const val DEVICE_NAME = "--device-name"
 
 private const val RUN = "area.run"
 private const val SETUP = "area.setup"
@@ -15,6 +19,7 @@ private const val CONFIGURATION = "area.config"
 private const val SECRETS = "area.secrets"
 private const val SHORTCUTS = "area.shortcuts"
 private const val CHATS = "area.chats"
+private const val PLEOCHROIC = "area.pleochroic"
 private const val HELP = "area.help"
 
 private fun noArguments(given: Given, name: String) = given.atMost(0, Text("usage.no_argument", "command" to name))
@@ -281,6 +286,50 @@ internal val COMMANDS: List<CliCommand> = listOf(
     CliCommand(listOf("chats"), "[$JSON]", CHATS, flags = setOf(JSON)) { given ->
         noArguments(given, "chats")
         CliAction.Act { chats(it, given.flag(JSON)) }
+    },
+    CliCommand(
+        listOf("login"),
+        "pleochroic [$SERVICE_URL <url> $SERVICE_TOKEN <token>] [$DEVICE_NAME <name>]",
+        PLEOCHROIC,
+        options = setOf(SERVICE_URL, SERVICE_TOKEN, DEVICE_NAME),
+    ) { given ->
+        val service = given.single(Text("usage.login"))
+        if (service != "pleochroic") throw UsageException("usage.login_unknown", "service" to service)
+        val url = given.option(SERVICE_URL)
+        val token = given.option(SERVICE_TOKEN)
+        if ((url == null) != (token == null)) throw UsageException("usage.login_self_hosted")
+        CliAction.Act { pleochroicLogin(it, url, token, given.option(DEVICE_NAME)) }
+    },
+    CliCommand(listOf("logout"), "pleochroic", PLEOCHROIC) { given ->
+        val service = given.single(Text("usage.logout"))
+        if (service != "pleochroic") throw UsageException("usage.logout_unknown", "service" to service)
+        CliAction.Act(::pleochroicLogout)
+    },
+    CliCommand(listOf("account"), "[$JSON]", PLEOCHROIC, flags = setOf(JSON)) { given ->
+        noArguments(given, "account")
+        CliAction.Act { pleochroicAccountStatus(it, given.flag(JSON)) }
+    },
+    CliCommand(
+        listOf("sync", "enable"),
+        "[--prefer local|remote|merge]",
+        PLEOCHROIC,
+        options = setOf("--prefer"),
+    ) { given ->
+        noArguments(given, "sync enable")
+        val policy = given.option("--prefer")?.let(::requireSyncPolicy) ?: SyncPolicy.MERGE
+        CliAction.Act { syncEnable(it, policy) }
+    },
+    CliCommand(listOf("sync", "disable"), "", PLEOCHROIC) { given ->
+        noArguments(given, "sync disable")
+        CliAction.Act(::syncDisable)
+    },
+    CliCommand(listOf("sync", "now"), "[$JSON]", PLEOCHROIC, flags = setOf(JSON)) { given ->
+        noArguments(given, "sync now")
+        CliAction.Act { syncNow(it, given.flag(JSON)) }
+    },
+    CliCommand(listOf("sync", "status"), "[$JSON]", PLEOCHROIC, flags = setOf(JSON)) { given ->
+        noArguments(given, "sync status")
+        CliAction.Act { syncStatus(it, given.flag(JSON)) }
     },
     CliCommand(listOf("manual"), "[<topic>] [--search <words>]", HELP, options = setOf("--search")) { given ->
         val search = given.option("--search")

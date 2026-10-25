@@ -17,7 +17,8 @@ For hosts that embed Alexandrite, the implementation modules: `alexandrite-runti
 `alexandrite-agent`, `alexandrite-tools`, `alexandrite-commands`, `alexandrite-mcp`,
 `alexandrite-channel-telegram`, `alexandrite-provider-anthropic-compatible`,
 `alexandrite-provider-deepseek`, `alexandrite-provider-lmstudio`, `alexandrite-provider-openai-compatible`,
-`alexandrite-provider-openai-responses`, `alexandrite-provider-openrouter`, `alexandrite-store-sqlite`,
+`alexandrite-provider-openai-responses`, `alexandrite-provider-openrouter`, `alexandrite-provider-pleochroic`,
+`alexandrite-store-sqlite`,
 `alexandrite-automation-common`, `alexandrite-automation-heartbeat`, `alexandrite-automation-schedule`,
 `alexandrite-sandbox-bubblewrap` and `alexandrite-sandbox-seatbelt`. Their API may change in any release, so a plugin
 builds on the libraries for plugin authors only.
