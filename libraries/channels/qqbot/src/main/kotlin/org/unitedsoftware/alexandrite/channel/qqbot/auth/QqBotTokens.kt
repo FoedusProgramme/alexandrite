@@ -22,7 +22,7 @@ import java.time.Instant
  * The access token of one bot, which the open platform sells for its AppID and AppSecret and expires after two hours.
  *
  * The platform answers the same token while it is valid, so the token is kept until shortly before it expires and
- * bought again then. A call that fails because the token expired asks for a new one rather than failing the turn.
+ * bought again then. A call that fails because the token expired asks for a new one.
  */
 @ChannelInstanceScoped
 internal class QqBotTokens(

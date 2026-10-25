@@ -183,7 +183,7 @@ internal class QqBotUploads(private val api: QqBotApi, private val config: QqBot
         return QqBotUpload.Uploaded("")
     }
 
-    /** PUTs [block] to the presigned [url], which is the platform's own storage rather than its API. */
+    /** PUTs [block] to the presigned [url] of the platform's storage, apart from its API. */
     private suspend fun put(url: String, block: ByteArray): QqBotUpload = withContext(Dispatchers.IO) {
         try {
             val request = HttpRequest.newBuilder(URI.create(url))

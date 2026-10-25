@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap
  * The last message the bot sent to each chat, by the id the platform reported for it.
  *
  * The platform recalls a message by the id its send answered with, which is not the id of the message a turn answers.
- * Keeping it here lets a recall without an explicit id take back the bot's own last message instead of the user's.
+ * Keeping it here lets a recall without an explicit id take back the bot's own last message.
  */
 @Singleton
 internal class QqBotSentMessages {

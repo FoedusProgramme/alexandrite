@@ -37,8 +37,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * bot's to answer. Everything else a bot of the platform may subscribe to is left for a version that has a shape to
  * hand it to another plugin.
  *
- * The platform may push the same message twice: a message id already read is dropped rather than becoming a second
- * turn.
+ * The platform may push the same message twice: a message id already read is dropped.
  */
 @ChannelInstanceScoped
 internal class QqBotInbox(

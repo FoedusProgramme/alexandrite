@@ -52,7 +52,7 @@ internal class QqBotApi(private val http: QqBotHttp, private val tokens: QqBotTo
     private suspend fun call(method: String, path: String, body: JsonObject?, retried: Boolean = false): QqBotAnswer =
         try {
             // Buying the token is part of the call: a platform that cannot be reached for the token must answer the
-            // caller like any other failed call rather than throw past it.
+            // caller like any other failed call.
             val authorization = tokens.authorization(refresh = retried)
             val call = HttpCall(
                 method = method,

@@ -52,8 +52,7 @@ internal class QqBotApprovals(
                 logger.warn("{} could not show approval {} in any chat", instance.id, request.id)
                 return ApprovalAnswer.Unavailable(text(TextKeys.APPROVAL_UNREACHABLE, request.turn.language))
             }
-            // The answer comes after the approval message, so the turn's stream ends here rather than showing it above
-            // the request.
+            // The answer comes after the approval message, so the turn's stream ends here.
             progress.deferChat(request.turn.chat)
             logger.info(
                 "{} asks for approval {} of {} in turn {} in {} chat(s)",

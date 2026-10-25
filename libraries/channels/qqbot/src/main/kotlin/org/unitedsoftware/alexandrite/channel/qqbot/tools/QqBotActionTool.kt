@@ -27,9 +27,9 @@ import kotlin.time.Duration.Companion.minutes
 /**
  * Reads what the open platform knows about the group of the turn or the bot itself.
  *
- * The tool takes the action and its arguments rather than one tool per action, because the platform's surface is a
- * table of endpoints. Only the actions of [QqBotActions.reading] can be named; a read that answers makes the turn
- * carry content the bot cannot vouch for.
+ * The tool takes the action and its arguments, because the platform's surface is a table of endpoints. Only the
+ * actions of [QqBotActions.reading] can be named; a read that answers makes the turn carry content the bot cannot
+ * vouch for.
  */
 @Singleton
 @Contribute(Tool::class)
