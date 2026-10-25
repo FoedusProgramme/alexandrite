@@ -13,6 +13,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.TurnId
 import org.unitedsoftware.alexandrite.sdk.chat.TurnKind
 import org.unitedsoftware.alexandrite.sdk.model.Trust
 import org.unitedsoftware.alexandrite.sdk.tool.Mandate
+import org.unitedsoftware.alexandrite.sdk.transcript.ToolCallPart
 import org.unitedsoftware.alexandrite.sdk.turn.ReplyRoute
 import java.time.Instant
 
@@ -31,6 +32,8 @@ internal class TurnPlan(
     val queuedAt: Instant,
     /** Where the final reply of a turn that replies to its caller goes. */
     val route: ReplyRoute = ReplyRoute.None,
+    /** The call that the turn makes for its operator before it asks its model anything, null when it makes none. */
+    val operatorCall: ToolCallPart? = null,
 )
 
 /** What a turn answers. */

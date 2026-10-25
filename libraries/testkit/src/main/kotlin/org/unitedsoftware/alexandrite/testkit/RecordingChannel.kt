@@ -252,8 +252,12 @@ public class RecordingChannel(
             violation(
                 when {
                     turn.chat.instance != instance -> "a reply of turn ${turn.id} opened for ${turn.chat}."
-                    turn.replyTarget != ReplyTarget.CHAT -> "a reply of turn ${turn.id}, which replies to its caller."
+
+                    turn.replyTarget != ReplyTarget.CHAT && request.run?.run != turn.lineage?.run ->
+                        "a reply of turn ${turn.id}, which replies to its caller."
+
                     (turn.id to request.run?.run) in opened -> "a second reply of turn ${turn.id}."
+
                     else -> null
                 },
             )

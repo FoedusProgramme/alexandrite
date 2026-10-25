@@ -22,7 +22,10 @@ public interface Channel {
     /** How many platform messages [text] in [markup] takes in [chat], one where the channel splits no text. */
     public suspend fun partsNeeded(chat: ChatAddress, text: String, markup: Markup): Int = 1
 
-    /** Opens the reply of a turn that delivers to its chat, once the agent dequeues the turn. */
+    /**
+     * Opens the reply of a turn that delivers to its chat, or of a sub-agent run where the channel takes
+     * [ChannelCapabilities.runReplies], once the agent dequeues the turn.
+     */
     public suspend fun openReply(request: ReplyRequest): ReplySink
 
     /** Sends [message] to [chat] outside any turn's reply. */
@@ -95,6 +98,10 @@ public class DelegatedRun @InternalAlexandriteApi constructor(
     public val run: RunId,
     public val agent: AgentId,
     public val under: RunId? = null,
+    /** What the delegating agent asked the run to do, as it wrote it, null where it is not told. */
+    public val task: String? = null,
+    /** The ended run that this one goes on from, which it resumes or forks, null for a run of its own. */
+    public val from: RunId? = null,
 )
 
 /**
@@ -116,7 +123,10 @@ public class ReplyRequest @InternalAlexandriteApi constructor(
     public val turn: TurnInfo,
     /** The message or interaction the turn answers, null when it answers none. */
     public val trigger: ChannelMessageRef?,
-    /** The background run of [turn] whose activity alone this reply shows, null for the turn's own reply. */
+    /**
+     * The run this reply is of, null for the turn's own reply: where the channel takes [ChannelCapabilities.runReplies],
+     * the whole reply of the run that [turn] is, else the activity alone of a background run of [turn].
+     */
     public val run: DelegatedRun? = null,
 )
 

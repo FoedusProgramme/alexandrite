@@ -22,6 +22,8 @@ import org.unitedsoftware.alexandrite.agent.tool.TOOLS_SECTION
 import org.unitedsoftware.alexandrite.agent.workspace.WORKSPACE_SECTION
 import org.unitedsoftware.alexandrite.sdk.channel.ApprovalAnswer
 import org.unitedsoftware.alexandrite.sdk.channel.ApprovalRequest
+import org.unitedsoftware.alexandrite.sdk.channel.DelegatedRun
+import org.unitedsoftware.alexandrite.sdk.channel.ReplyEnd
 import org.unitedsoftware.alexandrite.sdk.channel.ToolCallStatus
 import org.unitedsoftware.alexandrite.sdk.channel.TurnEvent
 import org.unitedsoftware.alexandrite.sdk.channel.TurnEventKind
@@ -68,6 +70,9 @@ import org.unitedsoftware.alexandrite.sdk.turn.AgentRunLifecycle
 import org.unitedsoftware.alexandrite.sdk.turn.ChatSettings
 import org.unitedsoftware.alexandrite.sdk.turn.ChatSettingsUpdate
 import org.unitedsoftware.alexandrite.sdk.turn.JobLifecycle
+import org.unitedsoftware.alexandrite.sdk.turn.RefusalReason
+import org.unitedsoftware.alexandrite.sdk.turn.RunWay
+import org.unitedsoftware.alexandrite.sdk.turn.Submission
 import org.unitedsoftware.alexandrite.sdk.turn.TurnControl
 import org.unitedsoftware.alexandrite.sdk.turn.TurnOutcome
 import org.unitedsoftware.alexandrite.sdk.turn.TurnPhase
@@ -767,6 +772,152 @@ class DelegationTurnsTest {
         }
     }
 
+    // Messages to runs.
+
+    @Test
+    fun `an operator's message to a running run is taken in after its call, and the run answers with it in view`() {
+        read.hold()
+        model.reply(ROOT) { toolCall(DELEGATE_TOOL, delegate("reviewer", "Read a.")) }
+            .reply(profile(REVIEWER)) { toolCall("test.read", """{"path": "a"}""") }
+            .reply(profile(REVIEWER)) { text("Read a and b.") }
+            .reply(ROOT) { text("Done.") }
+
+        harness().execute {
+            val turn = ask()
+            read.awaitCalls(1)
+            val run = get<TurnControl>().turns().single { it.turn.kind == TurnKind.DELEGATED }.turn
+            val message = channel().message("Also read b.", sender = channel().user("operator"))
+            val submission = Submission.ToRun(checkNotNull(run.lineage).run, message)
+            val sent = assertIs<Admission.Accepted>(channel().submit(submission))
+            read.release()
+
+            assertEquals(run.id, assertIs<TurnOutcome.Absorbed>(sent.ticket.outcome()).into)
+            turn.ticket.outcome()
+            val said = runs(REVIEWER).last().history.filterIsInstance<UserEntry>()
+                .flatMap { entry -> entry.parts.filterIsInstance<TextPart>().map { it.text } }
+            assertTrue(said.any { "Also read b." in it }, "The run was not shown the message: $said")
+            assertEquals(listOf(ToolOutcome.Succeeded to "Read a and b."), rootResults().map { it.shown() })
+        }
+    }
+
+    @Test
+    fun `a message to a run is refused from a guest, to an unknown run, and once the run ended`() {
+        read.hold()
+        model.reply(ROOT) { toolCall(DELEGATE_TOOL, delegate("reviewer", "Read a.")) }
+            .reply(profile(REVIEWER)) { toolCall("test.read", """{"path": "a"}""") }
+            .reply(profile(REVIEWER)) { text("Read a.") }
+            .reply(ROOT) { text("Done.") }
+
+        harness().execute {
+            val turn = ask()
+            read.awaitCalls(1)
+            val run = get<TurnControl>().turns().single { it.turn.kind == TurnKind.DELEGATED }.turn
+            val id = checkNotNull(run.lineage).run
+            fun refusal(to: RunId, user: String = "operator"): RefusalReason? {
+                val message = channel().message("Hello.", sender = channel().user(user))
+                return (channel().submit(Submission.ToRun(to, message)) as? Admission.Refused)?.reason
+            }
+
+            assertEquals(RefusalReason.NOT_PERMITTED, refusal(id, user = "guest"))
+            assertEquals(RefusalReason.UNKNOWN_RUN, refusal(RunId("r-unknown")))
+            read.release()
+            turn.ticket.outcome()
+            assertEquals(RefusalReason.RUN_ENDED, refusal(id))
+        }
+    }
+
+    @Test
+    fun `a message that a run did not take in before it was stopped is taken back`() {
+        read.hold()
+        model.reply(ROOT) { toolCall(DELEGATE_TOOL, delegate("reviewer", "Read a.")) }
+            .reply(profile(REVIEWER)) { toolCall("test.read", """{"path": "a"}""") }
+            .reply(ROOT) { text("Stopped.") }
+
+        harness().execute {
+            val turn = ask()
+            read.awaitCalls(1)
+            val control = get<TurnControl>()
+            val id = checkNotNull(control.turns().single { it.turn.kind == TurnKind.DELEGATED }.turn.lineage).run
+            val message = channel().message("Also read b.", sender = channel().user("operator"))
+            val sent = assertIs<Admission.Accepted>(channel().submit(Submission.ToRun(id, message)))
+
+            assertTrue(control.cancelRun(id, tree = true, channel().user("operator")))
+
+            assertEquals(TurnOutcome.TakenBack, sent.ticket.outcome())
+            turn.ticket.outcome()
+        }
+    }
+
+    @Test
+    fun `an operator resumes an ended run, which goes on from its conversation, and the agent keeps its report`() {
+        model.reply(ROOT) { toolCall(DELEGATE_TOOL, delegate("reviewer", "Review notes.md.")) }
+            .reply(profile(REVIEWER)) { text("Notes look fine.") }
+            .reply(ROOT) { text("Fine.") }
+            .reply(profile(REVIEWER)) { text("Tests look fine as well.") }
+
+        harness().execute {
+            val capabilities = RecordingChannel.DEFAULT_CAPABILITIES.rebuild {
+                runReplies(true)
+                events(TurnEventKind.entries.toSet())
+            }
+            channel().scriptCapabilities(capabilities)
+            ask().ticket.outcome()
+            val earlier = lineage(runs(REVIEWER)[0]).run
+            val message = channel().message("Now check the tests too.", sender = channel().user("operator"))
+            val sent = assertIs<Admission.Accepted>(
+                channel().submit(Submission.ToRun(earlier, message, RunWay.RESUME)),
+            )
+
+            assertIs<TurnOutcome.Completed>(sent.ticket.outcome())
+            val said = runs(REVIEWER).last().history.flatMap { entry ->
+                when (entry) {
+                    is UserEntry -> entry.parts.filterIsInstance<TextPart>().map { it.text }
+                    is AssistantEntry -> entry.parts.filterIsInstance<TextPart>().map { it.text }
+                    else -> emptyList()
+                }
+            }
+            assertEquals(listOf("Review notes.md.", "Notes look fine.", "Now check the tests too."), said)
+            val resumed = rootResults().last { it.toolName == DELEGATE_TOOL }
+            assertEquals(ToolOutcome.Succeeded to "Tests look fine as well.", resumed.shown())
+            assertTrue(resumed.run() != earlier)
+            assertEquals(earlier, channel().replies.last { it.request.run != null }.request.run?.from)
+            // The turn asks its model nothing: neither before the call nor about the report, which its next turn reads.
+            assertEquals(ReplyEnd.COMPLETED, channel().reply(sent.ticket.turn).awaitEnd().abandoned)
+            assertEquals(4, model.requests.size)
+            val call = channel().reply(sent.ticket.turn).activity.filterIsInstance<TurnEvent.ToolCallStarted>().single()
+            assertEquals("reviewer $earlier", call.title)
+        }
+    }
+
+    @Test
+    fun `a run is resumed only by an operator, and only once it ended`() {
+        read.hold()
+        model.reply(ROOT) { toolCall(DELEGATE_TOOL, delegate("reviewer", "Read a.")) }
+            .reply(profile(REVIEWER)) { toolCall("test.read", """{"path": "a"}""") }
+            .reply(profile(REVIEWER)) { text("Read a.") }
+            .reply(ROOT) { text("Done.") }
+
+        harness().execute {
+            val turn = ask()
+            read.awaitCalls(1)
+            val id = checkNotNull(
+                get<TurnControl>().turns().single {
+                    it.turn.kind == TurnKind.DELEGATED
+                }.turn.lineage,
+            ).run
+            fun refusal(user: String, way: RunWay): RefusalReason? {
+                val message = channel().message("Again.", sender = channel().user(user))
+                return (channel().submit(Submission.ToRun(id, message, way)) as? Admission.Refused)?.reason
+            }
+
+            assertEquals(RefusalReason.RUN_RUNNING, refusal("operator", RunWay.RESUME))
+            assertEquals(RefusalReason.RUN_RUNNING, refusal("operator", RunWay.FORK))
+            read.release()
+            turn.ticket.outcome()
+            assertEquals(RefusalReason.NOT_PERMITTED, refusal("guest", RunWay.RESUME))
+        }
+    }
+
     // Approvals, cancel and denials.
 
     @Test
@@ -825,7 +976,10 @@ class DelegationTurnsTest {
     fun `cancelling a run with its tree stops the runs below it, and the turn above goes on`() {
         read.hold()
         model.reply(ROOT) { toolCall(DELEGATE_TOOL, delegate("nester", "Level 1.")) }
-            .reply(task("Level 1.")) { toolCall(DELEGATE_TOOL, delegate("nester", "Level 2.")) }
+            .reply(task("Level 1.")) {
+                text("Handing level 2\non.")
+                toolCall(DELEGATE_TOOL, delegate("nester", "Level 2."))
+            }
             .reply(task("Level 2.")) { toolCall("test.read", """{"path": "a"}""") }
             .reply(ROOT) { text("The run was stopped.") }
 
@@ -842,8 +996,9 @@ class DelegationTurnsTest {
 
             assertIs<TurnOutcome.Completed>(turn.ticket.outcome())
             assertEquals(1, read.cancelled.size)
-            val stopped = "Cancelled (outcome unknown): Sub-agent run ${first.lineage?.run} of nester was stopped " +
-                "before it ended."
+            val stopped = "[alexandrite:stopped] Operator stopped Sub-agent run ${first.lineage?.run} of nester " +
+                "before it ended. What it wrote last: Handing level 2 on. " +
+                "Its conversation ${first.conversation} keeps what it did."
             assertEquals(listOf(ToolOutcome.Cancelled to stopped), rootResults().map { it.shown() })
             assertEquals(TurnEndKind.CANCELLED, store.conversations.turn(first.id)?.end)
             assertEquals("The run was stopped.", channel().reply(turn.ticket.turn).completed?.text)
@@ -864,6 +1019,7 @@ class DelegationTurnsTest {
             ask().ticket.outcome()
 
             val request = channel().approvals.single()
+            assertEquals(lineage(runs(WRITER)[0]).run, request.turn.lineage?.run)
             val denied = ToolOutcome.NotRun(NotRunReason.DENIED)
             assertEquals(
                 listOf(
@@ -912,6 +1068,79 @@ class DelegationTurnsTest {
                 },
             )
             assertEquals(2, channel().reply(turn.ticket.turn).activity.count { it is TurnEvent.UsageUpdated })
+        }
+    }
+
+    @Test
+    fun `a channel that gives each run a reply shows the run's words, calls and report there, apart from the turn`() {
+        val delegateCall = ToolCallId("delegate")
+        val readCall = ToolCallId("read")
+        model.reply(ROOT) { toolCall(DELEGATE_TOOL, delegate("reviewer", "Review notes.md."), delegateCall) }
+            .reply(profile(REVIEWER)) {
+                text("Reading it.")
+                toolCall("test.read", """{"path": "notes.md"}""", readCall)
+            }
+            .reply(profile(REVIEWER)) { text("Fine.") }
+            .reply(ROOT) { text("It is fine.") }
+
+        harness().execute {
+            val capabilities = RecordingChannel.DEFAULT_CAPABILITIES.rebuild {
+                streaming(true)
+                events(TurnEventKind.entries.toSet())
+                runReplies(true)
+            }
+            channel().scriptCapabilities(capabilities)
+            val turn = ask()
+            turn.ticket.outcome()
+
+            val run = lineage(runs(REVIEWER)[0]).run
+            val reply = channel().replies.single { it.request.run != null }
+            assertEquals(DelegatedRun(delegateCall, run, REVIEWER_ID, task = "Review notes.md."), reply.request.run)
+            assertEquals(run, reply.turn.lineage?.run)
+            assertEquals("Reading it.", reply.segments[0])
+            assertEquals("Fine.", reply.completed?.text)
+            assertEquals(
+                listOf(
+                    TurnEvent.ToolCallStarted(readCall, "test.read", ToolActivity.READ, "notes.md", run, REVIEWER_ID),
+                    TurnEvent.ToolCallUpdated(readCall, ToolCallStatus.RUNNING, null, run),
+                    TurnEvent.ToolCallUpdated(readCall, ToolCallStatus.COMPLETED, null, run),
+                ),
+                reply.activity.filter { it is TurnEvent.ToolCallStarted || it is TurnEvent.ToolCallUpdated },
+            )
+            assertEquals(2, reply.activity.count { it is TurnEvent.UsageUpdated })
+            val root = channel().reply(turn.ticket.turn)
+            assertEquals(
+                listOf(
+                    TurnEvent.ToolCallStarted(delegateCall, DELEGATE_TOOL, ToolActivity.DELEGATE, "reviewer"),
+                    TurnEvent.ToolCallUpdated(delegateCall, ToolCallStatus.RUNNING),
+                    TurnEvent.ToolCallUpdated(delegateCall, ToolCallStatus.COMPLETED),
+                ),
+                root.activity.filter { it is TurnEvent.ToolCallStarted || it is TurnEvent.ToolCallUpdated },
+            )
+            assertEquals("It is fine.", root.completed?.text)
+            assertEquals(emptyList(), channel().violations)
+        }
+    }
+
+    @Test
+    fun `a run stopped in a channel that gives it a reply ends that reply as cancelled`() {
+        read.hold()
+        model.reply(ROOT) { toolCall(DELEGATE_TOOL, delegate("nester", "Level 1.")) }
+            .reply(task("Level 1.")) { toolCall("test.read", """{"path": "a"}""") }
+            .reply(ROOT) { text("The run was stopped.") }
+
+        harness().execute {
+            channel().scriptCapabilities(RecordingChannel.DEFAULT_CAPABILITIES.rebuild { runReplies(true) })
+            val turn = ask()
+            read.awaitCalls(1)
+            val control = get<TurnControl>()
+            val run = control.turns().single { it.turn.kind == TurnKind.DELEGATED }.turn
+
+            assertTrue(control.cancelRun(checkNotNull(run.lineage).run, tree = true, channel().user("operator")))
+
+            assertIs<TurnOutcome.Completed>(turn.ticket.outcome())
+            assertEquals(ReplyEnd.CANCELLED, channel().reply(run.id, run.lineage?.run).awaitEnd().abandoned)
+            assertEquals("The run was stopped.", channel().reply(turn.ticket.turn).completed?.text)
         }
     }
 

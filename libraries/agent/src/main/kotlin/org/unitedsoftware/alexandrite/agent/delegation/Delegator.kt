@@ -19,6 +19,7 @@ import org.unitedsoftware.alexandrite.agent.job.Jobs
 import org.unitedsoftware.alexandrite.agent.messaging.MessageBudget
 import org.unitedsoftware.alexandrite.agent.permission.actorBelow
 import org.unitedsoftware.alexandrite.agent.profile.Profiles
+import org.unitedsoftware.alexandrite.agent.prompt.Escaper
 import org.unitedsoftware.alexandrite.agent.prompt.oneLine
 import org.unitedsoftware.alexandrite.agent.tool.AgentToolContext
 import org.unitedsoftware.alexandrite.agent.tool.DelegatedTask
@@ -146,13 +147,11 @@ internal class Delegator(
             runRecords.put(run, RunRecord(created.id, root, profile.id.value))
             created
         }
-        val detachedParent = if (background) {
-            BackgroundParent(parent, channels, DelegatedRun(call, run, profile.id, turn.lineage?.run))
-        } else {
-            null
-        }
+        val shown = DelegatedRun(call, run, profile.id, turn.lineage?.run, task, resume)
+        val detachedParent = if (background) BackgroundParent(parent, channels, shown) else null
         val delegation = Delegation(
             run,
+            shown,
             lineage,
             conversation,
             profile,
@@ -266,7 +265,7 @@ internal class Delegator(
                 val job = launch(start = CoroutineStart.LAZY) {
                     outcome = runner.value.run(plan, inbox, permit, resolved = {}, decided = {})
                 }
-                runs.started(LiveRun(delegation, plan.id, job, plan.queuedAt))
+                runs.started(LiveRun(delegation, plan.id, job, plan.queuedAt, inbox))
                 hooks.fire(TurnPoints.AGENT_SPAWN, lifecycle(delegation))
                 job.join()
             }
@@ -308,11 +307,32 @@ internal class Delegator(
                 InTurnResult(shaped(listOf(TextPart("$run $how$notice. $kept"))), ToolOutcome.Failed)
             }
 
-            else -> InTurnResult(
+            else -> stopped(delegation, turn, run) ?: InTurnResult(
                 "Cancelled (outcome unknown): $run was stopped before it ended.",
                 ToolOutcome.Cancelled,
             )
         }
+    }
+
+    /** What the model reads of [delegation], [run], whose turn [turn] a person stopped, null when nobody did. */
+    private suspend fun stopped(delegation: Delegation, turn: TurnId, run: String): InTurnResult? {
+        val by = delegation.stoppedBy ?: return null
+        val said = lastWords(turn)?.let { " What it wrote last: $it" }.orEmpty()
+        val kept = "Its conversation ${delegation.conversation.id} keeps what it did."
+        val told = Escaper.HEADERS.text("${oneLine(by.displayName)} stopped $run before it ended.$said $kept")
+        return InTurnResult("[alexandrite:stopped] $told", ToolOutcome.Cancelled)
+    }
+
+    /** The visible text of the last response of the turn [turn] on one line, null when it has none. */
+    private suspend fun lastWords(turn: TurnId): String? = try {
+        transcripts.turnEntries(turn).filterIsInstance<AssistantEntry>()
+            .map(::visibleText)
+            .lastOrNull(String::isNotBlank)
+            ?.let { oneLine(it).take(MAX_LAST_WORDS) }
+    } catch (e: Exception) {
+        currentCoroutineContext().ensureActive()
+        logger.warn("Cannot read the responses of the sub-agent turn {}: {}", turn, e.toString())
+        null
     }
 
     private fun invalid(text: String) = InTurnResult(text, ToolOutcome.NotRun(NotRunReason.INVALID_ARGUMENTS))
@@ -412,3 +432,6 @@ private val logger = LoggerFactory.getLogger(Delegator::class.java)
 
 private fun lifecycle(run: Delegation): AgentRunLifecycle =
     AgentRunLifecycle(run.parent.turn, run.run, run.profile.id, run.background)
+
+/** The characters of a stopped run's last words that its result keeps. */
+private const val MAX_LAST_WORDS = 2000

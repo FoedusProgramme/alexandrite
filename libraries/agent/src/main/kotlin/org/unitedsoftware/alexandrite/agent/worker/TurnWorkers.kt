@@ -528,7 +528,8 @@ private class Current(val job: WorkerJob) {
 
 /** The follow-ups of [principal] in [chat] queued since [since], up to the first change of the key's state. */
 private fun ArrayDeque<WorkerJob>.followUps(principal: UserAddress, chat: ChatAddress, since: Instant) = asSequence()
-    .takeWhile { it is WorkerJob.Turn }
+    // A turn that makes a call for its operator runs as its own, and the messages after it wait for it.
+    .takeWhile { it is WorkerJob.Turn && it.plan.operatorCall == null }
     .filterIsInstance<WorkerJob.Turn>()
     .filter { it.plan.isFollowUp(principal, chat, since) }
 

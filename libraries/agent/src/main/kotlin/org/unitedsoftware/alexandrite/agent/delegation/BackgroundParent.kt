@@ -48,10 +48,14 @@ internal class BackgroundParent(
         if (!closed && activityVisible) activity = parent.detachActivity(run)
     }
 
-    /** Opens a reply of the run's own when its activity could not be taken over. */
+    /**
+     * Opens a reply of the run's own when its activity could not be taken over, unless the channel gives each run a
+     * reply of its own, which the run's turn opens.
+     */
     suspend fun open(): Unit = lifecycle.withLock {
         if (closed || !activityVisible || activity != null) return
         val channel = channels.channel(turn.chat.instance) ?: return
+        if (channel.capabilities(turn.chat).runReplies) return
         // A run below a run shows in the root chat, though its parent's turn replies to its own caller.
         sink = channel.openReply(ReplyRequest(turn.rebuild { replyTarget(ReplyTarget.CHAT) }, null, run))
         show(TurnEvent.ToolCallStarted(run.call, DELEGATE_TOOL, ToolActivity.DELEGATE, "${run.agent}", run.under))

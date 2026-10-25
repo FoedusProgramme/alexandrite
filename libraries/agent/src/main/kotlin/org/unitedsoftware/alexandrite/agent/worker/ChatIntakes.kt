@@ -14,6 +14,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ReplyTarget
 import org.unitedsoftware.alexandrite.sdk.chat.TurnId
 import org.unitedsoftware.alexandrite.sdk.chat.TurnKind
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
+import org.unitedsoftware.alexandrite.sdk.transcript.ToolCallPart
 import org.unitedsoftware.alexandrite.sdk.turn.Admission
 import org.unitedsoftware.alexandrite.sdk.turn.Capacity
 import org.unitedsoftware.alexandrite.sdk.turn.RefusalReason
@@ -39,18 +40,25 @@ internal class ChatIntakes(
 
     val chats: Set<ChatAddress> get() = lock.locked { intakes.keys.toSet() }
 
-    fun dispatch(turn: TurnId, message: IncomingMessage, capacity: Capacity, queuedAt: Instant): Admission =
-        lock.locked {
-            val chat = message.chat
-            val held = Held(turn, message, capacity, queuedAt, AgentTicket(turn) { cancel(it, TurnCancelled(null)) })
-            val route = router.resolve(chat)
-            when {
-                !workers.accepting -> Admission.Refused(RefusalReason.SHUTTING_DOWN)
-                route !is Resolution.Served -> Admission.Refused(refusal(route))
-                chat !in intakes -> workers.submit(route.key, turn(held, route.key), heldAt[route.key] ?: 0)
-                else -> hold(held, route.key)
-            }
+    fun dispatch(
+        turn: TurnId,
+        message: IncomingMessage,
+        capacity: Capacity,
+        queuedAt: Instant,
+        /** The call that the turn makes for its operator first, null when it makes none. */
+        operatorCall: ToolCallPart? = null,
+    ): Admission = lock.locked {
+        val chat = message.chat
+        val ticket = AgentTicket(turn) { cancel(it, TurnCancelled(null)) }
+        val held = Held(turn, message, capacity, queuedAt, ticket, operatorCall)
+        val route = router.resolve(chat)
+        when {
+            !workers.accepting -> Admission.Refused(RefusalReason.SHUTTING_DOWN)
+            route !is Resolution.Served -> Admission.Refused(refusal(route))
+            chat !in intakes -> workers.submit(route.key, turn(held, route.key), heldAt[route.key] ?: 0)
+            else -> hold(held, route.key)
         }
+    }
 
     /** Holds the chat's messages until [command] lets them go. */
     fun gate(chat: ChatAddress, command: TurnId) {
@@ -140,6 +148,7 @@ internal class ChatIntakes(
             replyTarget = ReplyTarget.CHAT,
             trigger = message.ref,
             queuedAt = held.queuedAt,
+            operatorCall = held.operatorCall,
         )
         return WorkerJob.Turn(plan, held.ticket, held.capacity)
     }
@@ -158,6 +167,7 @@ private class Held(
     val capacity: Capacity,
     val queuedAt: Instant,
     val ticket: AgentTicket,
+    val operatorCall: ToolCallPart?,
 ) {
     /** The key the message counts against, null for one that is not counted. */
     var countedAt: AgentChatKey? = null
