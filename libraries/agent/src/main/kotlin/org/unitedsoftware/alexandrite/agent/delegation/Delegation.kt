@@ -17,14 +17,18 @@ import org.unitedsoftware.alexandrite.agent.turn.FollowUps
 import org.unitedsoftware.alexandrite.agent.turn.TurnPermit
 import org.unitedsoftware.alexandrite.agent.turn.TurnSource
 import org.unitedsoftware.alexandrite.sdk.agent.AgentProfile
+import org.unitedsoftware.alexandrite.sdk.channel.DelegatedRun
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
+import org.unitedsoftware.alexandrite.sdk.chat.ChatUser
 import org.unitedsoftware.alexandrite.sdk.chat.ConversationId
 import org.unitedsoftware.alexandrite.sdk.chat.RunId
+import org.unitedsoftware.alexandrite.sdk.chat.TurnId
 import org.unitedsoftware.alexandrite.sdk.chat.TurnInfo
 import org.unitedsoftware.alexandrite.sdk.chat.TurnLineage
 import org.unitedsoftware.alexandrite.sdk.chat.UserAddress
 import org.unitedsoftware.alexandrite.sdk.store.ConversationInfo
 import org.unitedsoftware.alexandrite.sdk.tool.Tool
+import org.unitedsoftware.alexandrite.sdk.turn.TurnOutcome
 import java.time.Clock
 import java.time.Instant
 
@@ -37,6 +41,8 @@ internal const val MAX_DEPTH: Int = 3
 /** A sub-agent run of [profile] on [task] in [conversation], which a call of [parent]'s turn started as [run]. */
 internal class Delegation(
     val run: RunId,
+    /** The run as a channel shows it. */
+    val shown: DelegatedRun,
     val lineage: TurnLineage,
     val conversation: ConversationInfo,
     val profile: AgentProfile,
@@ -76,6 +82,10 @@ internal class Delegation(
     var taint: TurnTaint? = null
         private set
 
+    /** The person who stopped the run, null while nobody did. */
+    @Volatile
+    var stoppedBy: ChatUser? = null
+
     /** Counts the taint of the earlier run that the run goes on from as its own in [taint], the taint of its turn. */
     fun opened(taint: TurnTaint) {
         resumed?.let(taint::note)
@@ -90,14 +100,15 @@ internal class Delegation(
 }
 
 /**
- * The follow-ups of a sub-agent run, which takes no messages but the reports of the background runs it started, in
- * [conversation], its own.
+ * The follow-ups of a sub-agent run in [conversation], its own: the reports of the background runs it started, and the
+ * messages that people send the run itself, which no other turn takes.
  */
 internal class RunInbox(private val conversation: ConversationId, private val jobs: Jobs, private val clock: Clock) :
     FollowUps,
     JobInbox {
     private val lock = Any()
     private val reports = ArrayDeque<FollowUp>()
+    private val sent = ArrayDeque<FollowUp>()
     private val changed = Channel<Unit>(Channel.CONFLATED)
     private var closed = false
 
@@ -114,16 +125,46 @@ internal class RunInbox(private val conversation: ConversationId, private val jo
         changed.trySend(Unit)
     }
 
-    /** Takes no more reports, and returns those the run did not take. */
-    fun close(): List<EndedJob> = synchronized(lock) {
-        closed = true
-        reports.map { (it.plan.input as TurnSource.FromJob).job }.also { reports.clear() }
+    /** Queues [followUp], a message sent to the run, and returns false once the run takes no more. */
+    fun post(followUp: FollowUp): Boolean {
+        synchronized(lock) {
+            if (closed) return false
+            sent += followUp
+        }
+        changed.trySend(Unit)
+        return true
+    }
+
+    /** Drops the queued message of [turn], and returns whether it was queued. */
+    fun withdraw(turn: TurnId): Boolean {
+        val followUp = synchronized(lock) {
+            sent.firstOrNull { it.plan.id == turn }?.also(sent::remove)
+        } ?: return false
+        followUp.complete(TurnOutcome.TakenBack)
+        return true
+    }
+
+    /** Takes no more reports or messages, ends the queued messages as taken back, and returns the reports left. */
+    fun close(): List<EndedJob> {
+        val (messages, left) = synchronized(lock) {
+            closed = true
+            val messages = sent.toList().also { sent.clear() }
+            messages to reports.map { (it.plan.input as TurnSource.FromJob).job }.also { reports.clear() }
+        }
+        messages.forEach { it.complete(TurnOutcome.TakenBack) }
+        return left
     }
 
     override fun take(principal: UserAddress, chat: ChatAddress, since: Instant): List<FollowUp> = emptyList()
 
+    override fun takeSent(): List<FollowUp> = synchronized(lock) { sent.toList().also { sent.clear() } }
+
     override fun restore(followUps: List<FollowUp>) {
-        synchronized(lock) { followUps.asReversed().forEach(reports::addFirst) }
+        synchronized(lock) {
+            followUps.asReversed().forEach {
+                if (it.plan.input is TurnSource.FromJob) reports.addFirst(it) else sent.addFirst(it)
+            }
+        }
     }
 
     override fun queued(principal: UserAddress, chat: ChatAddress, since: Instant): Boolean = false
@@ -138,8 +179,8 @@ internal class RunInbox(private val conversation: ConversationId, private val jo
     override suspend fun awaitJobs(conversation: ConversationId): Boolean {
         if (conversation != this.conversation) return false
         while (true) {
-            if (synchronized(lock) { reports.isNotEmpty() }) return true
-            if (!jobs.running(conversation)) return synchronized(lock) { reports.isNotEmpty() }
+            if (synchronized(lock) { reports.isNotEmpty() || sent.isNotEmpty() }) return true
+            if (!jobs.running(conversation)) return synchronized(lock) { reports.isNotEmpty() || sent.isNotEmpty() }
             changed.receive()
         }
     }

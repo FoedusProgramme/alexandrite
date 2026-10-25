@@ -20,12 +20,16 @@ internal interface FollowUps {
     /** Returns once [take] would return a message. */
     suspend fun await(principal: UserAddress, chat: ChatAddress, since: Instant)
 
+    /** Takes the messages that people sent to the sub-agent run itself off the queue, in arrival order. */
+    fun takeSent(): List<FollowUp> = emptyList()
+
     /** Takes the results of the jobs that turns from [chat] started in [conversation] off the queue, in queue order. */
     fun takeJobs(chat: ChatAddress, conversation: ConversationId): List<FollowUp>
 
     /**
-     * Waits until a result of a job that [conversation] started is queued and returns true, or returns false once no
-     * such job runs; false at once where results start turns of their own, as at a top-level turn.
+     * Waits until a result of a job that [conversation] started, or a message sent to its run, is queued and returns
+     * true, or returns false once no such job runs and no message is queued; false at once where results start turns
+     * of their own, as at a top-level turn.
      */
     suspend fun awaitJobs(conversation: ConversationId): Boolean = false
 }

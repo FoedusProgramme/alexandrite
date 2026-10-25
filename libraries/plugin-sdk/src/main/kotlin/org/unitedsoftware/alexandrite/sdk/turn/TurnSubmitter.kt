@@ -6,6 +6,7 @@ import org.unitedsoftware.alexandrite.sdk.InternalAlexandriteApi
 import org.unitedsoftware.alexandrite.sdk.channel.Delivery
 import org.unitedsoftware.alexandrite.sdk.channel.IncomingMessage
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
+import org.unitedsoftware.alexandrite.sdk.chat.RunId
 import org.unitedsoftware.alexandrite.sdk.chat.TurnId
 import org.unitedsoftware.alexandrite.sdk.runtime.HostApi
 import org.unitedsoftware.alexandrite.sdk.transcript.AssistantEntry
@@ -51,6 +52,53 @@ public sealed interface Submission {
         }
 
         override val chat: ChatAddress get() = invocation.chat
+    }
+
+    /**
+     * A [message] to the sub-agent run [run], which a person in the chat of the turn that started it writes, the way
+     * [way] says. For [RunWay.FOLLOW_UP], its ticket ends as absorbed once the run takes the message in, and as taken
+     * back when the run ends first; for [RunWay.RESUME] and [RunWay.FORK], it is the ticket of the chat agent's turn
+     * that starts the new run and ends with its report.
+     */
+    @Poko
+    public class ToRun(
+        public val run: RunId,
+        public val message: IncomingMessage,
+        public val way: RunWay = RunWay.FOLLOW_UP,
+        override val capacity: Capacity = Capacity.COUNTED,
+    ) : Submission {
+        override val chat: ChatAddress get() = message.chat
+    }
+}
+
+/** How a sub-agent run takes a message that a person sends it. */
+@JvmInline
+@Serializable
+public value class RunWay internal constructor(public val id: String) {
+    override fun toString(): String = id
+
+    public companion object {
+        /** The running run takes the message in after its current calls, as a turn takes its follow-ups. */
+        public val FOLLOW_UP: RunWay = RunWay("follow_up")
+
+        /**
+         * The run, which ended, goes on with the message as its next task: a turn of the chat's agent, which an
+         * operator alone may ask for, delegates a new run that goes on from the run's conversation, as when its model
+         * resumes a run, and ends with the new run's report, which the agent reads in its next turn.
+         */
+        public val RESUME: RunWay = RunWay("resume")
+
+        /**
+         * A new run starts from the conversation of the run, which ended, with the message as its task, as for
+         * [RESUME]; the agent does the same, and a channel shows the new run apart from the one it forks.
+         */
+        public val FORK: RunWay = RunWay("fork")
+
+        /** The values this version knows. */
+        public val entries: List<RunWay> = listOf(FOLLOW_UP, RESUME, FORK)
+
+        /** The value of [id], which keeps an id this version does not know. */
+        public fun of(id: String): RunWay = RunWay(id)
     }
 }
 
@@ -103,8 +151,33 @@ public value class RefusalReason internal constructor(public val id: String) {
         /** No agent serves the chat. */
         public val NO_AGENT: RefusalReason = RefusalReason("no_agent")
 
+        /** No sub-agent run of the submission's chat has its id. */
+        public val UNKNOWN_RUN: RefusalReason = RefusalReason("unknown_run")
+
+        /** The sub-agent run ended and takes no more messages. */
+        public val RUN_ENDED: RefusalReason = RefusalReason("run_ended")
+
+        /** The sender may not write to the sub-agent run: it is neither an operator nor the person it works for. */
+        public val NOT_PERMITTED: RefusalReason = RefusalReason("not_permitted")
+
+        /** The sub-agent run goes on, so it takes follow-ups rather than being resumed or forked. */
+        public val RUN_RUNNING: RefusalReason = RefusalReason("run_running")
+
+        /** This version does not know what the submission asks for, such as a way of a [RunWay] it does not know. */
+        public val UNSUPPORTED: RefusalReason = RefusalReason("unsupported")
+
         /** The values this version knows. */
-        public val entries: List<RefusalReason> = listOf(QUEUE_FULL, SHUTTING_DOWN, UNKNOWN_CHAT, NO_AGENT)
+        public val entries: List<RefusalReason> = listOf(
+            QUEUE_FULL,
+            SHUTTING_DOWN,
+            UNKNOWN_CHAT,
+            NO_AGENT,
+            UNKNOWN_RUN,
+            RUN_ENDED,
+            NOT_PERMITTED,
+            RUN_RUNNING,
+            UNSUPPORTED,
+        )
 
         /** The value of [id], which keeps an id this version does not know. */
         public fun of(id: String): RefusalReason = RefusalReason(id)

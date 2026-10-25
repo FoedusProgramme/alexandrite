@@ -129,6 +129,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.UserAddress
 import org.unitedsoftware.alexandrite.sdk.di.Binds
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
 import org.unitedsoftware.alexandrite.sdk.model.FinishKind
+import org.unitedsoftware.alexandrite.sdk.model.FinishReason
 import org.unitedsoftware.alexandrite.sdk.model.ModelError
 import org.unitedsoftware.alexandrite.sdk.model.ModelErrorKind
 import org.unitedsoftware.alexandrite.sdk.model.ModelEvent
@@ -264,6 +265,12 @@ internal class AgentTurnRunner(
         private var sink: ReplySink? = null
         private var capabilities: ChannelCapabilities? = null
         private var previews: ReplyStream? = null
+
+        /** The reply of the sub-agent run the turn is, where its channel gives each run one, null otherwise. */
+        private var runReply: ReplySink? = null
+
+        /** Whether [runReply] ended. */
+        private var runClosed = false
         private val media = TurnMedia(plan.id, mediaStore, agentSettings.maxMediaBytes, inbox, mediaReader)
 
         /** How the turn's model takes each kind of media. */
@@ -542,7 +549,10 @@ internal class AgentTurnRunner(
 
         /** Opens the reply of a turn that replies to its chat, false when the chat's channel is not open. */
         private suspend fun openReply(turn: TurnInfo): Boolean {
-            if (turn.replyTarget != ReplyTarget.CHAT) return true
+            if (turn.replyTarget != ReplyTarget.CHAT) {
+                delegation?.let { openRunReply(turn, it) }
+                return true
+            }
             val channel = channels.channel(turn.chat.instance)
             if (channel == null) {
                 logger.warn("Turn {} fails: channel instance {} is not open", turn.id, turn.chat.instance)
@@ -552,13 +562,32 @@ internal class AgentTurnRunner(
             val sink = channel.openReply(ReplyRequest(turn, plan.trigger))
             this.capabilities = capabilities
             this.sink = sink
-            if (capabilities.streaming) {
-                val interval = Duration.ofMillis(agentSettings.previewIntervalMillis)
-                previews = ReplyStream(turn.id, sink, interval, clock) { segment, text ->
-                    hooks.responsePreview(turn, segment, text)
-                }
-            }
+            if (capabilities.streaming) previews = previews(turn, sink)
             return true
+        }
+
+        /**
+         * Opens the reply of [delegation], the run that [turn] is, where its chat's channel gives each run a reply of
+         * its own and shows the activity of the turn above.
+         */
+        private suspend fun openRunReply(turn: TurnInfo, delegation: Delegation) {
+            if (!delegation.parent.activityVisible) return
+            val channel = channels.channel(turn.chat.instance) ?: return
+            attempt("open its run's reply") {
+                val capabilities = channel.capabilities(turn.chat)
+                if (!capabilities.runReplies) return@attempt
+                val reply = channel.openReply(ReplyRequest(turn, null, delegation.shown))
+                this.capabilities = capabilities
+                runReply = reply
+                if (capabilities.streaming) previews = previews(turn, reply)
+            }
+        }
+
+        private fun previews(turn: TurnInfo, sink: ReplySink): ReplyStream {
+            val interval = Duration.ofMillis(agentSettings.previewIntervalMillis)
+            return ReplyStream(turn.id, sink, interval, clock) { segment, text ->
+                hooks.responsePreview(turn, segment, text)
+            }
         }
 
         /** The turn context of [turn], whose input reads [text], placed for its requests to [model] with [options]. */
@@ -798,21 +827,27 @@ internal class AgentTurnRunner(
                 val final = limit != null
                 val options = retry ?: parts.options
                 retry = null
-                val built = fitted(parts, options, pending, round, final) ?: return windowFull(parts.model)
-                val request = hooks.llmRequest(turn, round, built).or { return stopped(it) }
-                val response = try {
-                    call(parts.model, request)
-                } catch (e: ModelException) {
-                    val moved = moveOn(parts, e.error) ?: return modelFailed(e.error)
-                    parts = moved.first
-                    tools = moved.second
-                    continue
+                val operatorCall = plan.operatorCall?.takeIf { round == 0 }
+                val response = if (operatorCall != null) {
+                    operatorResponse(operatorCall, parts.model.ref)
+                } else {
+                    val built = fitted(parts, options, pending, round, final) ?: return windowFull(parts.model)
+                    val request = hooks.llmRequest(turn, round, built).or { return stopped(it) }
+                    val response = try {
+                        call(parts.model, request)
+                    } catch (e: ModelException) {
+                        val moved = moveOn(parts, e.error) ?: return modelFailed(e.error)
+                        parts = moved.first
+                        tools = moved.second
+                        continue
+                    }
+                    usage = usage?.plus(response.usage) ?: response.usage
+                    spend(spentOn(response.usage))
+                    parts.window.measured(request, response.usage)
+                    emitUsageUpdated(usage, parts.window.tokens)
+                    hooks.llmResponse(turn, round, response).or { return stopped(it) }
+                    response
                 }
-                usage = usage?.plus(response.usage) ?: response.usage
-                spend(spentOn(response.usage))
-                parts.window.measured(request, response.usage)
-                emitUsageUpdated(usage, parts.window.tokens)
-                hooks.llmResponse(turn, round, response).or { return stopped(it) }
                 val message = response.message
                 val calls = message.parts.filterIsInstance<ToolCallPart>()
                 val finish = response.finish.kind
@@ -857,7 +892,10 @@ internal class AgentTurnRunner(
 
                     limit != null -> return withContext(NonCancellable) { limited(reply, calls, limit) }
 
-                    calls.isEmpty() && awaitedRuns(turn) -> absorbJobs(turn)
+                    calls.isEmpty() && awaitedRuns(turn) -> {
+                        absorbJobs(turn)
+                        absorbFollowUps(turn)
+                    }
 
                     calls.isEmpty() -> return withContext(NonCancellable) {
                         val cutShort = finish == FinishKind.MAX_OUTPUT_TOKENS
@@ -866,6 +904,7 @@ internal class AgentTurnRunner(
 
                     else -> {
                         runCalls(turn, calls, tools)
+                        if (operatorCall != null) return withContext(NonCancellable) { operated(reply) }
                         absorbJobs(turn)
                         absorbFollowUps(turn)
                         toolRounds++
@@ -1117,8 +1156,9 @@ internal class AgentTurnRunner(
         }
 
         /**
-         * Whether a report came in from a background run that this run started, waited for without the turn's permit,
-         * so that the run answers only once none is left; false at once for a top-level turn.
+         * Whether a report came in from a background run that this run started, or a person sent the run a message,
+         * waited for without the turn's permit, so that the run answers only once none is left; false at once for a
+         * top-level turn.
          */
         private suspend fun awaitedRuns(turn: TurnInfo): Boolean =
             delegation != null && permit.released { followUps.awaitJobs(turn.conversation) }
@@ -1164,10 +1204,15 @@ internal class AgentTurnRunner(
             }
         }
 
-        /** Absorbs the messages that the turn's principal queued since the turn started. */
+        /** Absorbs the messages that the turn's principal queued since the turn started, or that people sent its run. */
         private suspend fun absorbFollowUps(turn: TurnInfo) {
-            val principal = principal ?: return
-            val taken = ArrayDeque(followUps.take(principal, plan.origin, startedAt))
+            val principal = principal
+            val queued = when {
+                principal != null -> followUps.take(principal, plan.origin, startedAt)
+                delegation != null -> followUps.takeSent()
+                else -> return
+            }
+            val taken = ArrayDeque(queued)
             try {
                 while (taken.isNotEmpty()) absorbFirst(turn, taken)
             } finally {
@@ -1246,6 +1291,22 @@ internal class AgentTurnRunner(
             val notRun = ToolOutcome.NotRun(limit.reason)
             if (calls.isNotEmpty()) append(*calls.map { textResult(it, limit.result, notRun) }.toTypedArray())
             return answer(reply, limit.notice to limit.key)
+        }
+
+        /**
+         * Ends the turn after [reply], the call it made for its operator, without asking its model about the result,
+         * which the agent reads in its next turn; the reply showed the call alone. A model that needs the reasoning
+         * behind each call it made since the last message, like DeepSeek's, would refuse to go on from a call it did
+         * not make.
+         */
+        private suspend fun operated(reply: AssistantEntry): TurnOutcome {
+            decided()
+            val turn = checkNotNull(turn)
+            sink?.takeUnless { replied }?.let { sink ->
+                replied = true
+                attempt("end its reply") { sink.abandon(ReplyEnd.COMPLETED, vouched(turn)) }
+            }
+            return end(TurnOutcome.Completed(reply), TurnEndKind.COMPLETED)
         }
 
         /** Delivers the stored [reply] as the turn's answer, followed by the notice [after]. */
@@ -1407,6 +1468,7 @@ internal class AgentTurnRunner(
             val turn = checkNotNull(turn)
             append(NoticeEntry(null, text, kind))
             sink?.let { showNotice(it, turn, notice(text, plan.trigger, turn.conversation, vouched)) }
+            closeRun(outcome, end, notice(text, null, turn.conversation, vouched))
             if (sink == null && end == TurnEndKind.FAILED) {
                 attempt("send its failure notice") { routeNotice(turn, text) }
             }
@@ -1428,6 +1490,7 @@ internal class AgentTurnRunner(
         private suspend fun end(outcome: TurnOutcome, end: TurnEndKind): TurnOutcome {
             decided()
             val turn = turn
+            closeRun(outcome, end)
             if (::taint.isInitialized) taint.record()
             if (turn != null && recorded) {
                 attempt("record its end") { conversations.endTurn(turn.id, end) }
@@ -1447,6 +1510,24 @@ internal class AgentTurnRunner(
             stored += appended
             history.appended(turn.conversation, appended)
             return appended
+        }
+
+        /**
+         * Ends the reply of the run the turn is, which ended with [outcome] as [end]: with the run's report, else with
+         * [notice], else without a final message.
+         */
+        private suspend fun closeRun(outcome: TurnOutcome, end: TurnEndKind, notice: OutboundMessage? = null) {
+            val reply = runReply?.takeUnless { runClosed } ?: return
+            runClosed = true
+            val turn = checkNotNull(turn)
+            val report = (outcome as? TurnOutcome.Completed)?.reply?.let(::visibleText)?.takeIf { it.isNotBlank() }
+            val message = report?.let { replyMessage(it, capabilities, null, turn.conversation, vouched(turn)) }
+                ?: notice
+            withContext(NonCancellable) {
+                attempt("end its run's reply") {
+                    if (message != null) reply.complete(message) else reply.abandon(replyEnd(end), vouched(turn))
+                }
+            }
         }
 
         /** Shows the final [notice] of [turn] through [sink], else sends it once more beside the reply. */
@@ -1564,7 +1645,8 @@ internal class AgentTurnRunner(
             override suspend fun detachActivity(run: DelegatedRun): ReplyActivity? {
                 var activity: ReplyActivity? = null
                 attempt("retain a delegated activity") {
-                    activity = delegation?.parent?.detachActivity(run) ?: sink?.detachActivity(run)
+                    activity = delegation?.let { runReply?.detachActivity(run) ?: it.parent.detachActivity(run) }
+                        ?: sink?.detachActivity(run)
                 }
                 return activity
             }
@@ -1624,10 +1706,19 @@ internal class AgentTurnRunner(
         }
 
         /**
-         * Shows [build]'s event through the sink, where the chat's capabilities ask for [kind], or the tool-call events
-         * of a sub-agent run through the turn that delegated it.
+         * Shows [build]'s event through the sink, or the reply of the run the turn is, where the chat's capabilities ask
+         * for [kind], or else the tool-call events of a sub-agent run through the turn that delegated it.
          */
         private suspend fun emit(kind: TurnEventKind, build: () -> TurnEvent) {
+            val runReply = runReply
+            if (runReply != null) {
+                if (capabilities?.events?.contains(kind) ==
+                    true
+                ) {
+                    attempt("show a turn event") { runReply.event(build()) }
+                }
+                return
+            }
             val parent = delegation?.parent
             if (parent != null) {
                 if (kind in FORWARDED) attempt("show a turn event") { parent.show(build()) }
@@ -1692,11 +1783,29 @@ internal fun openCalls(entries: List<TranscriptEntry>): List<ToolCallPart> {
 /** The input and output tokens that [usage] counts. */
 private fun spentOn(usage: Usage): Long = (usage.inputTokens ?: 0) + (usage.outputTokens ?: 0)
 
+/**
+ * The response that makes [call] for the turn's operator in place of [model]'s first, which the model then reads as
+ * its own, as if it had made the call that the operator asked for.
+ */
+private fun operatorResponse(call: ToolCallPart, model: ModelRef): ModelEvent.Completed = ModelEvent.Completed(
+    AssistantEntry(null, listOf(call), model),
+    FinishReason(FinishKind.TOOL_USE, null, "a call the operator asked for"),
+    Usage.builder().build(),
+)
+
 /** The pauses after which a turn goes on. */
 private const val MAX_PAUSES = 3
 
 /** The events of a sub-agent run that the turn above it shows. */
 private val FORWARDED = setOf(TurnEventKind.TOOL_CALL_STARTED, TurnEventKind.TOOL_CALL_UPDATED)
+
+/** How a reply ends without a final message when its turn ended as [end]. */
+private fun replyEnd(end: TurnEndKind): ReplyEnd = when (end) {
+    TurnEndKind.CANCELLED -> ReplyEnd.CANCELLED
+    TurnEndKind.FAILED -> ReplyEnd.FAILED
+    TurnEndKind.SHUT_DOWN -> ReplyEnd.SHUTDOWN
+    else -> ReplyEnd.COMPLETED
+}
 
 /** The tool calls of one response that run at once. */
 private const val MAX_PARALLEL_CALLS = 4

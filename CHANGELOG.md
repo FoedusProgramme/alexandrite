@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- A channel can give each sub-agent run a reply of its own (`ChannelCapabilities.runReplies`), which shows the run's
+  words, thoughts, tool calls and report apart from the turn that delegated it.
+- A channel is told what each sub-agent run was asked to do (`DelegatedRun.task`).
+- A person can write to a running sub-agent run with `Submission.ToRun`; the run takes the message in after its
+  current calls.
+- When a person stops a run, the turn above is told who stopped it and what the run wrote last.
+- An operator can resume or fork a sub-agent run that ended (`RunWay.RESUME`, `RunWay.FORK`): a turn of the chat's
+  agent delegates a new run that goes on from the run's conversation, and ends with its report, which the agent reads
+  in its next turn.
+- Breaking SDK change: `Submission` gains the subtype `ToRun`.
+
 ## 1.0.0-alpha.2
 
 - Config keys with dots, like model names, are written in brackets: `models["gpt-6.1-sol"]`.

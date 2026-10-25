@@ -130,7 +130,7 @@ internal class DelegateTool(
         },
         risk = ToolRisk.AGENT_STATE,
         activity = ToolActivity.DELEGATE,
-        titleArguments = listOf("profile"),
+        titleArguments = listOf("profile", "resume"),
     )
 
     private companion object {

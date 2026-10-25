@@ -23,6 +23,11 @@ public class ChannelCapabilities private constructor(
     public val files: Boolean,
     /** The most bytes one file may hold, null when there is no limit. */
     public val maxFileBytes: Long?,
+    /**
+     * Whether each sub-agent run of a turn gets a reply of its own, which shows the run's words, thoughts, tool calls
+     * and usage and then its report, while the turn's reply shows only the call that delegated it.
+     */
+    public val runReplies: Boolean,
 ) {
     init {
         require(maxPartsPerReply == null || maxPartsPerReply > 0) {
@@ -41,6 +46,7 @@ public class ChannelCapabilities private constructor(
         .events(events)
         .files(files)
         .maxFileBytes(maxFileBytes)
+        .runReplies(runReplies)
 
     public class Builder internal constructor() {
         private var maxPartsPerReply: Int? = null
@@ -51,6 +57,7 @@ public class ChannelCapabilities private constructor(
         private var events: Set<TurnEventKind> = emptySet()
         private var files: Boolean = false
         private var maxFileBytes: Long? = null
+        private var runReplies: Boolean = false
 
         public fun maxPartsPerReply(maxPartsPerReply: Int?): Builder = apply {
             this.maxPartsPerReply = maxPartsPerReply
@@ -71,6 +78,8 @@ public class ChannelCapabilities private constructor(
 
         public fun maxFileBytes(maxFileBytes: Long?): Builder = apply { this.maxFileBytes = maxFileBytes }
 
+        public fun runReplies(runReplies: Boolean): Builder = apply { this.runReplies = runReplies }
+
         public fun build(): ChannelCapabilities = ChannelCapabilities(
             maxPartsPerReply,
             streaming,
@@ -80,6 +89,7 @@ public class ChannelCapabilities private constructor(
             events,
             files,
             maxFileBytes,
+            runReplies,
         )
     }
 
