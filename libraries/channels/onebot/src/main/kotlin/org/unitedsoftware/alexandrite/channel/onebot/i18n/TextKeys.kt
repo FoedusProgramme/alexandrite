@@ -147,4 +147,44 @@ internal object TextKeys {
     const val ACTIVITY_DELEGATE_PAST: String = "activity.delegate.past"
 
     const val ACTIVITY_CALL_BY_AGENT: String = "activity.call.by_agent"
+
+    private val VERBS: Map<String, Pair<String, String>> = mapOf(
+        "read" to (ACTIVITY_VERB_READ_PRESENT to ACTIVITY_VERB_READ_PAST),
+        "list" to (ACTIVITY_VERB_LIST_PRESENT to ACTIVITY_VERB_LIST_PAST),
+        "search" to (ACTIVITY_VERB_SEARCH_PRESENT to ACTIVITY_VERB_SEARCH_PAST),
+        "edit" to (ACTIVITY_VERB_EDIT_PRESENT to ACTIVITY_VERB_EDIT_PAST),
+        "delete" to (ACTIVITY_VERB_DELETE_PRESENT to ACTIVITY_VERB_DELETE_PAST),
+        "move" to (ACTIVITY_VERB_MOVE_PRESENT to ACTIVITY_VERB_MOVE_PAST),
+        "execute" to (ACTIVITY_VERB_EXECUTE_PRESENT to ACTIVITY_VERB_EXECUTE_PAST),
+        "fetch" to (ACTIVITY_VERB_FETCH_PRESENT to ACTIVITY_VERB_FETCH_PAST),
+        "send" to (ACTIVITY_VERB_SEND_PRESENT to ACTIVITY_VERB_SEND_PAST),
+        "think" to (ACTIVITY_VERB_THINK_PRESENT to ACTIVITY_VERB_THINK_PAST),
+        "other" to (ACTIVITY_VERB_OTHER_PRESENT to ACTIVITY_VERB_OTHER_PAST),
+    )
+
+    private val NOUNS: Map<String, Pair<String, String>> = mapOf(
+        "read" to (ACTIVITY_NOUN_READ_ONE to ACTIVITY_NOUN_READ_MANY),
+        "list" to (ACTIVITY_NOUN_LIST_ONE to ACTIVITY_NOUN_LIST_MANY),
+        "search" to (ACTIVITY_NOUN_SEARCH_ONE to ACTIVITY_NOUN_SEARCH_MANY),
+        "edit" to (ACTIVITY_NOUN_EDIT_ONE to ACTIVITY_NOUN_EDIT_MANY),
+        "delete" to (ACTIVITY_NOUN_DELETE_ONE to ACTIVITY_NOUN_DELETE_MANY),
+        "move" to (ACTIVITY_NOUN_MOVE_ONE to ACTIVITY_NOUN_MOVE_MANY),
+        "execute" to (ACTIVITY_NOUN_EXECUTE_ONE to ACTIVITY_NOUN_EXECUTE_MANY),
+        "fetch" to (ACTIVITY_NOUN_FETCH_ONE to ACTIVITY_NOUN_FETCH_MANY),
+        "send" to (ACTIVITY_NOUN_SEND_ONE to ACTIVITY_NOUN_SEND_MANY),
+        "think" to (ACTIVITY_NOUN_THINK_ONE to ACTIVITY_NOUN_THINK_MANY),
+        "other" to (ACTIVITY_NOUN_OTHER_ONE to ACTIVITY_NOUN_OTHER_MANY),
+    )
+
+    /** The present or past tense verb of one activity kind's id, that of `other` for a kind this version does not know. */
+    fun activityVerb(kind: String, past: Boolean): String {
+        val (present, pastKey) = VERBS[kind] ?: VERBS.getValue("other")
+        return if (past) pastKey else present
+    }
+
+    /** The noun phrase, with `{count}`, of one activity kind's id; some languages use it for one and for many alike. */
+    fun activityNoun(kind: String, many: Boolean): String {
+        val (one, manyKey) = NOUNS[kind] ?: NOUNS.getValue("other")
+        return if (many) manyKey else one
+    }
 }

@@ -264,7 +264,7 @@ private fun counted(group: List<ProgressCall>, texts: Texts, language: LanguageT
         return texts.text(TextKeys.ACTIVITY_SUMMARY_NOT_RUN, language, "noun" to noun)
     }
     val past = ran.all { it.status in ENDED }
-    val verb = texts.text("activity.verb.${kind(activity)}.${if (past) "past" else "present"}", language)
+    val verb = texts.text(TextKeys.activityVerb(kind(activity), past), language)
     return "$verb ${noun(activity, ran.size, texts, language)}"
 }
 
@@ -282,7 +282,7 @@ private fun named(call: ProgressCall): String {
 
 /** What one call did to something, as the words of its kind and the count of it. */
 private fun noun(activity: ToolActivity, count: Int, texts: Texts, language: LanguageTag?): String =
-    texts.text("activity.noun.${kind(activity)}.${if (count == 1) "one" else "many"}", language, "count" to count)
+    texts.text(TextKeys.activityNoun(kind(activity), count != 1), language, "count" to count)
 
 /** One call's own line: what it is, and what became of it. */
 private fun callLine(call: ProgressCall, texts: Texts, language: LanguageTag?): String {
