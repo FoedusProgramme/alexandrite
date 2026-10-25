@@ -34,10 +34,14 @@
   harm the local machine on its own. A pulled change to a skill (its files are executable content, so any create,
   change or delete of one is held, never just a risky-looking one; pushing a local-only skill stays automatic), an
   mcp server, a provider endpoint, an instructions file, an agent's permission, sandbox, tools, channels, workspace
-  or inline instructions, a settings value that is a URL or secret reference, or a secret that would overwrite an
-  existing local value, is held for the owner to review rather than applied; so is overwriting or deleting a local
-  item that was never synced before (including on the first sync). `alexandrite sync review [--json]` lists what is
-  held, with why, a diff against current local content, and, for a skill, every file added, changed or removed
+  or inline instructions, or a secret that would overwrite an existing local value, is held for the owner to
+  review rather than applied; so is overwriting or deleting a local item that was never synced before (including
+  on the first sync). A pulled `app.*` settings change is held too unless every changed field is on an explicit
+  allowlist of harmless preferences (`language`, `zone`); `plugins` (which extra plugins load) and
+  `updates.install` (installing a new release with nobody confirming it) are never on it, and neither is a
+  third-party plugin's own settings field, of which none is assumed harmless. `alexandrite sync review [--json]`
+  lists what is held, with why, a diff against current local content, and, for a skill, every file added, changed
+  or removed
   (with its size and, for a small text file such as `SKILL.md`, a line diff); `sync apply [--all] [<key>...]`
   applies it (re-deciding against current local content, so a local edit made since it was staged is not lost);
   `sync discard [--all] [<key>...]` dismisses it without applying it. A pulled config document's secret reference

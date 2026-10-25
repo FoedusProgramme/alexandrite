@@ -42,29 +42,113 @@ class DangerTest {
     }
 
     @Test
-    fun `a settings document introducing a URL is flagged`() {
-        val before = buildJsonObject { put("fetchBackend", "brave") }
+    fun `changedSettingsFields names every top-level field that differs, is added or is removed`() {
+        val before = buildJsonObject {
+            put("language", "en")
+            put("zone", "UTC")
+        }
         val after = buildJsonObject {
-            put("fetchBackend", "pleochroic")
-            put("pleochroicApiBase", "https://evil.example/v1")
+            put("language", "zh-CN")
+            put("plugins", "new")
         }
 
-        assertTrue(hasNewSensitiveSettingsValue(before, after))
+        assertEquals(setOf("language", "zone", "plugins"), changedSettingsFields(before, after))
     }
 
     @Test
-    fun `a settings document introducing a secret reference is flagged`() {
-        val after = buildJsonObject { put("pleochroicApiKey", "\${env:MY_TOKEN}") }
-
-        assertTrue(hasNewSensitiveSettingsValue(null, after))
+    fun `changedSettingsFields is null when either side is not a plain object`() {
+        assertEquals(null, changedSettingsFields(JsonPrimitive("not an object"), buildJsonObject {}))
+        assertEquals(null, changedSettingsFields(buildJsonObject {}, JsonPrimitive("not an object")))
     }
 
     @Test
-    fun `an ordinary settings change with no new URL or secret is not flagged`() {
-        val before = buildJsonObject { put("theme", "dark") }
-        val after = buildJsonObject { put("theme", "light") }
+    fun `an allowlisted app settings field auto-applies on its own`() {
+        assertEquals(
+            emptyList(),
+            dangerReasons(
+                AREA_CONFIG,
+                KIND_SETTINGS,
+                "app",
+                buildJsonObject { put("language", "en") },
+                buildJsonObject { put("language", "zh-CN") },
+                emptySet(),
+            ),
+        )
+        assertEquals(
+            emptyList(),
+            dangerReasons(
+                AREA_CONFIG,
+                KIND_SETTINGS,
+                "app",
+                buildJsonObject { put("zone", "UTC") },
+                buildJsonObject { put("zone", "Asia/Shanghai") },
+                emptySet(),
+            ),
+        )
+    }
 
-        assertTrue(!hasNewSensitiveSettingsValue(before, after))
+    @Test
+    fun `app settings plugins and updates fields are staged, never auto-applied`() {
+        val pluginsChange = dangerReasons(
+            AREA_CONFIG,
+            KIND_SETTINGS,
+            "app",
+            buildJsonObject { put("plugins", buildJsonObject {}) },
+            buildJsonObject { put("plugins", "a-new-plugin") },
+            emptySet(),
+        )
+        assertEquals(listOf("settings_field:plugins"), pluginsChange)
+
+        val updatesChange = dangerReasons(
+            AREA_CONFIG,
+            KIND_SETTINGS,
+            "app",
+            buildJsonObject { put("updates", buildJsonObject { put("install", false) }) },
+            buildJsonObject { put("updates", buildJsonObject { put("install", true) }) },
+            emptySet(),
+        )
+        assertEquals(listOf("settings_field:updates"), updatesChange)
+    }
+
+    @Test
+    fun `a mix of an allowlisted and a non-allowlisted app settings field stages, naming only the latter`() {
+        val reasons = dangerReasons(
+            AREA_CONFIG,
+            KIND_SETTINGS,
+            "app",
+            buildJsonObject {
+                put("language", "en")
+                put("plugins", buildJsonObject {})
+            },
+            buildJsonObject {
+                put("language", "zh-CN")
+                put("plugins", "a-new-plugin")
+            },
+            emptySet(),
+        )
+
+        assertEquals(listOf("settings_field:plugins"), reasons)
+    }
+
+    @Test
+    fun `a plugin's own settings have no allowlist, so even a harmlessly-named field stages`() {
+        val reasons = dangerReasons(
+            AREA_CONFIG,
+            KIND_SETTINGS,
+            "heartbeat",
+            buildJsonObject { put("language", "en") },
+            buildJsonObject { put("language", "zh-CN") },
+            emptySet(),
+        )
+
+        assertEquals(listOf("settings_field:language"), reasons)
+    }
+
+    @Test
+    fun `a non-object settings document stages as a wildcard, not as no change at all`() {
+        val reasons = dangerReasons(AREA_CONFIG, KIND_SETTINGS, "app", null, JsonPrimitive("not an object"), emptySet())
+
+        assertEquals(listOf("settings_field:*"), reasons)
     }
 
     @Test
@@ -115,8 +199,8 @@ class DangerTest {
                 AREA_CONFIG,
                 KIND_SETTINGS,
                 "app",
-                buildJsonObject { put("theme", "dark") },
-                buildJsonObject { put("theme", "light") },
+                buildJsonObject { put("language", "en") },
+                buildJsonObject { put("language", "zh-CN") },
                 emptySet(),
             ),
         )

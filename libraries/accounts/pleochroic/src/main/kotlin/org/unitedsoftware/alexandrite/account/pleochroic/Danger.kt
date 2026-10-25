@@ -1,10 +1,7 @@
 package org.unitedsoftware.alexandrite.account.pleochroic
 
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 
 /*
  * Which pulled changes a sync run stages for the owner to review instead of applying at once (the owner's
@@ -32,34 +29,28 @@ public fun dangerousAgentFields(before: JsonElement?, after: JsonElement?): List
     return DANGEROUS_AGENT_FIELDS.filter { field -> beforeObject?.get(field) != afterObject?.get(field) }
 }
 
-private val URL_LIKE = Regex("^[A-Za-z][A-Za-z0-9+.-]*://")
-
-/** Whether [text] is a URL, or a secret reference in either of [SecretRefs]'s spellings. */
-private fun looksSensitive(text: String): Boolean =
-    URL_LIKE.containsMatchIn(text) || text.startsWith("\${env:") || text.startsWith("\${secret:")
+/**
+ * The `app.*` fields this version knows are a harmless, display-only preference: the language texts are shown in,
+ * and the time zone times are shown in (`AppConfig` in `app/AppConfig.kt`). Nothing else there is allowed through
+ * on its own: `plugins` names which extra plugins the app loads (code), and `updates.install` lets it install a
+ * new release of itself with nobody confirming it; `shutdownGraceSeconds` and `startTimeoutSeconds` are process
+ * lifecycle timing, not a preference, so they are held back too in the absence of a clear reason to trust them.
+ * A plugin's own settings (every `settings` id but `"app"`) have no fixed field set at all (`PluginIds` names the
+ * config root, but each plugin's own `@ConfigSection` class defines whatever it holds), so none of them are ever
+ * assumed harmless; the empty set is used for those.
+ */
+public val ALLOWED_APP_SETTINGS_FIELDS: Set<String> = setOf("language", "zone")
 
 /**
- * Whether [after] (a `settings` document, `app.*` or a plugin's own section) introduces a URL or secret reference
- * that [before] did not already hold anywhere in it: `tools.web.pleochroicApiBase` / `pleochroicApiKey` are two
- * examples among the settings a plugin may define, so this reads every string leaf rather than naming fields.
+ * The top-level fields [before] and [after] (two `settings` documents) disagree on, including a field only one
+ * side names; null when either side holds something other than a plain object, so the caller treats every field
+ * as unknown rather than trusting a document shaped unlike any `settings` document this version writes.
  */
-public fun hasNewSensitiveSettingsValue(before: JsonElement?, after: JsonElement?): Boolean {
-    val added = stringLeafValues(after) - stringLeafValues(before)
-    return added.any(::looksSensitive)
-}
-
-private fun stringLeafValues(element: JsonElement?): Set<String> {
-    val out = mutableSetOf<String>()
-    fun visit(value: JsonElement) {
-        when (value) {
-            is JsonObject -> value.values.forEach(::visit)
-            is JsonArray -> value.forEach(::visit)
-            is JsonNull -> Unit
-            is JsonPrimitive -> if (value.isString) out += value.content
-        }
-    }
-    element?.let(::visit)
-    return out
+public fun changedSettingsFields(before: JsonElement?, after: JsonElement?): Set<String>? {
+    if (before != null && before !is JsonObject) return null
+    if (after != null && after !is JsonObject) return null
+    val keys = before?.keys.orEmpty() + after?.keys.orEmpty()
+    return keys.filterTo(sortedSetOf()) { before?.get(it) != after?.get(it) }
 }
 
 /**
@@ -88,10 +79,22 @@ public fun dangerReasons(
         AREA_CONFIG -> {
             when (kind) {
                 KIND_MCP -> reasons += "mcp_server"
+
                 KIND_PROVIDER -> reasons += "provider_endpoint"
+
                 KIND_INSTRUCTIONS -> reasons += "instructions_file"
+
                 KIND_AGENT -> dangerousAgentFields(before, after).forEach { reasons += "agent_field:$it" }
-                KIND_SETTINGS -> if (hasNewSensitiveSettingsValue(before, after)) reasons += "settings_sensitive_value"
+
+                KIND_SETTINGS -> {
+                    val allowed = if (id == "app") ALLOWED_APP_SETTINGS_FIELDS else emptySet()
+                    val changed = changedSettingsFields(before, after)
+                    if (changed == null) {
+                        reasons += "settings_field:*"
+                    } else {
+                        (changed - allowed).forEach { reasons += "settings_field:$it" }
+                    }
+                }
             }
             after?.let { data ->
                 suspiciousSecretReference(data, syncedSecrets)?.let { reasons += "suspicious_secret_reference" }
