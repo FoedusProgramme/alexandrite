@@ -27,6 +27,7 @@ import org.unitedsoftware.alexandrite.sdk.channel.TurnEvent
 import org.unitedsoftware.alexandrite.sdk.channel.rebuild
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 import org.unitedsoftware.alexandrite.sdk.chat.ChatUser
+import org.unitedsoftware.alexandrite.sdk.chat.UserAddress
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import org.unitedsoftware.alexandrite.sdk.di.Contribute
 import org.unitedsoftware.alexandrite.sdk.i18n.Texts
@@ -85,6 +86,10 @@ internal class OneBotChannel(
 
     override fun mayRun(chat: ChatAddress, issuer: ChatUser, command: String, withArguments: Boolean): Boolean =
         rules.mayRun(chat, issuer.isOperator, command, withArguments)
+
+    /** Whether [user] is one of the instance's configured admins, who are operators in every chat of the bot. */
+    override suspend fun isOperator(chat: ChatAddress, user: UserAddress): Boolean =
+        user.instance == instance.id && user.user in config.admins
 
     /**
      * The reply of one turn, which delivers the words of each of the turn's requests and the final message.

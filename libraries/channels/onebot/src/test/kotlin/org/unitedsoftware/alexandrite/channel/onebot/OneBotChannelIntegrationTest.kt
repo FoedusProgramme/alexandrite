@@ -21,6 +21,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 import org.unitedsoftware.alexandrite.sdk.chat.ToolCallId
+import org.unitedsoftware.alexandrite.sdk.chat.UserAddress
 import org.unitedsoftware.alexandrite.sdk.di.key
 import org.unitedsoftware.alexandrite.sdk.tool.ToolActivity
 import org.unitedsoftware.alexandrite.sdk.turn.Submission
@@ -34,6 +35,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -375,6 +377,31 @@ class OneBotChannelIntegrationTest {
         get(directory).channel(instance) ?: error("the instance has no channel")
 
     @Test
+    fun `only a configured admin is an operator of the instance`() {
+        val peer = ImplementationPeer()
+        val port = peer.startAndPort()
+        val submitter = RecordingTurnSubmitter()
+        try {
+            runBlocking {
+                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                    .config(config(port, admins = setOf("12345678")))
+                    .turnSubmitter(submitter)
+                    .build()
+                    .run {
+                        assertTrue(peer.awaitConnection())
+                        val chat = ChatAddress(instance, "private:12345678")
+                        assertTrue(front().isOperator(chat, UserAddress(instance, "12345678")))
+                        assertFalse(front().isOperator(chat, UserAddress(instance, "99999999")))
+                        val other = ChannelInstanceId(ChannelType("onebot"), "other")
+                        assertFalse(front().isOperator(chat, UserAddress(other, "12345678")))
+                    }
+            }
+        } finally {
+            peer.stop()
+        }
+    }
+
+    @Test
     fun `what the channel sends and drops is logged`() {
         val peer = ImplementationPeer()
         val port = peer.startAndPort()
@@ -524,7 +551,7 @@ class OneBotChannelIntegrationTest {
         return front.send(chat, message)
     }
 
-    private fun config(port: Int): String = """
+    private fun config(port: Int, admins: Set<String> = emptySet()): String = """
         {
           "settings": {"eventQueueCapacity": 64},
           "instances": {
@@ -535,7 +562,8 @@ class OneBotChannelIntegrationTest {
               "firstByteTimeoutMillis": 5000,
               "idleTimeoutMillis": 5000,
               "reconnectIntervalMillis": 200,
-          "allowedChats": ["group:987654", "private:12345678"]
+          "allowedChats": ["group:987654", "private:12345678"],
+          "admins": [${admins.joinToString(",") { "\"$it\"" }}]
             }
           }
         }

@@ -29,6 +29,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 import org.unitedsoftware.alexandrite.sdk.chat.RunId
 import org.unitedsoftware.alexandrite.sdk.chat.ToolCallId
+import org.unitedsoftware.alexandrite.sdk.chat.UserAddress
 import org.unitedsoftware.alexandrite.sdk.di.key
 import org.unitedsoftware.alexandrite.sdk.tool.ToolActivity
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
@@ -41,6 +42,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -86,6 +88,33 @@ class QqBotChannelIntegrationTest {
                         val sent = api.calls(SEND_DIRECT).first { "\"msg_type\":0" in it.body }
                         assertTrue("\"content\":\"hello back\"" in sent.body, sent.body)
                         assertTrue("\"msg_id\":\"msg1\"" in sent.body, sent.body)
+                    }
+            }
+        } finally {
+            platform.stop()
+            api.close()
+        }
+    }
+
+    @Test
+    fun `only a configured admin is an operator of the instance`() {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        try {
+            runBlocking {
+                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                    .config(config(api.base, platform.url, admins = setOf("u1")))
+                    .turnSubmitter(RecordingTurnSubmitter())
+                    .build()
+                    .run {
+                        assertTrue(platform.awaitConnection(), "the gateway was not connected")
+                        val channel = get(directory).channel(instance) ?: error("the instance has no channel")
+                        val chat = ChatAddress(instance, "private:u1")
+                        assertTrue(channel.isOperator(chat, UserAddress(instance, "u1")))
+                        assertFalse(channel.isOperator(chat, UserAddress(instance, "u2")))
+                        val other = ChannelInstanceId(ChannelType("qqbot"), "other")
+                        assertFalse(channel.isOperator(chat, UserAddress(other, "u1")))
                     }
             }
         } finally {

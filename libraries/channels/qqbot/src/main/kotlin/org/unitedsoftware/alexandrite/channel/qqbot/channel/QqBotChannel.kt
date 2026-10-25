@@ -9,6 +9,7 @@ import org.unitedsoftware.alexandrite.sdk.channel.ApprovalAnswer
 import org.unitedsoftware.alexandrite.sdk.channel.ApprovalRequest
 import org.unitedsoftware.alexandrite.sdk.channel.Channel
 import org.unitedsoftware.alexandrite.sdk.channel.ChannelCapabilities
+import org.unitedsoftware.alexandrite.sdk.channel.ChannelInstance
 import org.unitedsoftware.alexandrite.sdk.channel.DelegatedRun
 import org.unitedsoftware.alexandrite.sdk.channel.Delivery
 import org.unitedsoftware.alexandrite.sdk.channel.Markup
@@ -27,6 +28,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 import org.unitedsoftware.alexandrite.sdk.chat.ChatKind
 import org.unitedsoftware.alexandrite.sdk.chat.ChatUser
 import org.unitedsoftware.alexandrite.sdk.chat.RunId
+import org.unitedsoftware.alexandrite.sdk.chat.UserAddress
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import org.unitedsoftware.alexandrite.sdk.di.Contribute
 import org.unitedsoftware.alexandrite.sdk.transcript.AssistantEntry
@@ -43,6 +45,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
 @ChannelInstanceScoped
 @Contribute(Channel::class, name = "qqbot")
 internal class QqBotChannel(
+    private val instance: ChannelInstance,
     private val sender: QqBotSender,
     private val approvals: QqBotApprovals,
     private val typing: QqBotTyping,
@@ -61,6 +64,10 @@ internal class QqBotChannel(
 
     override fun mayRun(chat: ChatAddress, issuer: ChatUser, command: String, withArguments: Boolean): Boolean =
         rules.mayRun(chat, issuer.isOperator, command, withArguments)
+
+    /** Whether [user] is one of the instance's configured admins, who are operators in every chat of the bot. */
+    override suspend fun isOperator(chat: ChatAddress, user: UserAddress): Boolean =
+        user.instance == instance.id && user.user in config.admins
 
     override suspend fun partsNeeded(chat: ChatAddress, text: String, markup: Markup): Int =
         if (text.isEmpty()) 0 else 1
