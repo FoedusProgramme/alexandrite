@@ -17,6 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class QqBotGatewayTest {
@@ -138,6 +139,86 @@ class QqBotGatewayTest {
             assertEquals(4_000L, gateway.backOff(20))
         } finally {
             http.close()
+        }
+    }
+
+    @Test
+    fun `OP_RECONNECT keeps the session and resumes it`() = runBlocking {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        val config = testConfig(api.base, gatewayUrl = platform.url)
+        val http = QqBotHttp(config)
+        try {
+            val tokens = QqBotTokens(config, http, clock)
+            val gateway = QqBotGateway(config, QqBotApi(http, tokens), tokens)
+            gateway.onStart()
+
+            assertNotNull(platform.awaitFrame(predicate = { it.contains("\"op\":2") }))
+
+            platform.push("""{"op":7}""")
+
+            val resumed = assertNotNull(platform.awaitFrame(predicate = { it.contains("\"op\":6") }))
+            assertTrue("\"session_id\":\"s1\"" in resumed, resumed)
+
+            gateway.onStop()
+        } finally {
+            platform.stop()
+            http.close()
+            api.close()
+        }
+    }
+
+    @Test
+    fun `OP_INVALID_SESSION drops the session and identifies fresh`() = runBlocking {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        val config = testConfig(api.base, gatewayUrl = platform.url)
+        val http = QqBotHttp(config)
+        try {
+            val tokens = QqBotTokens(config, http, clock)
+            val gateway = QqBotGateway(config, QqBotApi(http, tokens), tokens)
+            gateway.onStart()
+
+            assertNotNull(platform.awaitFrame(predicate = { it.contains("\"op\":2") }))
+
+            platform.push("""{"op":9}""")
+
+            val reidentified = assertNotNull(platform.awaitFrame(predicate = { it.contains("\"op\":2") }))
+            assertTrue("QQBot access" in reidentified, reidentified)
+
+            gateway.onStop()
+        } finally {
+            platform.stop()
+            http.close()
+            api.close()
+        }
+    }
+
+    @Test
+    fun `a fatal close code stops the gateway for good`() = runBlocking {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        val config = testConfig(api.base, gatewayUrl = platform.url)
+        val http = QqBotHttp(config)
+        try {
+            val tokens = QqBotTokens(config, http, clock)
+            val gateway = QqBotGateway(config, QqBotApi(http, tokens), tokens)
+            gateway.onStart()
+
+            assertNotNull(platform.awaitFrame(predicate = { it.contains("\"op\":2") }))
+
+            platform.closeConnection(4013, "disallowed intents")
+
+            assertNull(platform.awaitFrame(predicate = { it.contains("\"op\":2") }, timeoutMillis = 1_000))
+
+            gateway.onStop()
+        } finally {
+            platform.stop()
+            http.close()
+            api.close()
         }
     }
 
