@@ -12,6 +12,8 @@ private const val EXAMPLE_CHAT = "telegram:work:123456789"
 private const val SERVICE_URL = "--service-url"
 private const val SERVICE_TOKEN = "--service-token"
 private const val DEVICE_NAME = "--device-name"
+private const val DRY_RUN = "--dry-run"
+private const val ALL = "--all"
 
 private const val RUN = "area.run"
 private const val SETUP = "area.setup"
@@ -23,6 +25,14 @@ private const val PLEOCHROIC = "area.pleochroic"
 private const val HELP = "area.help"
 
 private fun noArguments(given: Given, name: String) = given.atMost(0, Text("usage.no_argument", "command" to name))
+
+/** `null` for `--all` (every pending change), the named keys otherwise; a usage error for neither or both. */
+private fun pendingKeys(given: Given): Set<String>? {
+    val all = given.flag(ALL)
+    if (all && given.operands.isNotEmpty()) throw UsageException("usage.sync_pending_both")
+    if (!all && given.operands.isEmpty()) throw UsageException("usage.sync_pending_none")
+    return if (all) null else given.operands.toSet()
+}
 
 private fun admins(given: Given): List<Long> = given.all("--admin").map {
     it.toLongOrNull()?.takeIf { id -> id > 0 } ?: throw UsageException("usage.admin_id")
@@ -323,13 +333,40 @@ internal val COMMANDS: List<CliCommand> = listOf(
         noArguments(given, "sync disable")
         CliAction.Act(::syncDisable)
     },
-    CliCommand(listOf("sync", "now"), "[$JSON]", PLEOCHROIC, flags = setOf(JSON)) { given ->
+    CliCommand(
+        listOf("sync", "now"),
+        "[$JSON] [--dry-run]",
+        PLEOCHROIC,
+        flags = setOf(JSON, DRY_RUN),
+    ) { given ->
         noArguments(given, "sync now")
-        CliAction.Act { syncNow(it, given.flag(JSON)) }
+        CliAction.Act { syncNow(it, given.flag(JSON), given.flag(DRY_RUN)) }
     },
     CliCommand(listOf("sync", "status"), "[$JSON]", PLEOCHROIC, flags = setOf(JSON)) { given ->
         noArguments(given, "sync status")
         CliAction.Act { syncStatus(it, given.flag(JSON)) }
+    },
+    CliCommand(listOf("sync", "review"), "[$JSON]", PLEOCHROIC, flags = setOf(JSON)) { given ->
+        noArguments(given, "sync review")
+        CliAction.Act { syncReview(it, given.flag(JSON)) }
+    },
+    CliCommand(
+        listOf("sync", "apply"),
+        "[--all] [<key>...]",
+        PLEOCHROIC,
+        flags = setOf(ALL),
+    ) { given ->
+        val keys = pendingKeys(given)
+        CliAction.Act { syncApply(it, keys) }
+    },
+    CliCommand(
+        listOf("sync", "discard"),
+        "[--all] [<key>...]",
+        PLEOCHROIC,
+        flags = setOf(ALL),
+    ) { given ->
+        val keys = pendingKeys(given)
+        CliAction.Act { syncDiscard(it, keys) }
     },
     CliCommand(listOf("manual"), "[<topic>] [--search <words>]", HELP, options = setOf("--search")) { given ->
         val search = given.option("--search")

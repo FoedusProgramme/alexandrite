@@ -2,7 +2,9 @@ package org.unitedsoftware.alexandrite.app
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
@@ -14,6 +16,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 /**
  * `sync now` end to end, through a loopback [FakeModelServer] standing in for the account's `apiBase`: the glue this
@@ -67,7 +70,7 @@ class SyncNowTest {
     }
 
     @Test
-    fun `sync now pulls a brand new remote mcp server into the config file`() {
+    fun `sync now stages a brand new remote mcp server rather than pulling it in`() {
         cli.config(signedInConfig())
         cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
         assertEquals(0, cli("sync", "enable").code)
@@ -91,8 +94,24 @@ class SyncNowTest {
 
         assertEquals(0, printed.code, printed.err)
         assertContains(printed.out, "1 pushed")
-        assertContains(printed.out, "1 pulled")
+        assertContains(printed.out, "0 pulled")
+        assertContains(printed.out, "held back for review")
+        assertNull(file().at("mcp.servers.notes"))
+
+        val review = cli("sync", "review", "--json")
+        val key = Json.parseToJsonElement(review.out).jsonObject["pending"]!!.jsonArray.single().jsonObject["key"]!!
+            .jsonPrimitive.content
+
+        val applied = cli("sync", "apply", key)
+
+        assertEquals(0, applied.code, applied.err)
         assertEquals("\"mcp-server\"", "${file().at("mcp.servers.notes.command")}")
+        assertEquals(
+            0,
+            cli("sync", "review", "--json").let {
+                Json.parseToJsonElement(it.out).jsonObject["pending"]!!.jsonArray.size
+            },
+        )
     }
 
     @Test
@@ -112,6 +131,101 @@ class SyncNowTest {
         assertContains(printed.out, "2 pushed")
         val request = server.requests.single { it.path == "/secrets/MY_TOKEN" }
         assertContains(request.body, "hunter2")
+    }
+
+    @Test
+    fun `sync now --dry-run reports what would happen but writes and stages nothing`() {
+        cli.config(signedInConfig())
+        cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+        assertEquals(0, cli("sync", "enable").code)
+        server.enqueue(
+            fakeResponse {
+                body(
+                    """{"changes": [{"seq": 1, "area": "config", "kind": "mcp", "id": "notes", "rev": "rev-9",
+                        "deleted": false}], "cursor": 1, "more": false}""",
+                )
+            },
+            "/sync/changes",
+        )
+        server.enqueue(
+            fakeResponse { body("""{"rev": "rev-9", "data": {"command": "mcp-server"}}""") },
+            "/config/mcp/notes",
+        )
+
+        val printed = cli("sync", "now", "--dry-run")
+
+        assertEquals(0, printed.code, printed.err)
+        assertContains(printed.out, "Sync would do")
+        assertNull(file().at("mcp.servers.notes"))
+        assertEquals(
+            0,
+            cli("sync", "review", "--json").let {
+                Json.parseToJsonElement(it.out).jsonObject["pending"]!!.jsonArray.size
+            },
+        )
+        assertEquals(
+            0,
+            cli("sync", "status", "--json").let {
+                Json.parseToJsonElement(it.out).jsonObject["cursor"]?.jsonPrimitive?.content?.toLong() ?: -1L
+            },
+        )
+    }
+
+    @Test
+    fun `sync discard leaves a pending change unapplied, and sync review no longer shows it`() {
+        cli.config(signedInConfig())
+        cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+        assertEquals(0, cli("sync", "enable").code)
+        server.enqueue(
+            fakeResponse {
+                body(
+                    """{"changes": [{"seq": 1, "area": "config", "kind": "mcp", "id": "notes", "rev": "rev-9",
+                        "deleted": false}], "cursor": 1, "more": false}""",
+                )
+            },
+            "/sync/changes",
+        )
+        server.enqueue(
+            fakeResponse { body("""{"rev": "rev-9", "data": {"command": "mcp-server"}}""") },
+            "/config/mcp/notes",
+        )
+        server.enqueue(fakeResponse { body("""{"rev": "rev-1"}""") }, "/config/provider/pleochroic%2Fdefault")
+        cli("sync", "now")
+        val key = Json.parseToJsonElement(cli("sync", "review", "--json").out)
+            .jsonObject["pending"]!!.jsonArray.single().jsonObject["key"]!!.jsonPrimitive.content
+
+        val discarded = cli("sync", "discard", key)
+
+        assertEquals(0, discarded.code, discarded.err)
+        assertNull(file().at("mcp.servers.notes"))
+        assertEquals(
+            0,
+            cli("sync", "review", "--json").let {
+                Json.parseToJsonElement(it.out).jsonObject["pending"]!!.jsonArray.size
+            },
+        )
+    }
+
+    @Test
+    fun `sync apply and discard need either --all or named keys, not both and not neither`() {
+        cli.config(signedInConfig())
+        cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+
+        assertEquals(ExitCode.USAGE, cli("sync", "apply").code)
+        assertEquals(ExitCode.USAGE, cli("sync", "apply", "--all", "some-key").code)
+        assertEquals(ExitCode.USAGE, cli("sync", "discard").code)
+        assertEquals(ExitCode.USAGE, cli("sync", "discard", "--all", "some-key").code)
+    }
+
+    @Test
+    fun `sync apply of an unknown key is a usage-level failure, naming it`() {
+        cli.config(signedInConfig())
+        cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+
+        val printed = cli("sync", "apply", "no-such-key")
+
+        assertEquals(ExitCode.FAILURE, printed.code)
+        assertContains(printed.err, "no-such-key")
     }
 }
 

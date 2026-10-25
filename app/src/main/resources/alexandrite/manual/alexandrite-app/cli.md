@@ -104,9 +104,26 @@ turned on; nothing is synced before `sync enable` runs.
   that side's content; `merge` (the default) takes the union of an object document's keys, the locally-changed
   value winning on a key both sides hold.
 - `alexandrite sync disable` — turn sync off; what was already synced is left as it is.
-- `alexandrite sync now [--json]` — sync once: pulls the change feed since the last sync, pushes what changed
-  locally, and resolves anything that changed on both sides by the enabled policy.
-- `alexandrite sync status [--json]` — whether sync is on, its policy, and how many items it tracks.
+- `alexandrite sync now [--json] [--dry-run]` — sync once: pulls the change feed since the last sync, pushes what
+  changed locally, and resolves anything that changed on both sides by the enabled policy. `--dry-run` reports what
+  would happen without writing or holding anything back.
+- `alexandrite sync status [--json]` — whether sync is on, its policy, how many items it tracks, and how many
+  pulled changes are held back for review.
+- `alexandrite sync review [--json]` — list the pulled changes held back for review (see below), each with why and
+  a diff against the current local content.
+- `alexandrite sync apply [--all] [<key>...]` — apply held-back changes, named (the keys `sync review` prints) or
+  all of them. Each is re-decided against current local content first, so a local edit made after it was held back
+  is not lost.
+- `alexandrite sync discard [--all] [<key>...]` — dismiss held-back changes without applying them; the same
+  version is not held back again, but a further change at the service still will be.
+
+A pull is held back for review rather than applied when it is one of: a change to an mcp server or a provider
+endpoint; a change to an instructions file (`AGENTS.md`, `PERSONA.md`); a change to an agent's `permission`,
+`sandbox`, `tools`, `channels`, `workspace` or inline `instructions`; a settings value that is a URL or a secret
+reference; a secret that would overwrite a value already held locally; or overwriting or deleting a local item
+that was never synced before (including every local item on the very first sync). This is because the account's
+server could be compromised or impersonated, and a pull must never be able to change what an agent is allowed to
+do, where it reads or writes, or which secret a provider or tool uses, without the owner seeing it first.
 
 ## The manual
 
