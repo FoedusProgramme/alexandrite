@@ -10,8 +10,7 @@ import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
  *
  * The platform names an account by its single-chat open id in a direct chat and by another id in each group, so
  * [QqBotInstanceConfig.admins] alone, which holds the single-chat ids, never names an admin inside a group. A group's
- * own owner or administrator role is not asked here: anyone may add a public bot to a group they own, and a platform
- * role is not this instance's to trust with its tools. An admin reaches a group as themselves only once [links] holds
+ * own owner or administrator role is not asked here. An admin reaches a group as themselves only once [links] holds
  * an alias of them there.
  */
 @ChannelInstanceScoped

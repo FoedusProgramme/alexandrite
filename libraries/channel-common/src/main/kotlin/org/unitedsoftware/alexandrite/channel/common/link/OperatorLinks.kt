@@ -22,14 +22,9 @@ import kotlin.time.Duration.Companion.minutes
  *
  * An operator asks for a one-time code where they are already recognized, then spends it with a command in the chat
  * where the platform gives them a different id; that id becomes their alias there, for that chat alone, until
- * revoked. OneBot and Telegram name the same account everywhere and have no use for this; the QQ official bot
- * platform names a person by a different id in a single chat and in each group, which is what this is for.
+ * revoked.
  */
-public class OperatorLinks(
-    clock: Clock,
-    records: Records,
-    public val codeLifetime: Duration = 10.minutes,
-) {
+public class OperatorLinks(clock: Clock, records: Records, public val codeLifetime: Duration = 10.minutes) {
     private val codes = PairingCodes<UserAddress, Unit>(clock, codeLifetime, capacity = CODE_CAPACITY)
     private val links = records.collection<LinkRecord>(COLLECTION)
     private val deciding = Mutex()
