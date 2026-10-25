@@ -75,8 +75,8 @@ internal val COMMANDS: List<CliCommand> = listOf(
     CliCommand(
         listOf("init"),
         "[--non-interactive] [--only <step>]... [--skip <step>]... [--provider <provider>] [--endpoint <name>] " +
-            "[--base-url <url>] [--model <model>]... [$AGENT <id>] [--admin <user id>]... [--language <tag>] " +
-            "[--zone <zone>] [--api-base-url <url>] [--force]",
+            "[--base-url <url>] [$SERVICE_URL <url> $SERVICE_TOKEN <token>] [--model <model>]... [$AGENT <id>] " +
+            "[--admin <user id>]... [--language <tag>] [--zone <zone>] [--api-base-url <url>] [--force]",
         SETUP,
         flags = setOf("--non-interactive", "--force"),
         options = setOf(
@@ -85,6 +85,8 @@ internal val COMMANDS: List<CliCommand> = listOf(
             "--provider",
             "--endpoint",
             "--base-url",
+            SERVICE_URL,
+            SERVICE_TOKEN,
             "--model",
             AGENT,
             "--admin",
@@ -98,12 +100,17 @@ internal val COMMANDS: List<CliCommand> = listOf(
         val skipped = given.all("--skip").map(::requireStep).toSet()
         if (only.isNotEmpty() && skipped.isNotEmpty()) throw UsageException("usage.init_only_skip")
         val steps = (only.ifEmpty { InitStep.entries.toSet() }) - skipped
+        val serviceUrl = given.option(SERVICE_URL)
+        val serviceToken = given.option(SERVICE_TOKEN)
+        if ((serviceUrl == null) != (serviceToken == null)) throw UsageException("usage.init_self_hosted")
         val options = InitOptions(
             interactive = !given.flag("--non-interactive"),
             steps = steps,
             provider = given.option("--provider")?.let(::requireProvider),
             endpoint = given.option("--endpoint")?.let { requireId(it, "what.endpoint") },
             baseUrl = given.option("--base-url"),
+            serviceUrl = serviceUrl,
+            serviceToken = serviceToken,
             models = given.all("--model"),
             agent = given.option(AGENT)?.let { requireId(it, "what.agent_id") },
             admins = admins(given),

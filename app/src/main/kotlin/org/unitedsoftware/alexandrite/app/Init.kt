@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import org.unitedsoftware.alexandrite.account.pleochroic.PLEOCHROIC_PORTAL_URL
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
 import org.unitedsoftware.alexandrite.app.tui.Choice
 import org.unitedsoftware.alexandrite.internal.time.zoneOrNull
@@ -32,6 +33,11 @@ internal class InitOptions(
     val provider: ProviderKind? = null,
     val endpoint: String? = null,
     val baseUrl: String? = null,
+    /** A self-hosted standalone-service's address and token, for the Pleochroic provider only. */
+    val serviceUrl: String? = null,
+    val serviceToken: String? = null,
+    /** The portal a Pleochroic device login signs in through; only a test overrides it. */
+    val portalBaseUrl: String = PLEOCHROIC_PORTAL_URL,
     /** The models of the endpoint, the first the agent's default. */
     val models: List<String> = emptyList(),
     val agent: String? = null,
@@ -162,6 +168,7 @@ private class Setup(private val cli: Cli, private val options: InitOptions) {
         }
         if (!begins(InitStep.MODEL)) return ExitCode.OK
         val kind = options.provider ?: chooseProvider() ?: return cli.fail(cli.t("init.no_answer"))
+        if (kind.id == "pleochroic") return pleochroicModel(kind)
         val endpoint = options.endpoint ?: kind.endpoint
         val base = baseUrl(kind) ?: return ExitCode.FAILURE
         val variable = if (endpoint == kind.endpoint) kind.keyVariable else keyVariable(endpoint)
@@ -199,13 +206,61 @@ private class Setup(private val cli: Cli, private val options: InitOptions) {
         } else if (config.at("$root.baseUrl") != null) {
             changes += ConfigChangeView("$root.baseUrl", remove = true)
         }
+        summary["init.summary.provider"] = "${title(kind)} · $base"
+        finishModelStep(endpoint, models.map { "$endpoint/$it" })
+        return ExitCode.OK
+    }
+
+    /**
+     * The Pleochroic provider's model step: signs in ([pleochroicSignIn], a device login or, with
+     * `--service-url`/`--service-token`, a self-hosted standalone-service) in place of the generic step's key and
+     * base URL prompts, then continues exactly as the other providers do (the model pick against `GET /v1/models`,
+     * [finishModelStep]'s agent/Telegram wiring), and turns on `tools.web`'s backend where the account is entitled
+     * for it ([webBackendChanges], the same as `alexandrite login pleochroic`).
+     */
+    private fun pleochroicModel(kind: ProviderKind): Int {
+        val signedIn = pleochroicSignIn(cli, options.serviceUrl, options.serviceToken, null, options.portalBaseUrl)
+            ?: return ExitCode.FAILURE
+        val base = signedIn.apiBase
+        val key = signedIn.key
+        val listing = ui.busy({ cli.t("init.model.checking", "base" to base) }) { listModels(cli, kind, base, key) }
+        val listed = when (listing) {
+            is Listing.Models -> {
+                ui.good(cli.t("init.model.listed", "base" to base, "count" to listing.ids.size))
+                listing.ids
+            }
+
+            is Listing.Refused -> return cli.fail(cli.texts(listing.reason))
+
+            is Listing.Unchecked -> null.also { cli.fail(cli.texts(listing.reason)) }
+        }
+        val models = chooseModels(listed) ?: return ExitCode.FAILURE
+        val endpoint = PLEOCHROIC_ENDPOINT
+        val root = "providers.${kind.id}.endpoints.$endpoint"
+        secrets[kind.keyVariable] = key
+        changes += ConfigChangeView("$root.apiKey", JsonPrimitive(EnvReferences.of(kind.keyVariable)))
+        changes += ConfigChangeView("$root.baseUrl", JsonPrimitive(base))
+        changes += webBackendChanges(config, signedIn.status, base, key)
+        summary["init.summary.provider"] = pleochroicSummary(kind, signedIn)
+        finishModelStep(endpoint, models.map { "$endpoint/$it" })
+        return ExitCode.OK
+    }
+
+    private fun pleochroicSummary(kind: ProviderKind, signedIn: PleochroicSignIn): String {
+        val account = signedIn.account.label ?: cli.t("pleochroic.unnamed")
+        val plan = signedIn.account.plan?.label
+        return "${title(kind)} · $account" + (plan?.let { " ($it)" } ?: "")
+    }
+
+    /** What every provider's model step finishes with, once it has [endpoint] and [named] (its chosen models,
+     * `<endpoint>/<model>`): the agent's default description and models, the summary line, and, when a Telegram
+     * instance is already set up but serves no agent yet, wiring this agent to it. */
+    private fun finishModelStep(endpoint: String, named: List<String>) {
         if (agentConfig == null) {
             changes += ConfigChangeView("$AGENTS.$agent.description", JsonPrimitive(cli.t("init.agent")))
         }
-        val named = models.map { "$endpoint/$it" }
         changes += defaultModels(agent, agentConfig, named)
         ui.good(cli.t("init.model.chosen", "agent" to agent, "models" to named.joinToString()))
-        summary["init.summary.provider"] = "${title(kind)} · $base"
         summary["init.summary.models"] = cli.t("init.summary.models_value", "models" to named.joinToString())
         val instance = config.at("$TELEGRAM_INSTANCES.$INSTANCE") as? JsonObject
         val served = agents(config).any { it.channels["telegram:$INSTANCE"] != null }
@@ -216,7 +271,6 @@ private class Setup(private val cli: Cli, private val options: InitOptions) {
                 JsonObject(listOfNotNull(home?.let { "home" to JsonPrimitive(it) }).toMap()),
             )
         }
-        return ExitCode.OK
     }
 
     /** Whether the agent has a model, or gets one in this run. */

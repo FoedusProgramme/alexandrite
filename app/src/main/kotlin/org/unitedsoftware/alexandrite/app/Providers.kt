@@ -3,6 +3,7 @@ package org.unitedsoftware.alexandrite.app
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import org.unitedsoftware.alexandrite.account.pleochroic.PLEOCHROIC_API_BASE
 import java.io.IOException
 
 /**
@@ -25,26 +26,9 @@ internal class ProviderKind(
     val listsWindows: Boolean = true,
 )
 
-/** The providers in the order `init` offers them. */
+/** The providers in the order `init` offers them: alphabetically by [title], Pleochroic a peer of the rest (its
+ * own device login, in place of the others' key prompt, is `Setup.pleochroicModel`'s business, not this list's). */
 internal val PROVIDER_KINDS: List<ProviderKind> = listOf(
-    ProviderKind("deepseek", "deepseek", "https://api.deepseek.com", "/models", "DEEPSEEK_API_KEY", true),
-    ProviderKind(
-        "openrouter",
-        "openrouter",
-        "https://openrouter.ai/api/v1",
-        "/models",
-        "OPENROUTER_API_KEY",
-        true,
-        keyPath = "/key",
-    ),
-    ProviderKind(
-        "openai-compatible",
-        "compatible",
-        null,
-        "/models",
-        "OPENAI_COMPATIBLE_API_KEY",
-        false,
-    ),
     ProviderKind(
         "anthropic-compatible",
         "anthropic",
@@ -54,6 +38,7 @@ internal val PROVIDER_KINDS: List<ProviderKind> = listOf(
         false,
         anthropic = true,
     ),
+    ProviderKind("deepseek", "deepseek", "https://api.deepseek.com", "/models", "DEEPSEEK_API_KEY", true),
     ProviderKind(
         "lmstudio",
         "lmstudio",
@@ -70,6 +55,31 @@ internal val PROVIDER_KINDS: List<ProviderKind> = listOf(
         "/models",
         "OPENAI_API_KEY",
         false,
+    ),
+    ProviderKind(
+        "openai-compatible",
+        "compatible",
+        null,
+        "/models",
+        "OPENAI_COMPATIBLE_API_KEY",
+        false,
+    ),
+    ProviderKind(
+        "openrouter",
+        "openrouter",
+        "https://openrouter.ai/api/v1",
+        "/models",
+        "OPENROUTER_API_KEY",
+        true,
+        keyPath = "/key",
+    ),
+    ProviderKind(
+        "pleochroic",
+        PLEOCHROIC_ENDPOINT,
+        PLEOCHROIC_API_BASE,
+        "/models",
+        "PLEOCHROIC_API_KEY",
+        true,
     ),
 )
 

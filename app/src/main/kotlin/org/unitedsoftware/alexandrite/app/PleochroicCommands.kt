@@ -31,8 +31,8 @@ import java.nio.file.Files
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-private const val PLEOCHROIC_ENDPOINT = "default"
-private const val PLEOCHROIC_PROVIDER = "providers.pleochroic.endpoints.$PLEOCHROIC_ENDPOINT"
+internal const val PLEOCHROIC_ENDPOINT = "default"
+internal const val PLEOCHROIC_PROVIDER = "providers.pleochroic.endpoints.$PLEOCHROIC_ENDPOINT"
 private const val SEARCH_BACKEND = "tools.web.searchBackend"
 private const val FETCH_BACKEND = "tools.web.fetchBackend"
 private const val WEB_API_BASE = "tools.web.pleochroicApiBase"
@@ -54,13 +54,59 @@ private fun defaultDeviceName(): String? = try {
     null
 }
 
+/** A signed-in Pleochroic account, however [pleochroicSignIn] reached it: its `apiBase` and key, the account it
+ * belongs to, and `GET /v1/service`'s answer (null when it could not be read), for [webBackendChanges]. */
+internal class PleochroicSignIn(
+    val apiBase: String,
+    val key: String,
+    val account: AccountSummary,
+    val status: JsonObject?,
+)
+
 /**
- * Logs in to a Pleochroic account through the `libraries/accounts/pleochroic` library: a device login at
- * [portalBaseUrl] (fixed in production; a parameter only so a test can point it at a fake), or, with [serviceUrl]
- * and [serviceToken] both given, a self-hosted standalone-service taken as is. Writes
- * `providers.pleochroic.endpoints.default` (the key through the secrets file, never as a plain value) and, where the
- * account is entitled for them, `tools.web.searchBackend` / `fetchBackend`, unless an operator already chose another
- * backend there.
+ * Signs in to a Pleochroic account through the `libraries/accounts/pleochroic` library, writing nothing: a device
+ * login at [portalBaseUrl] (fixed in production; a parameter only so a test can point it at a fake), or, with
+ * [serviceUrl] and [serviceToken] both given, a self-hosted standalone-service taken as is. Null after printing why
+ * (a refused or unreachable portal/service, or a denied/expired/timed-out device code); [pleochroicLogin] and
+ * `init`'s own Pleochroic provider step ([Init.kt]) both build on this rather than signing in twice over.
+ */
+internal fun pleochroicSignIn(
+    cli: Cli,
+    serviceUrl: String?,
+    serviceToken: String?,
+    deviceName: String?,
+    portalBaseUrl: String = PLEOCHROIC_PORTAL_URL,
+): PleochroicSignIn? = pleochroicHttp().use { http ->
+    if (serviceUrl != null && serviceToken != null) {
+        val status = try {
+            runBlocking { fetchServiceStatus(http, serviceUrl, serviceToken, clientHeader(deviceName)) }
+        } catch (e: PleochroicApiException) {
+            unreachable(cli, e)
+            return@use null
+        }
+        return@use PleochroicSignIn(serviceUrl, serviceToken, serviceAccount(status), status)
+    }
+    val code = try {
+        runBlocking {
+            beginDeviceLogin(http, CLIENT, alexandriteVersion, deviceName ?: defaultDeviceName(), portalBaseUrl)
+        }
+    } catch (e: PleochroicApiException) {
+        unreachable(cli, e)
+        return@use null
+    }
+    val granted = awaitDeviceLogin(cli, http, code, portalBaseUrl) ?: return@use null
+    val status = try {
+        runBlocking { fetchServiceStatus(http, granted.apiBase, granted.key, clientHeader(deviceName)) }
+    } catch (e: PleochroicApiException) {
+        null
+    }
+    PleochroicSignIn(granted.apiBase, granted.key, granted.account, status)
+}
+
+/**
+ * Logs in to a Pleochroic account ([pleochroicSignIn]), then writes `providers.pleochroic.endpoints.default` (the
+ * key through the secrets file, never as a plain value) and, where the account is entitled for them,
+ * `tools.web.searchBackend` / `fetchBackend` ([webBackendChanges]).
  */
 internal fun pleochroicLogin(
     cli: Cli,
@@ -68,57 +114,43 @@ internal fun pleochroicLogin(
     serviceToken: String?,
     deviceName: String?,
     portalBaseUrl: String = PLEOCHROIC_PORTAL_URL,
-): Int = pleochroicHttp().use { http ->
-    val apiBase: String
-    val key: String
-    val account: AccountSummary
-    val status: JsonObject?
-    if (serviceUrl != null && serviceToken != null) {
-        status = try {
-            runBlocking { fetchServiceStatus(http, serviceUrl, serviceToken, clientHeader(deviceName)) }
-        } catch (e: PleochroicApiException) {
-            return@use unreachable(cli, e)
-        }
-        apiBase = serviceUrl
-        key = serviceToken
-        account = serviceAccount(status)
-    } else {
-        val code = try {
-            runBlocking {
-                beginDeviceLogin(http, CLIENT, alexandriteVersion, deviceName ?: defaultDeviceName(), portalBaseUrl)
-            }
-        } catch (e: PleochroicApiException) {
-            return@use unreachable(cli, e)
-        }
-        val granted = awaitDeviceLogin(cli, http, code, portalBaseUrl) ?: return@use ExitCode.FAILURE
-        apiBase = granted.apiBase
-        key = granted.key
-        account = granted.account
-        status = try {
-            runBlocking { fetchServiceStatus(http, apiBase, key, clientHeader(deviceName)) }
-        } catch (e: PleochroicApiException) {
-            null
-        }
-    }
+): Int {
+    val signedIn = pleochroicSignIn(cli, serviceUrl, serviceToken, deviceName, portalBaseUrl)
+        ?: return ExitCode.FAILURE
     val current = currentConfig(cli)
     val changes = mutableListOf(
-        ConfigChangeView("$PLEOCHROIC_PROVIDER.baseUrl", JsonPrimitive(apiBase)),
-        ConfigChangeView("$PLEOCHROIC_PROVIDER.apiKey", JsonPrimitive(key)),
+        ConfigChangeView("$PLEOCHROIC_PROVIDER.baseUrl", JsonPrimitive(signedIn.apiBase)),
+        ConfigChangeView("$PLEOCHROIC_PROVIDER.apiKey", JsonPrimitive(signedIn.key)),
     )
-    if (status != null) {
-        val search = status.entitled("search") && current?.at(SEARCH_BACKEND) == null
-        val fetch = status.entitled("fetch") && current?.at(FETCH_BACKEND) == null
-        if (search) changes += ConfigChangeView(SEARCH_BACKEND, JsonPrimitive(PLEOCHROIC_ID))
-        if (fetch) changes += ConfigChangeView(FETCH_BACKEND, JsonPrimitive(PLEOCHROIC_ID))
-        if (search || fetch) {
-            // The web search/fetch backend reads its own copy of the apiBase and key, not the provider's endpoint.
-            changes += ConfigChangeView(WEB_API_BASE, JsonPrimitive(apiBase))
-            changes += ConfigChangeView(WEB_API_KEY, JsonPrimitive(key))
-        }
+    changes += webBackendChanges(current, signedIn.status, signedIn.apiBase, signedIn.key)
+    val written = writeChanges(cli, changes) ?: return ExitCode.FAILURE
+    cli.ui.good(cli.t("pleochroic.logged_in", "account" to (signedIn.account.label ?: cli.t("pleochroic.unnamed"))))
+    return cli.reporting(false)(written)
+}
+
+/**
+ * The config changes that turn on `tools.web`'s Pleochroic backend where [status] (`GET /v1/service`'s answer,
+ * null when it could not be read) says the account is entitled for search or fetch and [current] (the config as it
+ * was) does not already name another backend there. The web backend reads its own copy of [apiBase] and [key],
+ * not the provider's endpoint.
+ */
+internal fun webBackendChanges(
+    current: JsonObject?,
+    status: JsonObject?,
+    apiBase: String,
+    key: String,
+): List<ConfigChangeView> {
+    if (status == null) return emptyList()
+    val search = status.entitled("search") && current?.at(SEARCH_BACKEND) == null
+    val fetch = status.entitled("fetch") && current?.at(FETCH_BACKEND) == null
+    val changes = mutableListOf<ConfigChangeView>()
+    if (search) changes += ConfigChangeView(SEARCH_BACKEND, JsonPrimitive(PLEOCHROIC_ID))
+    if (fetch) changes += ConfigChangeView(FETCH_BACKEND, JsonPrimitive(PLEOCHROIC_ID))
+    if (search || fetch) {
+        changes += ConfigChangeView(WEB_API_BASE, JsonPrimitive(apiBase))
+        changes += ConfigChangeView(WEB_API_KEY, JsonPrimitive(key))
     }
-    val written = writeChanges(cli, changes) ?: return@use ExitCode.FAILURE
-    cli.ui.good(cli.t("pleochroic.logged_in", "account" to (account.label ?: cli.t("pleochroic.unnamed"))))
-    cli.reporting(false)(written)
+    return changes
 }
 
 /** Signs out: `DELETE /v1/key` at the account's own `apiBase` (best effort), then forgets it locally. */
