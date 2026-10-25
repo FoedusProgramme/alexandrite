@@ -24,7 +24,7 @@ public enum class OneBotTransport {
     WS_REVERSE,
     ;
 
-    /** Whether the client listens for the implementation instead of calling it. */
+    /** Whether the client listens for the implementation, or calls it. */
     public val isReceiver: Boolean get() = this == HTTP_POST || this == WS_REVERSE
 
     public companion object {

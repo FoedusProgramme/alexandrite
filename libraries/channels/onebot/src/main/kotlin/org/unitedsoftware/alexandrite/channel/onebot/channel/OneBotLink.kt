@@ -97,11 +97,11 @@ internal class OneBotLink(private val config: OneBotConfig, private val instance
     }
 
     /**
-     * Runs one call over a socket, as a result rather than as a throw.
+     * Runs one call over a socket, turning what it throws into a result.
      *
-     * A socket that is gone throws where an HTTP answer would have been a result, so a channel that sends a reply
-     * would fail the turn instead of reporting a delivery that did not happen. A caller that gave up is not a failure
-     * of the transport and is left to travel as it is.
+     * A socket that is gone throws where an HTTP answer would have been a result, so this keeps a channel that sends
+     * a reply from failing the turn: it reports a delivery that did not happen. A caller that gave up is not a
+     * failure of the transport and is left to travel as it is.
      */
     private suspend fun overSocket(send: suspend () -> JsonObject): OneBotResult<JsonElement> = try {
         envelopeResult(send())

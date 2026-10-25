@@ -71,8 +71,8 @@ internal class OneBotHttpPostReceiver(
      * The threads that read reports, bounded so that a client cannot hold one thread per connection it opens.
      *
      * The pool is small and its queue shorter: a listener of one chat is not the busiest thing in the process, and a
-     * report arrives in a burst of one. Past that a connection is refused at once as busy rather than kept, which is
-     * what stops a slow sender from occupying the process.
+     * report arrives in a burst of one. Past that a connection is refused at once as busy, which is what stops a
+     * slow sender from occupying the process.
      */
     private val readers: java.util.concurrent.ThreadPoolExecutor = java.util.concurrent.ThreadPoolExecutor(
         MAX_CONCURRENT_REPORTS,
@@ -121,8 +121,8 @@ internal class OneBotHttpPostReceiver(
         accepting.set(false)
         runCatching { server?.close() }
         acceptor?.let { runCatching { it.join(CLOSE_TIMEOUT_MILLIS) } }
-        // A reader that is mid-report is left to its deadline rather than interrupted; one that has not started is
-        // dropped, so that a stopping receiver reads no more than it already took.
+        // A reader that is mid-report keeps running until its deadline; one that has not started is dropped, so that
+        // a stopping receiver reads no more than it already took.
         readers.shutdownNow()
         server = null
         acceptor = null
@@ -149,13 +149,13 @@ internal class OneBotHttpPostReceiver(
     private fun exchange(client: Socket) {
         try {
             // An idle timeout only measures the gap between two reads, so one deadline covers the whole request: a
-            // client that sends a byte at a time is cut off at the deadline rather than kept for as long as it likes.
+            // client that sends a byte at a time is still cut off at the deadline.
             val deadline = System.nanoTime() + settings.firstByteTimeoutMillis * 1_000_000
             client.soTimeout = settings.firstByteTimeoutMillis.toInt()
             val input = BufferedInputStream(client.getInputStream())
             // A report larger than this instance reads is refused as such, which is what the implementation is told.
             // Its declared body is read into nothing first, so that the answer is read by a peer that is still
-            // sending rather than lost to a connection that closed under it.
+            // sending, before the connection can close under it.
             val request = when (val outcome = read(input, deadline)) {
                 is ReadOutcome.TooLarge -> {
                     drain(input, outcome.declaredBytes, deadline)
@@ -233,7 +233,7 @@ internal class OneBotHttpPostReceiver(
         val body = operation?.let(OneBotWire::encodeToString) ?: detail.orEmpty()
         val bytes = body.toByteArray(StandardCharsets.UTF_8)
         // A quick operation is an object the implementation reads as JSON; a rejection is a sentence for whoever wrote
-        // it, and a client that parses it as JSON would fail instead of showing the reason.
+        // it.
         val type = if (operation == null) "text/plain; charset=utf-8" else "application/json"
         val out = client.getOutputStream()
         out.write(

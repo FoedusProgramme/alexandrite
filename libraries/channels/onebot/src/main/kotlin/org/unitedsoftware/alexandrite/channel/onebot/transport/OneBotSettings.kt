@@ -7,8 +7,7 @@ import org.unitedsoftware.alexandrite.channel.onebot.config.OneBotInstanceConfig
 /**
  * What one transport of one instance needs, gathered from the plugin's settings and the instance's own.
  *
- * A transport takes this rather than the two config classes, so that it never reads a setting its own instance
- * cannot hold.
+ * A transport takes this alone, so that it never reads a setting its own instance cannot hold.
  */
 internal class OneBotSettings(
     /** The URL of the transport that calls its implementation, null for the ones that listen. */

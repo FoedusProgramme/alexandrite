@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap
  * and its own account, so a tool that runs once for the whole runtime reads the one it needs from here.
  *
  * An instance is here while it runs and gone once it stops, so a caller that finds none knows the channel is not
- * serving that chat rather than that it never could.
+ * serving that chat right now.
  */
 @Singleton
 internal class OneBotApis {

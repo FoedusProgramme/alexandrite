@@ -83,9 +83,9 @@ internal class OneBotSender(private val link: OneBotLink, private val sent: OneB
         }
         for (file in message.files) {
             val (action, params) = upload(chat, file) ?: continue
-            // An upload is not a message, so the implementation names no message of it. The answer is matched to this
-            // call rather than to the chat and is not remembered: what an answer is matched against is the id of a
-            // message a chat can answer, and an upload names none.
+            // An upload is not a message, so the implementation names no message of it. The answer is matched to
+            // this call alone and is not remembered: what an answer is matched against is the id of a message a chat
+            // can answer, and an upload names none.
             delivery = try {
                 OneBotMessages.delivery(link.call(action, params, UPLOAD_WAIT_MILLIS), chat)
             } catch (e: CancellationException) {
@@ -191,8 +191,8 @@ private const val SAID_LIMIT: Int = 120
 /**
  * What the platform is told a file's bytes are, which is how it is handed one it cannot reach itself.
  *
- * A file of a chat is uploaded by the implementation rather than read from this machine, so its bytes travel in the
- * call. The tools of this channel hand one over the same way.
+ * A file of a chat cannot be read from this machine by the implementation, so its bytes travel in the call. The
+ * tools of this channel hand one over the same way.
  */
 private const val BYTES_PREFIX: String = "base64://"
 

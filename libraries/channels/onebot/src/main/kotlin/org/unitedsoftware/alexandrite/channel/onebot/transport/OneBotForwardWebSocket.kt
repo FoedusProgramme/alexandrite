@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * The standard answers a call on the same socket it was sent on, under the `echo` of the request, and pushes events
  * on the same socket without an echo, so this class tells the two apart and keeps the calls that are still waiting.
  * The socket is kept up: a connection that drops is made again after the instance's reconnect interval, and a call
- * that waits when the socket drops fails rather than waiting for a socket that may never answer it.
+ * that waits when the socket drops fails at once.
  */
 internal class OneBotForwardWebSocket(settings: OneBotSettings) : AbstractOneBotConnection(settings.eventCapacity) {
     private val settings = settings
@@ -90,8 +90,8 @@ internal class OneBotForwardWebSocket(settings: OneBotSettings) : AbstractOneBot
     }
 
     override fun stop() {
-        // A call waiting for an answer is ended here rather than by the close, whose handler runs on a thread this is
-        // about to cancel: a caller would otherwise stay suspended until its own timeout, after `stop` has returned.
+        // A call waiting for an answer is ended here, before the close, whose handler runs on a thread this is about
+        // to cancel: a caller would otherwise stay suspended until its own timeout, after `stop` has returned.
         // The close comes after, so that nothing new is sent in between.
         failPending(IllegalStateException("The connection to ${settings.endpoint} is closing."))
         runCatching { client?.close() }

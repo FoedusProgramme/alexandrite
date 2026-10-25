@@ -79,8 +79,7 @@ internal class OneBotApprovals(
             return ApprovalAnswer.Unavailable("another request has the id ${request.id}")
         }
         try {
-            // A chat nobody could be shown in is no reach, and what the platform said is the reason a call was refused
-            // rather than that no administrator exists.
+            // The chats here are never empty, so what the platform said is why posting into one was refused.
             val why = chats.mapNotNull { post(waiting, it, languageOf(waiting.request, it)) }.firstOrNull()
             if (waiting.carried.isEmpty()) {
                 logger.warn("{} could not show approval {} in any chat: {}", instance.id, request.id, why)

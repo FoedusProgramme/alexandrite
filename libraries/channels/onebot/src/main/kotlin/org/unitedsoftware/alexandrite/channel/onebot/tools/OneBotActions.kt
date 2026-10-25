@@ -7,12 +7,11 @@ import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
  * The actions of the platform this bot may be asked for, each declared once.
  *
  * One row says what an action is for, which arguments it takes, what they mean and how each is written. A tool reads
- * the row rather than a class of its own, so an action is added by adding a row, and the ones that must never be
- * called are left out of the table rather than guarded in each tool.
+ * the row, so an action is added by adding a row, and the ones that must never be called are left out of the table.
  *
  * An action the standard declares is checked against the registry, so a row naming one that does not exist, or one
- * the standard hides, fails where the table is read rather than at the platform. An action the standard does not
- * declare at all is a row that says so, which is how an implementation's own actions are reached.
+ * the standard hides, fails while the table is read, before any call reaches the platform. An action the standard
+ * does not declare at all is a row that says so, which is how an implementation's own actions are reached.
  *
  * The names of the arguments are the ones the platform takes, which are the keys its own requests are written with.
  */
@@ -52,7 +51,7 @@ internal object OneBotActions {
         /** Whether the standard declares this action at all. An implementation may have actions it does not. */
         val extension: Boolean = false,
     ) {
-        /** Whether this action changes something rather than only reading. */
+        /** Whether this action changes something. */
         val changes: Boolean get() = this in changing
 
         /** Whether the id of the message of this turn stands in for an argument that was left out. */

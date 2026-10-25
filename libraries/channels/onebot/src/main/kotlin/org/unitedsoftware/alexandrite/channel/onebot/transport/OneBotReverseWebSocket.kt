@@ -125,8 +125,7 @@ internal class OneBotReverseWebSocket(private val settings: OneBotSettings) :
             socket = null
             if (state.value.isOpen) lost(IllegalStateException("The connection closed: $code $reason"))
             // A call that was waiting for this connection is not answered by a connection that is gone, so it is told
-            // so now rather than when its own timeout runs out, which would report a slow implementation instead of a
-            // lost one.
+            // so now, before its own timeout mistakes a lost connection for a slow implementation.
             failWaiting(IllegalStateException("The connection closed before it answered: $code $reason"))
         }
 

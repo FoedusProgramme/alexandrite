@@ -25,8 +25,8 @@ import java.time.Duration
  * A report names an image by an address it can be read from, and sometimes by a name the implementation keeps it
  * under. The address is read directly; a name is turned into an address by asking the implementation for it.
  *
- * What cannot be read is left out of the turn with a note rather than failing it, which is what the agent does with a
- * read that throws. A read stops at the size the agent allows, and a body larger than that is not read further.
+ * What cannot be read is left out of the turn with a note. A read stops at the size the agent allows, and a body
+ * larger than that is not read further.
  */
 @ChannelInstanceScoped
 internal class OneBotMedia(private val link: OneBotLink) : MediaReader {

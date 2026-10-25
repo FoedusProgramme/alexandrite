@@ -41,7 +41,7 @@ import java.time.Instant
  *
  * A private chat is `private:<user id>` and a group is `group:<group id>`, the two ids the standard reports. A
  * temporary session, which is a private message that came from inside a group, keeps the group as the chat and the
- * sender as its thread, so that a reply goes back to the sender rather than to the group.
+ * sender as its thread, so that a reply goes back to the sender.
  */
 public object OneBotChats {
     /** The prefix of a private chat. */
@@ -111,8 +111,8 @@ public object OneBotMessages {
 /**
      * The bytes one file of a chat may hold, which is the ten gigabytes this platform takes.
      *
-     * A larger one is refused rather than sent, the way the telegram channel refuses one past what a bot of its own
-     * platform may send.
+     * A larger one is refused, the way the telegram channel refuses one past what a bot of its own platform may
+     * send.
      */
     internal const val MAX_FILE_BYTES: Long = 10L * 1024 * 1024 * 1024
 
@@ -156,7 +156,7 @@ public object OneBotMessages {
         }
         // A reply names a message of the implementation by its numeric id. A reference this version made up because
         // no id came back, `sent` or `async`, names no message there, so a message that answers one is sent without
-        // the reply segment rather than failing before it is sent.
+        // the reply segment.
         val reply = message.replyTo
             ?.id
             ?.takeIf { it.toLongOrNull() != null }
@@ -171,7 +171,7 @@ public object OneBotMessages {
      * The user a temporary session belongs to, null when [chat] is no such session.
      *
      * A temporary session is a message of a group sent privately, and its thread is the user who sent it. A reply has
-     * to go there rather than into the group the message came through.
+     * to go there.
      */
     public fun privateTemporary(chat: ChatAddress): UserId? = chat.thread
         ?.takeIf { isGroup(chat) && it.isNotEmpty() }
@@ -197,9 +197,8 @@ public object OneBotMessages {
             // The data of the answer of a send is either the object that names the message or the message itself,
             // which is what an implementation that answers with the identifier alone sends.
             val data = (result.data as? JsonObject)?.get("data") as? JsonObject ?: result.data
-            // The `echo` of an answer is the key this client sent to match it to its call, not an id the
-            // implementation gave the message, so an answer that names no message is a delivery this version cannot
-            // name rather than one named after a correlation key.
+            // The `echo` of an answer is the key this client sent to match it to its call, so an answer that names no
+            // message is a delivery this version cannot name.
             val id =
                 ((data as? JsonObject)?.get("message_id") as? JsonPrimitive)?.content
                     ?: "sent"

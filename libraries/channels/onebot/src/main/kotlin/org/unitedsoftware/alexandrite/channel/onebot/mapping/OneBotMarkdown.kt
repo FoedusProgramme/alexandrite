@@ -249,11 +249,11 @@ private val ORDERED = Regex("""^([ \t]*\d{1,9}[.)][ \t]+)(.*)$""")
 
 private val DELIMITER_ROW = Regex("""^[ \t]*\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$""")
 
-/** An image, which becomes a segment of its own rather than text a chat cannot see. */
+/** An image, which becomes a segment of its own. */
 private val IMAGE = Regex("""(?<!\\)!\[([^\]]*)]\(([^)\s]+)(?:\s+"[^"]*")?\)""")
 
 /** A link, whose text keeps its address beside it where the address says more than the text. */
 private val LINK = Regex("""(?<!\\)\[([^\]]*)]\(([^)\s]+)(?:\s+"[^"]*")?\)""")
 
-/** A character that is written as itself rather than as the marker it stands for. */
+/** A character that is written as itself. */
 private val ESCAPED = Regex("""\\[!-/:-@\[-`{-~]""")

@@ -64,7 +64,7 @@ import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
  *
  * The answer of an action that returns data is read into the type of the standard; an action this version models as
  * returning nothing answers with [Unit] once the implementation accepted it. An answer whose data does not fit the
- * type is reported as a malformed answer rather than being cast.
+ * type is reported as a malformed answer.
  */
 @ChannelInstanceScoped
 @Binds(OneBotApi::class)
@@ -207,7 +207,7 @@ internal class OneBotApiImpl(private val link: OneBotLink) : OneBotApi {
             )
         } catch (e: Exception) {
             // The answer goes along, so that a caller who meets an implementation whose data this version misreads
-            // can read the field itself instead of rebuilding the call to see it.
+            // can read the field itself, without rebuilding the call to see it.
             OneBotResult.Malformed(
                 "The data of $name does not fit its type: ${e.message}",
                 answer.echo,

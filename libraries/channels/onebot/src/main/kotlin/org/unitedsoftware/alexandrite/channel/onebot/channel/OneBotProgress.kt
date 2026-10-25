@@ -26,7 +26,7 @@ internal val ENDED: Set<ToolCallStatus> =
 private val NOTABLE: Set<ToolCallStatus> =
     setOf(ToolCallStatus.FAILED, ToolCallStatus.BACKGROUNDED, ToolCallStatus.WAITING_APPROVAL, ToolCallStatus.NOT_RUN)
 
-/** The tool of a call that runs a sub-agent, whose line names the run rather than what it did. */
+/** The tool of a call that runs a sub-agent, whose line names the run. */
 private const val DELEGATE_TOOL: String = "agent.delegate"
 
 /** The characters one message about a stretch of steps may hold before its oldest lines are left out. */
@@ -59,7 +59,7 @@ internal class ProgressCall(
     /** Whether the call delegates its task to a sub-agent, whose run its title names. */
     val delegates: Boolean get() = tool == DELEGATE_TOOL
 
-    /** Whether the line of this call belongs to a sub-agent rather than to the turn itself. */
+    /** Whether the line of this call belongs to a sub-agent, or to the turn itself. */
     val by: AgentId? get() = agent
 }
 
@@ -125,8 +125,7 @@ internal class OneBotProgress(
     /**
      * What waits to be told whether or not the interval has passed, for a reply that is ending.
      *
-     * Nothing waits once the reply is over, so its last steps are told rather than kept for a window that will not
-     * come.
+     * Nothing waits once the reply is over, so its last steps are told.
      */
     @Synchronized
     fun flush(): ProgressTally? {
@@ -219,8 +218,7 @@ internal fun activityMessage(calls: List<ProgressCall>, texts: Texts, language: 
 /**
  * The kinds of [calls] in the order each first appears, each delegation alone and each agent apart.
  *
- * A chat reads who did what rather than one count of everything a turn and its sub-agents did together, so the calls
- * of a sub-agent are counted on their own.
+ * A chat reads who did what, so the calls of a sub-agent are counted on their own.
  */
 private fun groupedByKind(calls: List<ProgressCall>): Collection<List<ProgressCall>> {
     val byKind = LinkedHashMap<Pair<AgentId?, Any>, MutableList<ProgressCall>>()
@@ -268,7 +266,7 @@ private fun counted(group: List<ProgressCall>, texts: Texts, language: LanguageT
     return "$verb ${noun(activity, ran.size, texts, language)}"
 }
 
-/** The delegation [call] stood for, named by the run it belongs to rather than by what it did. */
+/** The delegation [call] stood for, named by the run it belongs to. */
 private fun delegation(call: ProgressCall, texts: Texts, language: LanguageTag?): String {
     val key = if (call.status in ENDED) TextKeys.ACTIVITY_DELEGATE_PAST else TextKeys.ACTIVITY_DELEGATE_PRESENT
     return texts.text(key, language, "agent" to named(call))

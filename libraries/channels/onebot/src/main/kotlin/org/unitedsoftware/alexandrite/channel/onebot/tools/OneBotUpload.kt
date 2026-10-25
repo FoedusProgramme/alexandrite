@@ -47,7 +47,7 @@ private val STREAM_REFERENCE: List<String> = listOf("file_path", "file", "path",
  * without naming the file, ends the sending, and nothing is sent on afterwards, so a file that was only partly
  * streamed is never sent as if it were whole.
  *
- * [send] is one call of the action, which is what the tests stand in for rather than speaking to an implementation.
+ * [send] is one call of the action, which is what the tests stand in for.
  */
 internal suspend fun streamFile(
     path: Path,

@@ -57,7 +57,7 @@ public object OneBotRetcode {
     /** No such action, the counterpart of HTTP 404. */
     public const val NOT_FOUND: Int = 1404
 
-    /** The counterpart of the HTTP status [status], which a WebSocket reports instead of a status line. */
+    /** The counterpart of the HTTP status [status], used where a WebSocket has no status line. */
     public fun ofHttp(status: Int): Int = when (status) {
         400 -> BAD_REQUEST
         401 -> UNAUTHORIZED

@@ -67,9 +67,9 @@ public sealed interface OneBotSegment {
     /**
      * A file, which an implementation that offers the extension carries as a segment of its own.
      *
-     * The standard sends a file through the actions for files rather than in a message, so this is a segment the
-     * standard does not declare: an implementation that reports one names the file and what to call it, and may name
-     * more about it than this version carries.
+     * The standard sends a file through the actions for files, apart from messages, so this is a segment the standard
+     * does not declare: an implementation that reports one names the file and what to call it, and may name more
+     * about it than this version carries.
      */
     public data class File(
         /** How the implementation knows the file, which is also what an upload takes. */

@@ -18,7 +18,7 @@ import java.time.Instant
  *
  * A report of an event this version does not model is published all the same, under the name the implementation gave
  * it: a plugin written for an implementation's own vocabulary reads it without this mapping having to know it, and a
- * subscriber sees that something happened rather than nothing at all.
+ * subscriber sees that something happened.
  */
 public object OneBotNotices {
     /** The notice [event] reports, null when it reports none this channel publishes. */

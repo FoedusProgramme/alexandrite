@@ -46,9 +46,9 @@ import org.unitedsoftware.alexandrite.sdk.turn.TurnSubmitter
  *
  * Every other event, a notice, a request or a heartbeat, is read and dropped here: it is not a turn, and this version
  * has no way to hand one to another plugin. The connection can carry it, so the way out is a decision about the shape
- * of that interface rather than about this class, and until it is taken a plugin that needs a notice or a request goes
- * through [OneBotApi] for the state it wants. An instance whose runtime has no agent accepts the events and hands them
- * nowhere, which is reported once so that the silence is visible rather than puzzling.
+ * of that interface, and until it is taken a plugin that needs a notice or a request goes through [OneBotApi] for the
+ * state it wants. An instance whose runtime has no agent accepts the events and hands them nowhere, which is reported
+ * once so that the silence is visible.
  */
 @ChannelInstanceScoped
 internal class OneBotInbox(
@@ -151,8 +151,8 @@ internal class OneBotInbox(
             val kind = if (event is OneBotEvent.Message.Private) ChatKind.DIRECT else ChatKind.GROUP
             val ref = ChannelMessageRef(chat, event.messageId.value)
             if (!gate.admit(chat, kind, null, ref, asked, addressed)) return@collect
-            // An approval is answered here rather than by the agent: the command registry of the runtime knows nothing
-            // of it, and a command it does not claim is refused to everyone but an operator.
+            // An approval is answered here, since the command registry of the runtime knows nothing of it, and a
+            // command it does not claim is refused to everyone but an operator.
             if (command != null && approvals.answers(command.name)) {
                 val answer = approvals.answer(event, command, asked)
                 if (answer != null) {
@@ -221,7 +221,7 @@ internal class OneBotInbox(
         }
     }
 
-    /** The message that says [text] as an answer to a command rather than as the answer of a turn. */
+    /** The message that says [text] as the reply to a command, distinct from the reply to a turn. */
     private fun said(text: String): OutboundMessage = OutboundMessage.builder(text, MessageKind.REPLY).build()
 
     /** [text] in the host's language, with [args] put where they are named. */
@@ -253,8 +253,8 @@ internal class OneBotInbox(
     /**
      * Reports a submission the agent refused.
      *
-     * A message the agent refuses never becomes a turn, so it is said here rather than dropped in silence: the reason
-     * is what tells an operator that the chat is not linked, which nothing else reports.
+     * A message the agent refuses never becomes a turn, so it is said here: the reason is what tells an operator
+     * that the chat is not linked, which nothing else reports.
      */
     private fun report(message: IncomingMessage, admission: Admission?) {
         if (admission !is Admission.Refused) return
@@ -305,8 +305,8 @@ internal object OneBotCommands {
      * Whether [event] is a message the bot is addressed by.
      *
      * A direct chat is the bot's. A group is the bot's when the message names it or answers one of its messages, and
-     * what it answers is told by [answersTheBot] rather than by the message, which names the id it answers and not
-     * the author of it.
+     * what it answers is told by [answersTheBot], since the message names the id it answers but says nothing of who
+     * sent it.
      */
     fun addressed(
         event: OneBotEvent.Message,

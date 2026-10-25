@@ -35,8 +35,7 @@ public enum class OneBotLinkState {
  * One live connection to an OneBot implementation, whichever transport carries it.
  *
  * The plugin calls [send] and reads [events]; nothing outside this package sees the socket or the library behind
- * either. The events end when the connection closes, so a reader stops waiting rather than hanging on a connection
- * that will never speak again.
+ * either. The events end when the connection closes, so a reader stops waiting.
  */
 public interface OneBotConnection : AutoCloseable {
     /** Where the connection is. */
@@ -56,9 +55,9 @@ public interface OneBotConnection : AutoCloseable {
  * What every transport of this module shares: the events it reports, the state it reports them under and the close
  * that ends both.
  *
- * A full queue drops its oldest event rather than blocking the thread the implementation reports on, and what it
+ * A full queue drops its oldest event so the thread the implementation reports on is never blocked, and what it
  * dropped is worked out from what it took less what was read and what still waits, so that a connection that cannot
- * keep up is visible rather than silent.
+ * keep up is visible.
  */
 internal abstract class AbstractOneBotConnection(private val eventCapacity: Int) : OneBotConnection {
     private val dropped = AtomicLong()

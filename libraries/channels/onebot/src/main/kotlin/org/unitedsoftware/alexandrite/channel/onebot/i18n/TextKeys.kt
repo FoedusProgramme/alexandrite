@@ -33,7 +33,7 @@ internal object TextKeys {
     const val APPROVAL_OPAQUE: String = "approval.opaque"
     const val APPROVAL_ARGUMENTS: String = "approval.arguments"
 
-    /** How an approver answers, which this channel takes as a command rather than as a press. */
+    /** How an approver answers, which this channel takes as a command. */
     const val APPROVAL_ANSWER: String = "approval.answer"
 
     /** Takes `{rule}`. */

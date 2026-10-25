@@ -35,7 +35,7 @@ import kotlin.time.Duration.Companion.minutes
 /**
  * Reads what the platform knows about a chat, a member or a message this bot acts in.
  *
- * One tool serves every action it may be asked for rather than one tool per action, because an action is a row of
+ * One tool serves every action it may be asked for, because an action is a row of
  * [OneBotActions] and not a class: the platform's surface is large, and a row says what an action takes and what it
  * is worth. What a call may ask for is the table, so an action the table leaves out cannot be named at all, which is
  * where the actions that hand out the account's credentials and the ones that restart the implementation are kept.
@@ -110,7 +110,7 @@ private fun describe(header: String, rows: List<OneBotActions.Row>): String = bu
 /**
  * Calls [name] of [rows] in the chat of [context], and says what the platform answered.
  *
- * An action the call may not ask for is refused rather than passed on, and only the arguments its row declares are
+ * An action the call may not ask for is refused, and only the arguments its row declares are
  * sent, so nothing a call writes under `params` can reach the platform unless the action takes it by that name.
  */
 private suspend fun call(
@@ -133,8 +133,8 @@ private suspend fun call(
         is Prepared.Refused -> return ToolResult(prepared.said, isError = true)
         is Prepared.Ready -> prepared.params
     }
-    // A file of the workspace is read here rather than where the arguments are written, because whether this call may
-    // read one is the floor's to say, which a function of the row and the arguments has no way to ask.
+    // A file of the workspace is read here, because whether this call may read one is the floor's to say, which a
+    // function of the row and the arguments has no way to ask.
     val carried = when (
         val files =
             withFiles(row, params, floor, context) { call -> apis.serving(context.turn.chat).raw(UPLOAD_STREAM, call) }
@@ -168,8 +168,7 @@ internal sealed interface Prepared {
  * Every argument is written the way the standard asks for it, since a model writes them all as text: one that names a
  * message, a group or a length is sent as the number it names, and one that asks whether to do something is sent as
  * yes or no. An argument that must be given and was not, or one that cannot be read as what the row says it is, is
- * refused, naming it and what it is for, rather than sent as something the platform would answer without saying what
- * the call got wrong.
+ * refused, naming it and what it is for.
  */
 internal fun prepare(row: OneBotActions.Row, given: JsonObject, messageId: String?): Prepared {
     val params = buildJsonObject {
@@ -195,7 +194,7 @@ internal fun prepare(row: OneBotActions.Row, given: JsonObject, messageId: Strin
                 return@forEach
             }
             // An action about a message means the message of this turn when the call named none. A turn no message
-            // started leaves nothing to mean, and a call that had to name one is refused rather than sent without it.
+            // started leaves nothing to mean, and a call that had to name one is refused.
             if (parameter.name == OneBotActions.MESSAGE_ID && parameter.optional) {
                 val fallback = messageId ?: return Prepared.Refused(
                     "The action '${row.name}' needs ${parameter.name}: ${parameter.description}",
@@ -217,8 +216,7 @@ internal fun prepare(row: OneBotActions.Row, given: JsonObject, messageId: Strin
  * [value] as yes or no, null when it says neither.
  *
  * A model writes an argument as text even when it asks whether to do something, so both the words it may write and
- * the values a call may carry are read, and anything else is refused rather than sent as something the platform
- * would answer without saying what the call got wrong.
+ * the values a call may carry are read, and anything else is refused.
  */
 private fun boolean(value: JsonElement): Boolean? {
     val primitive = value as? JsonPrimitive ?: return null
@@ -243,7 +241,7 @@ private fun number(value: JsonElement): JsonElement {
  * the bytes the platform takes, written the way it takes them. What may be read is the floor's to say: a path it
  * denies is refused here with the reason it gave, and one it allows is read at the path it names, which is the path a
  * link is followed to. A runtime with no floor is one where nothing decides what may be read, so a call that needs a
- * file is refused rather than read of its own accord.
+ * file is always refused.
  *
  * A file larger than a call should carry goes to the implementation in pieces instead, which names it in answer, and
  * what the action carries is that name: a file of any size can be sent, and neither side ever holds it whole. [send]
@@ -354,7 +352,7 @@ private const val BYTES_PREFIX: String = "base64://"
  *
  * A file larger than one request carries is sent to the implementation in pieces, each of them a call of its own,
  * and is then sent on, so the timeout a turn takes by default is too short for one and ends the call with nothing
- * known of what became of it. This is a ceiling rather than a wait: a call that is done sooner ends sooner.
+ * known of what became of it. This is a ceiling: a call that is done sooner ends sooner.
  */
 private val actTimeout: Duration = 5.minutes
 
