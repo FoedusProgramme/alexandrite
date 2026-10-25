@@ -81,6 +81,15 @@ class DangerTest {
     }
 
     @Test
+    fun `dangerReasons always stages a skill, any create, change or delete of one`() {
+        assertEquals(listOf("skill"), dangerReasons(AREA_SKILL, SKILL_SCOPE_GLOBAL, "my-skill", null, null, emptySet()))
+        assertEquals(
+            listOf("skill"),
+            dangerReasons(AREA_SKILL, agentSkillScope("helper"), "my-skill", JsonPrimitive("x"), null, emptySet()),
+        )
+    }
+
+    @Test
     fun `dangerReasons stages overwriting an existing secret but not a brand new one`() {
         val old = JsonPrimitive("old")
         val new = JsonPrimitive("new")

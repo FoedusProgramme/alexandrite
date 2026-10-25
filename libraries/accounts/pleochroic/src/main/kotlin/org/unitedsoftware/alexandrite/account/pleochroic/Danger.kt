@@ -80,6 +80,11 @@ public fun dangerReasons(
     when (area) {
         AREA_SECRET -> if (before != null) reasons += "secret_overwrite"
 
+        // A skill's files are executable content (an agent runs what a SKILL.md or a script beside it says),
+        // so any pulled create, change or delete of one is staged; a local-only push stays automatic (pushing
+        // is never staged at all, see SyncRunner.writesLocally).
+        AREA_SKILL -> reasons += "skill"
+
         AREA_CONFIG -> {
             when (kind) {
                 KIND_MCP -> reasons += "mcp_server"

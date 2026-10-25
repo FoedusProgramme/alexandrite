@@ -124,7 +124,7 @@ class SyncRunnerTest {
      * the bug.
      */
     @Test
-    fun `a new local skill of a per-agent scope pushes with its scope and name intact`() = runBlocking {
+    fun `a new local skill of a per-agent scope pushes with its scope and name intact, automatically`() = runBlocking {
         val scope = agentSkillScope("work")
         val files = buildJsonObject { put("files", kotlinx.serialization.json.buildJsonArray {}) }
         val local = FakeSyncLocal(listOf(LocalItem(AREA_SKILL, scope, "myskill", files)))
@@ -133,26 +133,67 @@ class SyncRunnerTest {
         val (report, state) = SyncRunner(local, transport).run(SyncState(enabled = true, policy = SyncPolicy.MERGE))
 
         assertEquals(1, report.pushed)
+        assertEquals(0, report.staged)
         assertTrue(transport.puts.contains(Triple(AREA_SKILL, scope, "myskill")))
         assertEquals("rev-1", state.records[syncKey(AREA_SKILL, scope, "myskill")]?.remoteRev)
     }
 
-    /** The pull-side counterpart: a brand new remote skill of a per-agent scope lands with its scope and name intact. */
+    /** The pull-side counterpart: a skill's files are executable content, so a brand new remote skill is staged
+     * for review rather than pulled straight in, with its scope and name intact in the pending change. */
     @Test
-    fun `a brand new remote skill of a per-agent scope pulls with its scope and name intact`() = runBlocking {
+    fun `a brand new remote skill of a per-agent scope is staged, not pulled in`() = runBlocking {
         val scope = agentSkillScope("work")
         val local = FakeSyncLocal()
         val transport = FakeSyncTransport()
-        val files = buildJsonObject { put("files", kotlinx.serialization.json.buildJsonArray {}) }
+        val files = buildJsonObject {
+            put(
+                "files",
+                kotlinx.serialization.json.buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("path", "SKILL.md")
+                            put("encoding", "utf8")
+                            put("content", "# Hi")
+                        },
+                    )
+                },
+            )
+        }
         transport.docs[syncKey(AREA_SKILL, scope, "myskill")] = "rev-1" to files
         transport.changesSince0 =
             ChangePage(listOf(ChangeEntry(1, AREA_SKILL, scope, "myskill", "rev-1", deleted = false)), 1)
 
-        val (report, _) = SyncRunner(local, transport).run(SyncState(enabled = true, policy = SyncPolicy.MERGE))
+        val (report, state) = SyncRunner(local, transport).run(SyncState(enabled = true, policy = SyncPolicy.MERGE))
 
-        assertEquals(1, report.pulled)
-        val applied = local.applied.single()
-        assertEquals(AREA_SKILL to scope to "myskill", applied.area to applied.kind to applied.id)
+        assertEquals(0, report.pulled)
+        assertEquals(1, report.staged)
+        assertTrue(local.applied.isEmpty())
+        val pending = state.pending[syncKey(AREA_SKILL, scope, "myskill")]
+        assertEquals(files, pending?.remoteData)
+        assertEquals(listOf("skill"), pending?.reasons)
+    }
+
+    @Test
+    fun `a remote tombstone of a skill is staged rather than deleting it locally`() = runBlocking {
+        val skillDoc = buildJsonObject { put("files", kotlinx.serialization.json.buildJsonArray {}) }
+        val local = FakeSyncLocal(listOf(LocalItem(AREA_SKILL, SKILL_SCOPE_GLOBAL, "my-skill", skillDoc)))
+        val before = SyncState(
+            enabled = true,
+            policy = SyncPolicy.MERGE,
+            records = mapOf(
+                syncKey(AREA_SKILL, SKILL_SCOPE_GLOBAL, "my-skill") to SyncRecord(contentHash(skillDoc), "rev-1"),
+            ),
+        )
+        val transport = FakeSyncTransport()
+        transport.changesSince0 =
+            ChangePage(listOf(ChangeEntry(2, AREA_SKILL, SKILL_SCOPE_GLOBAL, "my-skill", "rev-2", deleted = true)), 2)
+
+        val (report, state) = SyncRunner(local, transport).run(before)
+
+        assertEquals(0, report.deletedLocal)
+        assertEquals(1, report.staged)
+        assertTrue(local.applied.isEmpty())
+        assertEquals(listOf("skill"), state.pending[syncKey(AREA_SKILL, SKILL_SCOPE_GLOBAL, "my-skill")]?.reasons)
     }
 
     @Test

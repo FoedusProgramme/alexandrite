@@ -16,6 +16,13 @@ public class PendingReview(public val key: String, public val change: PendingCha
             if (change.kind.isNotEmpty()) append(' ').append(change.kind)
             append(' ').append(change.id)
             append(if (change.deleted) ": the account deleted it" else ": the account changed it")
+            if (change.area == AREA_SKILL) {
+                val added = skillFiles.count { it.status == SkillFileStatus.ADDED }
+                val changed = skillFiles.count { it.status == SkillFileStatus.CHANGED }
+                val removed = skillFiles.count { it.status == SkillFileStatus.REMOVED }
+                append(" (").append(added).append(" added, ").append(changed).append(" changed, ")
+                    .append(removed).append(" removed)")
+            }
             if (change.reasons.isNotEmpty()) append(" — ").append(change.reasons.joinToString(", "))
         }
 
@@ -28,6 +35,11 @@ public class PendingReview(public val key: String, public val change: PendingCha
             val keys = (before?.keys.orEmpty() + after?.keys.orEmpty())
             return keys.filterTo(mutableSetOf()) { before?.get(it) != after?.get(it) }
         }
+
+    /** For a skill change ([change.area] is [AREA_SKILL]): every file added, changed or removed, with its size
+     * and, for a small text file, a diff. Empty for anything else. */
+    public val skillFiles: List<SkillFileChange>
+        get() = if (change.area == AREA_SKILL) skillFileChanges(local, change.remoteData) else emptyList()
 }
 
 /** What [PendingSync.apply] did with the pending changes it resolved. */

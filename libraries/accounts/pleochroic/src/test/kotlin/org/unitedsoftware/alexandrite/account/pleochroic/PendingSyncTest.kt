@@ -89,6 +89,41 @@ class PendingSyncTest {
     }
 
     @Test
+    fun `review of a staged skill change lists its added, changed and removed files`() = runBlocking {
+        fun skillDoc(path: String, content: String) = buildJsonObject {
+            put(
+                "files",
+                kotlinx.serialization.json.buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("path", path)
+                            put("encoding", "utf8")
+                            put("content", content)
+                        },
+                    )
+                },
+            )
+        }
+        val localDoc = skillDoc("SKILL.md", "old text")
+        val remoteDoc = skillDoc("SKILL.md", "new text")
+        val local = PendingFakeLocal(listOf(LocalItem(AREA_SKILL, SKILL_SCOPE_GLOBAL, "my-skill", localDoc)))
+        val key = syncKey(AREA_SKILL, SKILL_SCOPE_GLOBAL, "my-skill")
+        val change =
+            PendingChange(AREA_SKILL, SKILL_SCOPE_GLOBAL, "my-skill", null, "rev-1", false, remoteDoc, listOf("skill"))
+        val state = SyncState(pending = mapOf(key to change))
+
+        val review = PendingSync(local, PendingFakeTransport()).review(state).single()
+
+        assertEquals(1, review.skillFiles.size)
+        val file = review.skillFiles.single()
+        assertEquals("SKILL.md" to SkillFileStatus.CHANGED, file.path to file.status)
+        assertTrue(file.textDiff.orEmpty().contains("- old text"))
+        assertTrue(file.textDiff.orEmpty().contains("+ new text"))
+        assertTrue(review.summary.contains("1 changed"))
+        assertTrue(review.summary.contains("skill"))
+    }
+
+    @Test
     fun `apply writes a staged pull that nothing has touched since`() = runBlocking {
         val local = PendingFakeLocal()
         val key = syncKey(AREA_CONFIG, KIND_MCP, "notes")
