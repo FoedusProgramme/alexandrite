@@ -1,5 +1,6 @@
 package org.unitedsoftware.alexandrite.channel.onebot.channel
 
+import org.unitedsoftware.alexandrite.channel.common.command.CommandWho
 import org.unitedsoftware.alexandrite.channel.onebot.i18n.TextKeys
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
@@ -8,6 +9,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChatKind
 import org.unitedsoftware.alexandrite.sdk.chat.ChatUser
 import org.unitedsoftware.alexandrite.sdk.chat.UserAddress
 import org.unitedsoftware.alexandrite.sdk.turn.CommandContext
+import org.unitedsoftware.alexandrite.sdk.turn.CommandForms
 import org.unitedsoftware.alexandrite.sdk.turn.CommandHandler
 import org.unitedsoftware.alexandrite.sdk.turn.CommandInvocation
 import org.unitedsoftware.alexandrite.sdk.turn.CommandSpec
@@ -94,6 +96,25 @@ class OneBotCommandRulesTest {
     }
 
     @Test
+    fun `a form a handler keeps for operators stays with admins whatever the matrix says`() {
+        val kept = OneBotCommandRules(listOf(handler("settings" to CommandForms.ALL)), links = null)
+        val chat = ChatAddress(instance, "group:987654")
+        val issuer = ChatUser(UserAddress(instance, "12345678"), "someone", null, isBot = false, isOperator = false)
+        val invocation = CommandInvocation.builder(chat, "settings", issuer).build()
+        assertEquals(TextKeys.REFUSED_ADMIN, kept.refusal(invocation, ChatKind.GROUP))
+        assertFalse(kept.mayRun(chat, admin = false, "settings", withArguments = false))
+    }
+
+    @Test
+    fun `a configured rule overrides the default matrix`() {
+        val configured =
+            OneBotCommandRules(listOf(handler()), links = null, configured = mapOf("model" to CommandWho.ANYONE))
+        assertTrue(
+            configured.mayRun(ChatAddress(instance, "group:987654"), admin = false, "model", withArguments = true),
+        )
+    }
+
+    @Test
     fun `mayRun answers the matrix for a member`() {
         val direct = ChatAddress(instance, "private:12345678")
         val group = ChatAddress(instance, "group:987654")
@@ -124,11 +145,15 @@ class OneBotCommandRulesTest {
     }
 
     /** A handler that claims every command the default ones do, and one the matrix does not list. */
-    private fun handler(): CommandHandler = object : CommandHandler {
-        override val commands: List<CommandSpec> =
-            (CLAIMED + "trust").map { CommandSpec.builder(it, "a test command").build() }
+    private fun handler(vararg operatorsOnly: Pair<String, CommandForms>): CommandHandler {
+        val kept = operatorsOnly.toMap()
+        return object : CommandHandler {
+            override val commands: List<CommandSpec> = (CLAIMED + "trust").map {
+                CommandSpec.builder(it, "a test command").operatorsOnly(kept[it] ?: CommandForms.NONE).build()
+            }
 
-        override suspend fun handle(invocation: CommandInvocation, context: CommandContext) = Unit
+            override suspend fun handle(invocation: CommandInvocation, context: CommandContext) = Unit
+        }
     }
 
     private companion object {

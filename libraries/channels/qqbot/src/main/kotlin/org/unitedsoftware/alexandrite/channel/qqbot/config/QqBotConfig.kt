@@ -2,6 +2,8 @@ package org.unitedsoftware.alexandrite.channel.qqbot.config
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.unitedsoftware.alexandrite.channel.common.command.COMMAND_NAME
+import org.unitedsoftware.alexandrite.channel.common.command.CommandWho
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.chat.LanguageTag
 import org.unitedsoftware.alexandrite.sdk.config.ConfigSection
@@ -57,6 +59,11 @@ public class QqBotInstanceConfig(
     @SerialName("idleTimeoutMillis") public val idleTimeoutMillis: Long = DEFAULT_IDLE_TIMEOUT,
     /** How long to wait before connecting to the gateway again, in milliseconds. */
     @SerialName("reconnectIntervalMillis") public val reconnectIntervalMillis: Long = DEFAULT_RECONNECT,
+    /**
+     * Who may run each named command, over its default rule; the forms a command keeps for operators stay with
+     * admins.
+     */
+    public val commands: Map<String, CommandWho> = emptyMap(),
 ) {
     init {
         require(appId.isNotBlank()) { "appId may not be blank." }
@@ -76,6 +83,11 @@ public class QqBotInstanceConfig(
         syncLanguage?.let { language ->
             require(runCatching { LanguageTag.of(language) }.isSuccess) {
                 "syncLanguage is a BCP 47 language tag, was '$language'."
+            }
+        }
+        for (name in commands.keys) {
+            require(COMMAND_NAME.matches(name)) {
+                "commands.$name must name a command: lowercase letters, digits and '_', 32 characters at most"
             }
         }
     }

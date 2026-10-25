@@ -2,6 +2,8 @@ package org.unitedsoftware.alexandrite.channel.onebot.config
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.unitedsoftware.alexandrite.channel.common.command.COMMAND_NAME
+import org.unitedsoftware.alexandrite.channel.common.command.CommandWho
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.config.ConfigSection
 import org.unitedsoftware.alexandrite.sdk.config.Secret
@@ -110,6 +112,11 @@ public class OneBotInstanceConfig(
     public val progress: Boolean = true,
     /** Whether this instance shows what the model says while a turn works on tools. */
     public val streaming: Boolean = true,
+    /**
+     * Who may run each named command, over its default rule; the forms a command keeps for operators stay with
+     * admins.
+     */
+    public val commands: Map<String, CommandWho> = emptyMap(),
 ) {
     /** How this instance reaches its implementation. */
     public val kind: OneBotTransport = OneBotTransport.of(transport) ?: throw IllegalArgumentException(
@@ -158,6 +165,11 @@ public class OneBotInstanceConfig(
         for (chat in allowedChats) {
             require(ALLOWED_CHAT.matches(chat)) {
                 "allowedChats holds chats as private:<number> or group:<number>, was '$chat'"
+            }
+        }
+        for (name in commands.keys) {
+            require(COMMAND_NAME.matches(name)) {
+                "commands.$name must name a command: lowercase letters, digits and '_', 32 characters at most"
             }
         }
     }
