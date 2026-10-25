@@ -17,4 +17,7 @@ internal object TextKeys {
     const val APPROVAL_UNREACHABLE: String = "approval.unreachable"
     const val REFUSED_ADMIN: String = "refused.admin"
     const val REFUSED_ADMIN_HERE: String = "refused.admin_here"
+
+    /** Takes `{code}` and `{minutes}`. */
+    const val PAIRING_CODE: String = "pairing.code"
 }

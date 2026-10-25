@@ -37,9 +37,13 @@ public class QqBotInstanceConfig(
     public val streaming: Boolean = true,
     /**
      * The accounts that may operate this instance, by the open id a single chat names them by, which is the chat an
-     * approval of theirs is shown in. A group's administrators are its platform `member_role`, not this list.
+     * approval of theirs is shown in. The platform names the same account by another id in each group, so an admin
+     * reaches a group as themselves only once a one-time `/link` code aliases them there; a group's own owner or
+     * administrator role grants nothing by itself.
      */
     public val admins: Set<String> = emptySet(),
+    /** The chats this instance serves, by their key, such as `group:<openid>` or `private:<openid>`. */
+    public val allowedChats: List<String> = emptyList(),
     /** Whether the bot publishes its slash commands as the single-chat menu and command panels when it opens. */
     @SerialName("syncCommands") public val syncCommands: Boolean = true,
     /**
@@ -90,6 +94,11 @@ public class QqBotInstanceConfig(
                 "commands.$name must name a command: lowercase letters, digits and '_', 32 characters at most"
             }
         }
+        for (chat in allowedChats) {
+            require(ALLOWED_CHAT.matches(chat)) {
+                "allowedChats holds chats as private:<openid> or group:<openid>, was '$chat'"
+            }
+        }
     }
 
     public companion object {
@@ -108,6 +117,9 @@ public class QqBotInstanceConfig(
         public const val DEFAULT_RECONNECT: Long = 3_000L
 
         public const val DEFAULT_APPROVAL_MINUTES: Long = 10L
+
+        /** The shape of a chat key in [QqBotInstanceConfig.allowedChats]. */
+        private val ALLOWED_CHAT: Regex = Regex("(private|group):[A-Za-z0-9_-]+")
     }
 }
 

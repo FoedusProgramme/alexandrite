@@ -5,7 +5,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.unitedsoftware.alexandrite.channel.common.pairing.PairingDecision
 import org.unitedsoftware.alexandrite.channel.qqbot.channel.QQ_BOT_MAX_FILE_BYTES
+import org.unitedsoftware.alexandrite.channel.qqbot.pairing.QqBotPairingDesk
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.FakeApiServer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.FakeGatewayServer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.PlatformAnswer
@@ -561,7 +563,118 @@ class QqBotChannelIntegrationTest {
         }
     }
 
-    private fun config(apiBase: String, gatewayUrl: String, admins: Set<String> = emptySet()): String = """
+    @Test
+    fun `an unpaired chat is offered a code and reaches the agent only once approved`() {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        api.on(SEND_DIRECT, """{"id":"sent1","timestamp":"2026-07-21T10:00:00+08:00"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        val submitter = RecordingTurnSubmitter()
+        try {
+            runBlocking {
+                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                    .config(config(api.base, platform.url, allowedChats = emptyList()))
+                    .turnSubmitter(submitter)
+                    .build()
+                    .run {
+                        assertTrue(platform.awaitConnection(), "the gateway was not connected")
+                        platform.push(EVENT)
+                        assertTrue(awaitNoSubmission(submitter), "an unpaired chat reached the agent")
+                        assertNotNull(api.awaitRequest(SEND_DIRECT), "the chat was not offered a pairing code")
+
+                        val desk = get(key<QqBotPairingDesk>())
+                        val request = desk.pending().single()
+                        assertEquals(ChatAddress(instance, "private:u1"), request.chat)
+                        assertIs<PairingDecision.Approved>(desk.approve(request.code, null))
+
+                        platform.push(EVENT.replace("msg1", "msg1b").replace("\"s\":2", "\"s\":3"))
+                        val message = assertIs<Submission.Message>(awaitSubmission(submitter)).message
+                        assertEquals("hello", message.text)
+                    }
+            }
+        } finally {
+            platform.stop()
+            api.close()
+        }
+    }
+
+    @OptIn(InternalAlexandriteApi::class)
+    @Test
+    fun `a group's own owner role grants no operator rights, only admins and links do`() {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        api.on(ME_PATH, """{"id":"bot1","username":"YosBot"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        val submitter = RecordingTurnSubmitter()
+        try {
+            runBlocking {
+                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                    .config(config(api.base, platform.url))
+                    .turnSubmitter(submitter)
+                    .build()
+                    .run {
+                        assertTrue(platform.awaitConnection(), "the gateway was not connected")
+                        platform.push(OWNER_ROLE_EVENT)
+                        val message = assertIs<Submission.Message>(awaitSubmission(submitter)).message
+                        assertFalse(message.sender.isOperator, "the group's own owner role grants nothing by itself")
+
+                        val channel = get(directory).channel(instance) ?: error("the instance has no channel")
+                        val group = ChatAddress(instance, "group:g1")
+                        assertFalse(channel.isOperator(group, UserAddress(instance, "u1")))
+                        assertFalse(channel.isOperator(group, message.sender.address))
+                    }
+            }
+        } finally {
+            platform.stop()
+            api.close()
+        }
+    }
+
+    @OptIn(InternalAlexandriteApi::class)
+    @Test
+    fun `an admin's own single chat agrees with the channel on who operates it`() {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        val submitter = RecordingTurnSubmitter()
+        try {
+            runBlocking {
+                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                    .config(config(api.base, platform.url, admins = setOf("u1")))
+                    .turnSubmitter(submitter)
+                    .build()
+                    .run {
+                        assertTrue(platform.awaitConnection(), "the gateway was not connected")
+                        platform.push(EVENT)
+                        val message = assertIs<Submission.Message>(awaitSubmission(submitter)).message
+                        assertTrue(message.sender.isOperator)
+
+                        val channel = get(directory).channel(instance) ?: error("the instance has no channel")
+                        assertTrue(channel.isOperator(message.chat, message.sender.address))
+                    }
+            }
+        } finally {
+            platform.stop()
+            api.close()
+        }
+    }
+
+    /** Whether the agent was asked for no turn within the time one would arrive in. */
+    private suspend fun awaitNoSubmission(submitter: RecordingTurnSubmitter): Boolean {
+        val deadline = System.nanoTime() + 500_000_000L
+        while (System.nanoTime() < deadline) {
+            if (submitter.submissions.isNotEmpty()) return false
+            delay(20)
+        }
+        return true
+    }
+
+    private fun config(
+        apiBase: String,
+        gatewayUrl: String,
+        admins: Set<String> = emptySet(),
+        allowedChats: List<String> = listOf("private:u1", "group:g1"),
+    ): String = """
         {
           "instances": {
             "main": {
@@ -570,6 +683,7 @@ class QqBotChannelIntegrationTest {
               "apiBase": "$apiBase",
               "gatewayUrl": "$gatewayUrl",
               "admins": [${admins.joinToString(",") { "\"$it\"" }}],
+              "allowedChats": [${allowedChats.joinToString(",") { "\"$it\"" }}],
               "connectTimeoutMillis": 5000,
               "firstByteTimeoutMillis": 5000,
               "idleTimeoutMillis": 5000,
@@ -621,5 +735,12 @@ class QqBotChannelIntegrationTest {
             """"author":{"id":"u1","member_openid":"u1","username":"Ada","bot":false},""" +
             """"content":"<@member-bot-id> hello","group_openid":"g1","message_type":0,""" +
             """"timestamp":"2026-07-21T10:00:03+08:00"}}"""
+
+        /** A full-mode group message whose author's platform role is the group's owner, who is not an admin. */
+        const val OWNER_ROLE_EVENT = """{"id":"event-owner","op":0,"s":5,"t":"GROUP_MESSAGE_CREATE","d":""" +
+            """{"id":"msg-owner","author":{"id":"u1","member_openid":"u1","member_role":"owner","username":"Ada",""" +
+            """"bot":false},"content":"<@bot1> hello","group_openid":"g1","message_type":0,""" +
+            """"mentions":[{"id":"bot1","member_openid":"bot1","bot":true}],""" +
+            """"timestamp":"2026-07-21T10:00:04+08:00"}}"""
     }
 }

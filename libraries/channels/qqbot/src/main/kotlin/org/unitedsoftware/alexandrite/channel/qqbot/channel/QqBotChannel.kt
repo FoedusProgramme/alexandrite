@@ -53,6 +53,7 @@ internal class QqBotChannel(
     private val replies: QqBotReplyRegistry,
     private val rules: QqBotCommandRules,
     private val config: QqBotInstanceConfig,
+    private val operators: QqBotOperators,
 ) : Channel {
     override suspend fun capabilities(chat: ChatAddress): ChannelCapabilities =
         if (config.streaming && QqBotChats.kind(chat) == ChatKind.DIRECT) {
@@ -65,9 +66,9 @@ internal class QqBotChannel(
     override fun mayRun(chat: ChatAddress, issuer: ChatUser, command: String, withArguments: Boolean): Boolean =
         rules.mayRun(chat, issuer.isOperator, command, withArguments)
 
-    /** Whether [user] is one of the instance's configured admins, who are operators in every chat of the bot. */
+    /** Whether [user] operates this instance, by [QqBotOperators], in [chat]. */
     override suspend fun isOperator(chat: ChatAddress, user: UserAddress): Boolean =
-        user.instance == instance.id && user.user in config.admins
+        user.instance == instance.id && operators.isOperator(chat, user.user)
 
     override suspend fun partsNeeded(chat: ChatAddress, text: String, markup: Markup): Int =
         if (text.isEmpty()) 0 else 1

@@ -23,26 +23,34 @@ import java.time.OffsetDateTime
 internal object QqBotMessages {
     private val LEADING_MENTION = Regex("^\\s*<@!?[^>]+>\\s*")
 
-    /** The message [event] is, where [admins] are the accounts the instance marks as its operators. */
+    /**
+     * The account the platform reports [event] from, by the open id of the single chat or, in a group, the member
+     * id the platform names them by there alone.
+     */
+    fun authorId(event: QqBotMessageEvent): String {
+        val group = !event.groupOpenid.isNullOrEmpty()
+        return event.author.openid(group) ?: event.author.userOpenid ?: event.author.memberOpenid ?: "unknown"
+    }
+
+    /** The message [event] is, whose sender operates this instance when [isOperator]. */
     fun incoming(
         instance: ChannelInstanceId,
         event: QqBotMessageEvent,
-        admins: Set<String>,
+        isOperator: Boolean,
         media: QqBotMedia,
         index: QqBotMessageIndex? = null,
     ): IncomingMessage {
         val group = !event.groupOpenid.isNullOrEmpty()
         val chat = QqBotChats.addressOf(instance, event)
         index?.record(chat, event.messageScene?.ext("msg_idx"), event.id)
-        val authorId = event.author.openid(group) ?: event.author.userOpenid ?: event.author.memberOpenid ?: "unknown"
-        val role = event.author.memberRole
+        val authorId = authorId(event)
         val name = event.author.username?.takeIf { it.isNotBlank() } ?: authorId
         val sender = ChatUser(
             address = QqBotChats.user(instance, authorId),
             displayName = name,
             username = null,
             isBot = event.author.bot,
-            isOperator = authorId in admins || role == "admin" || role == "owner",
+            isOperator = isOperator,
         )
         val quote = quote(event, chat, index)
         index?.recordQuote(chat, event.id, quote?.target?.id)

@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory
 import org.unitedsoftware.alexandrite.channel.qqbot.config.QqBotInstanceConfig
 import org.unitedsoftware.alexandrite.channel.qqbot.gateway.QqBotGateway
 import org.unitedsoftware.alexandrite.channel.qqbot.i18n.TextKeys
+import org.unitedsoftware.alexandrite.channel.qqbot.mapping.QqBotChats
 import org.unitedsoftware.alexandrite.channel.qqbot.mapping.QqBotMedia
 import org.unitedsoftware.alexandrite.channel.qqbot.mapping.QqBotMessages
 import org.unitedsoftware.alexandrite.channel.qqbot.net.QqBotAnswer
@@ -19,6 +20,7 @@ import org.unitedsoftware.alexandrite.channel.qqbot.tools.QqBotApis
 import org.unitedsoftware.alexandrite.sdk.channel.ChannelInstance
 import org.unitedsoftware.alexandrite.sdk.channel.MessageKind
 import org.unitedsoftware.alexandrite.sdk.channel.OutboundMessage
+import org.unitedsoftware.alexandrite.sdk.chat.ChatKind
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import org.unitedsoftware.alexandrite.sdk.di.Lifecycle
 import org.unitedsoftware.alexandrite.sdk.i18n.Texts
@@ -52,6 +54,8 @@ internal class QqBotInbox(
     private val apis: QqBotApis,
     private val api: QqBotApi,
     private val index: QqBotMessageIndex,
+    private val gate: QqBotAccessGate,
+    private val operators: QqBotOperators,
     /** The agent, null while the runtime has none. */
     private val submitter: TurnSubmitter?,
 ) : Lifecycle {
@@ -144,24 +148,23 @@ internal class QqBotInbox(
             )
             return
         }
-        val message = QqBotMessages.incoming(instance.id, event, config.admins, media, index)
-        // A diagnostic that works before any tool: the person can read the id the bot knows them by, which is what
-        // the instance's admins list and the agent's tool rules are keyed by.
+        val chat = QqBotChats.addressOf(instance.id, event)
+        val authorId = QqBotMessages.authorId(event)
+        val isOperator = operators.isOperator(chat, authorId)
+        val message = QqBotMessages.incoming(instance.id, event, isOperator, media, index)
+        // A diagnostic that works before any tool and before pairing: the person can read the id the bot knows them
+        // by, which is what `admins` and a `/link` alias are keyed by.
         if (message.text.trim().equals(WHOAMI, ignoreCase = true)) {
-            sender.send(
-                message.chat,
-                OutboundMessage.builder(
-                    "chat=${message.chat.chat}\nsender=${message.sender.address}",
-                    MessageKind.NOTICE,
-                ).build(),
-            )
+            sender.send(message.chat, notice("chat=${message.chat.chat}\nsender=${message.sender.address}"))
             return
         }
+        val kind = if (!event.groupOpenid.isNullOrEmpty()) ChatKind.GROUP else ChatKind.DIRECT
+        if (!gate.admit(chat, kind, null, message.sender)) return
         val press = QqBotApprovalCommands.of(message.text)
         if (press != null) {
             logger.info("{}: {} answers an approval of {}", PLUGIN, message.sender.address, press.id)
             approvals.answer(press.name, press.id, press.always, message.sender, message.chat)?.let { said ->
-                sender.send(message.chat, OutboundMessage.builder(said, MessageKind.NOTICE).build())
+                sender.send(message.chat, notice(said))
             }
             return
         }
@@ -173,8 +176,7 @@ internal class QqBotInbox(
                 .build()
             val refusal = rules.refusal(invocation, message.chatInfo.kind)
             if (refusal != null) {
-                val said = texts.text(refusal, null, "command" to command.name.lowercase())
-                sender.send(message.chat, OutboundMessage.builder(said, MessageKind.NOTICE).build())
+                sender.send(message.chat, notice(texts.text(refusal, null, "command" to command.name.lowercase())))
                 return
             }
             val capacity = if (message.sender.isOperator) Capacity.EXEMPT else Capacity.COUNTED
@@ -185,6 +187,9 @@ internal class QqBotInbox(
         logger.info("{}: the message {} of {} becomes a turn for the agent", PLUGIN, event.id, message.chat)
         report(message, submitter?.submit(Submission.Message(message)))
     }
+
+    /** [text] as a notice this chat did not ask the agent for. */
+    private fun notice(text: String): OutboundMessage = OutboundMessage.builder(text, MessageKind.NOTICE).build()
 
     /** Whether [id] is a message this inbox reads for the first time. */
     private fun first(id: String): Boolean = synchronized(seen) { seen.put(id, Unit) == null }

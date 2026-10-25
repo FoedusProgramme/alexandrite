@@ -11,6 +11,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChatKind
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -23,7 +24,7 @@ class QqBotMessagesTest {
     @Test
     fun `a message of a single chat is the direct chat of its author`() {
         val event = eventOf(c2c())
-        val message = QqBotMessages.incoming(instance, event, admins = emptySet(), media = media)
+        val message = QqBotMessages.incoming(instance, event, isOperator = false, media = media)
 
         assertEquals("private:u1", message.chat.chat)
         assertEquals(ChatKind.DIRECT, message.chatInfo.kind)
@@ -37,25 +38,32 @@ class QqBotMessagesTest {
     }
 
     @Test
-    fun `a message of a group keeps its group and the role of its author`() {
-        val message = QqBotMessages.incoming(instance, eventOf(group()), admins = emptySet(), media = media)
+    fun `a message of a group keeps its group and the member id of its author`() {
+        val message = QqBotMessages.incoming(instance, eventOf(group()), isOperator = false, media = media)
 
         assertEquals("group:g1", message.chat.chat)
         assertEquals(ChatKind.GROUP, message.chatInfo.kind)
         assertEquals("member1", message.sender.address.user)
-        assertTrue(message.sender.isOperator, "the owner and admins of a group operate the bot")
+        assertFalse(message.sender.isOperator, "a group's own owner or admin role grants nothing by itself")
     }
 
     @Test
-    fun `an account the config names is an admin`() {
-        val message = QqBotMessages.incoming(instance, eventOf(c2c()), admins = setOf("u1"), media = media)
+    fun `the caller alone says whether the sender operates the instance`() {
+        val message = QqBotMessages.incoming(instance, eventOf(c2c()), isOperator = true, media = media)
 
         assertTrue(message.sender.isOperator)
     }
 
     @Test
+    fun `the account authorId reads is what a group names its member by`() {
+        assertEquals("member1", QqBotMessages.authorId(eventOf(group())))
+        assertEquals("u1", QqBotMessages.authorId(eventOf(c2c())))
+    }
+
+    @Test
     fun `a card message reaches the model as a card`() {
-        val message = QqBotMessages.incoming(instance, eventOf(framed("C2C_MESSAGE_CREATE", card())), emptySet(), media)
+        val message =
+            QqBotMessages.incoming(instance, eventOf(framed("C2C_MESSAGE_CREATE", card())), false, media)
 
         val fact = message.facts.singleOrNull { it.label == "card" }
         assertNotNull(fact)
@@ -67,7 +75,7 @@ class QqBotMessagesTest {
         val message = QqBotMessages.incoming(
             instance,
             eventOf(framed("C2C_MESSAGE_CREATE", quoted())),
-            emptySet(),
+            false,
             media,
         )
 
@@ -83,7 +91,7 @@ class QqBotMessagesTest {
         val message = QqBotMessages.incoming(
             instance,
             eventOf(framed("C2C_MESSAGE_CREATE", quoted())),
-            emptySet(),
+            false,
             media,
             index,
         )
