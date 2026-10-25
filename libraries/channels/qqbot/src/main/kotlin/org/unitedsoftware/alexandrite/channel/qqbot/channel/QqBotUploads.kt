@@ -48,11 +48,13 @@ internal sealed class QqBotUpload {
  * file uploaded for one cannot be sent to the other.
  */
 @ChannelInstanceScoped
-internal class QqBotUploads(private val api: QqBotApi, private val config: QqBotInstanceConfig) {
+internal class QqBotUploads(private val api: QqBotApi, private val config: QqBotInstanceConfig) : AutoCloseable {
     private val client: HttpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofMillis(config.connectTimeoutMillis))
         .followRedirects(HttpClient.Redirect.NORMAL)
         .build()
+
+    override fun close() = client.close()
 
     /** Uploads [file] for a message to [chat], or says why the platform did not take it. */
     suspend fun upload(chat: ChatAddress, file: OutboundFile): QqBotUpload {
