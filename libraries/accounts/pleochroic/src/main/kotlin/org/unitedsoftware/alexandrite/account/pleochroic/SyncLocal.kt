@@ -131,7 +131,7 @@ public class HostConfigSyncLocal(
                 change.area == AREA_SECRET -> applySecret(change)
                 change.area == AREA_SKILL -> applySkill(change)
                 change.kind == KIND_INSTRUCTIONS -> applyInstructions(change)
-                else -> configChanges += change
+                else -> if (isSafeConfigId(change.id)) configChanges += change
             }
         }
         if (configChanges.isNotEmpty()) {
@@ -145,7 +145,9 @@ public class HostConfigSyncLocal(
     }
 
     private fun applySecret(change: LocalChange) {
+        if (!isValidSecretName(change.id)) return
         val value = change.data?.let { (unwrapSecretValue(it) as? JsonPrimitive)?.content }
+        if (value != null && !isSafeSecretValue(value)) return
         val secrets = try {
             readSecrets(secretsFile).toMutableMap()
         } catch (e: IOException) {
@@ -161,37 +163,64 @@ public class HostConfigSyncLocal(
         writeTextFile(file, text)
     }
 
+    /**
+     * Writes [change]'s skill files under its own directory, refusing the whole change (nothing deleted or
+     * written) unless its scope, name and every file path are valid and provably inside that directory, the file
+     * count and total decoded size stay within `docs/API.md` "Skill" § "校验"'s caps, and no step of the way
+     * crosses a symlink: a pull decides what to write by name alone, never by a path it hands over directly.
+     */
     private fun applySkill(change: LocalChange) {
+        if (!isValidSkillName(change.id)) return
         val root = skillsRootOf(change.kind) ?: return
-        val directory = root.resolve(change.id)
+        val directory = safeChild(root, change.id) ?: return
         if (change.data == null) {
-            deleteRecursively(directory)
+            deleteSkillDirectory(root, directory)
             return
         }
         val files = (change.data as? JsonObject)?.get("files") as? JsonArray ?: return
-        deleteRecursively(directory)
+        if (files.size > MAX_SKILL_FILES) return
+        val decoded = mutableListOf<Pair<Path, ByteArray>>()
+        var totalBytes = 0L
         for (entry in files) {
-            val file = entry as? JsonObject ?: continue
-            val relative = (file["path"] as? JsonPrimitive)?.content ?: continue
-            if (relative.contains("..") || relative.startsWith("/")) continue
+            val file = entry as? JsonObject ?: return
+            val relative = (file["path"] as? JsonPrimitive)?.content ?: return
+            val target = safeDescendant(directory, relative) ?: return
             val encoding = (file["encoding"] as? JsonPrimitive)?.content ?: "utf8"
-            val content = (file["content"] as? JsonPrimitive)?.content ?: continue
-            val bytes = if (encoding ==
-                "base64"
-            ) {
-                Base64.getDecoder().decode(content)
-            } else {
-                content.toByteArray(Charsets.UTF_8)
+            val content = (file["content"] as? JsonPrimitive)?.content ?: return
+            val bytes = try {
+                if (encoding == "base64") Base64.getDecoder().decode(content) else content.toByteArray(Charsets.UTF_8)
+            } catch (e: IllegalArgumentException) {
+                return
             }
-            val target = directory.resolve(relative)
+            totalBytes += bytes.size
+            if (totalBytes > MAX_SKILL_TOTAL_BYTES) return
+            decoded += target to bytes
+        }
+        deleteSkillDirectory(root, directory)
+        for ((target, bytes) in decoded) {
             Files.createDirectories(target.parent)
+            if (!isFreeOfSymlinks(directory, target.parent)) continue
             Files.write(target, bytes)
         }
     }
 
+    /** Deletes [directory] (one skill's own directory under [root]), refusing unless it is proven inside [root],
+     * is not [root] itself, and is free of a symlink from [root] down. Never recursively deletes anything else. */
+    private fun deleteSkillDirectory(root: Path, directory: Path) {
+        val normalizedRoot = root.toAbsolutePath().normalize()
+        if (directory == normalizedRoot || !directory.startsWith(normalizedRoot)) return
+        if (!isFreeOfSymlinks(normalizedRoot, directory)) return
+        deleteRecursively(directory)
+    }
+
     private fun skillsRootOf(scope: String): Path? = when {
         scope == SKILL_SCOPE_GLOBAL -> globalSkillsRoot()
-        scope.startsWith("agent:") -> agentSkillsRoot(scope.removePrefix("agent:"))
+
+        scope.startsWith(AGENT_SCOPE_PREFIX) -> {
+            val agentId = scope.removePrefix(AGENT_SCOPE_PREFIX)
+            if (isValidAgentId(agentId)) agentSkillsRoot(agentId) else null
+        }
+
         else -> null
     }
 
@@ -202,12 +231,8 @@ public class HostConfigSyncLocal(
     private fun configDirectory(): Path = configFile.toAbsolutePath().parent
 
     private fun instructionsFile(name: String): Path? {
-        if (name.contains("..") || name.startsWith("/")) return null
-        return if (name == "AGENTS.md" || (name.startsWith("agents/") && name.endsWith("/PERSONA.md"))) {
-            configDirectory().resolve(name)
-        } else {
-            null
-        }
+        if (!isValidInstructionsId(name)) return null
+        return safeDescendant(configDirectory(), name)
     }
 }
 

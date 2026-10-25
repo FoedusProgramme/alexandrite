@@ -43,6 +43,24 @@ public fun syncKey(area: String, kind: String, id: String): String = "$area:$kin
 @Serializable
 public class SyncRecord(public val localHash: String?, public val remoteRev: String?)
 
+/**
+ * A dangerous pulled change [SyncRunner.run] staged instead of applying (the owner's decision: a pull must never
+ * be able to harm the local machine on its own), kept until [PendingSync.apply] or [PendingSync.discard] resolves
+ * it. [before] is the [SyncRecord] (possibly none) the item had before this change, so applying it later re-decides
+ * against whatever is locally current then rather than a stale snapshot. [remoteData] is null for a deletion.
+ */
+@Serializable
+public class PendingChange(
+    public val area: String,
+    public val kind: String,
+    public val id: String,
+    public val before: SyncRecord?,
+    public val remoteRev: String?,
+    public val deleted: Boolean,
+    public val remoteData: JsonElement?,
+    public val reasons: List<String>,
+)
+
 /** The sync feature's whole persisted state. A host keeps it in a file of its own, never in the config. */
 @Serializable
 public class SyncState(
@@ -50,13 +68,16 @@ public class SyncState(
     public val policy: SyncPolicy = SyncPolicy.MERGE,
     public val cursor: Long = 0,
     public val records: Map<String, SyncRecord> = emptyMap(),
+    /** Dangerous pulled changes awaiting the owner's review, keyed the same way as [records]. */
+    public val pending: Map<String, PendingChange> = emptyMap(),
 ) {
     public fun with(
         enabled: Boolean = this.enabled,
         policy: SyncPolicy = this.policy,
         cursor: Long = this.cursor,
         records: Map<String, SyncRecord> = this.records,
-    ): SyncState = SyncState(enabled, policy, cursor, records)
+        pending: Map<String, PendingChange> = this.pending,
+    ): SyncState = SyncState(enabled, policy, cursor, records, pending)
 
     public companion object {
         public val OFF: SyncState = SyncState()
