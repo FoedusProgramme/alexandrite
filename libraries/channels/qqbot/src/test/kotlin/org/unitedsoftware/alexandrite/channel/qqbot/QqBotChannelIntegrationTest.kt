@@ -598,6 +598,119 @@ class QqBotChannelIntegrationTest {
         }
     }
 
+    @Test
+    fun `an unpaired chat's command is ignored and offered a code, like any other message`() {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        api.on(SEND_DIRECT, """{"id":"sent1","timestamp":"2026-07-21T10:00:00+08:00"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        val submitter = RecordingTurnSubmitter()
+        try {
+            runBlocking {
+                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                    .config(config(api.base, platform.url, allowedChats = emptyList()))
+                    .turnSubmitter(submitter)
+                    .build()
+                    .run {
+                        assertTrue(platform.awaitConnection(), "the gateway was not connected")
+                        platform.push(COMMAND_EVENT)
+                        assertTrue(awaitNoSubmission(submitter), "an unpaired chat's command reached the agent")
+                        val offer = assertNotNull(api.awaitRequest(SEND_DIRECT), "the chat was not offered a code")
+                        assertTrue(CODE.containsMatchIn(offer.body), offer.body)
+                    }
+            }
+        } finally {
+            platform.stop()
+            api.close()
+        }
+    }
+
+    @Test
+    fun `an unpaired chat's approval press is ignored rather than answered`() {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        api.on(SEND_DIRECT, """{"id":"sent1","timestamp":"2026-07-21T10:00:00+08:00"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        try {
+            runBlocking {
+                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                    .config(config(api.base, platform.url, allowedChats = emptyList()))
+                    .turnSubmitter(RecordingTurnSubmitter())
+                    .build()
+                    .run {
+                        assertTrue(platform.awaitConnection(), "the gateway was not connected")
+                        platform.push(APPROVAL_PRESS)
+                        val offer = assertNotNull(api.awaitRequest(SEND_DIRECT), "the chat was not offered a code")
+                        assertTrue(CODE.containsMatchIn(offer.body), offer.body)
+                        delay(300)
+                        assertEquals(
+                            1,
+                            api.calls(SEND_DIRECT).size,
+                            "the press was answered although the chat is not paired",
+                        )
+                    }
+            }
+        } finally {
+            platform.stop()
+            api.close()
+        }
+    }
+
+    @Test
+    fun `a member other than an admin is refused a link code`() {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        api.on(SEND_DIRECT, """{"id":"sent1","timestamp":"2026-07-21T10:00:00+08:00"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        try {
+            runBlocking {
+                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                    .config(config(api.base, platform.url))
+                    .turnSubmitter(RecordingTurnSubmitter())
+                    .build()
+                    .run {
+                        assertTrue(platform.awaitConnection(), "the gateway was not connected")
+                        platform.push(LINK_ISSUE_EVENT)
+                        val said = assertNotNull(api.awaitRequest(SEND_DIRECT))
+                        assertFalse(CODE.containsMatchIn(said.body), "a non-admin was given a link code: ${said.body}")
+                    }
+            }
+        } finally {
+            platform.stop()
+            api.close()
+        }
+    }
+
+    @Test
+    fun `a wrong code is rejected rather than linking anybody`() {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        api.on(SEND_GROUP, """{"id":"sent2","timestamp":"2026-07-21T10:00:00+08:00"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        try {
+            runBlocking {
+                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                    .config(config(api.base, platform.url, admins = setOf("u1")))
+                    .turnSubmitter(RecordingTurnSubmitter())
+                    .build()
+                    .run {
+                        assertTrue(platform.awaitConnection(), "the gateway was not connected")
+                        val channel = get(directory).channel(instance) ?: error("the instance has no channel")
+                        val group = ChatAddress(instance, "group:g1")
+                        val member = UserAddress(instance, "member1")
+
+                        platform.push(LINK_REDEEM_EVENT.replace("CODE", "0000-0000"))
+                        val said = assertNotNull(api.awaitRequest(SEND_GROUP))
+                        assertTrue("unknown" in said.body || "valid" in said.body, said.body)
+                        assertFalse(channel.isOperator(group, member), "a wrong code must not link anybody")
+                    }
+            }
+        } finally {
+            platform.stop()
+            api.close()
+        }
+    }
+
     @OptIn(InternalAlexandriteApi::class)
     @Test
     fun `a group's own owner role grants no operator rights, only admins and links do`() {
