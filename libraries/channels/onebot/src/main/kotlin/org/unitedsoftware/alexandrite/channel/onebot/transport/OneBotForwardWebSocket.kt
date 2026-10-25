@@ -9,7 +9,9 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import org.java_websocket.client.WebSocketClient
 import org.java_websocket.handshake.ServerHandshake
@@ -93,12 +95,15 @@ internal class OneBotForwardWebSocket(settings: OneBotSettings) : AbstractOneBot
         // The close comes after, so that nothing new is sent in between.
         failPending(IllegalStateException("The connection to ${settings.endpoint} is closing."))
         runCatching { client?.close() }
+        val job = loop
         scope?.cancel()
         scope = null
         loop = null
+        if (job != null) runBlocking { withTimeoutOrNull(STOP_JOIN_MILLIS) { job.join() } }
     }
 
     private suspend fun connectLoop(opened: CompletableDeferred<Throwable?>) {
+        var failures = 0
         while (scope != null) {
             val ended = CompletableDeferred<Unit>()
             val socket = AnsweringClient(URI(settings.requireEndpoint()), ended)
@@ -118,14 +123,23 @@ internal class OneBotForwardWebSocket(settings: OneBotSettings) : AbstractOneBot
                     return
                 }
             } else if (connected == true) {
+                failures = 0
                 moveTo(OneBotLinkState.OPEN)
                 if (!opened.isCompleted) opened.complete(null)
                 ended.await()
                 failPending(IllegalStateException("The connection to ${settings.endpoint} ended."))
             }
             if (scope == null) return
-            delay(settings.reconnectIntervalMillis)
+            failures++
+            delay(backOff(failures))
         }
+    }
+
+    /** The pause after the [failures]th failed or dropped connection in a row, doubling up to 20 times the interval. */
+    internal fun backOff(failures: Int): Long {
+        val base = settings.reconnectIntervalMillis
+        val grown = base * (1L shl (failures - 1).coerceAtMost(MAX_SHIFT))
+        return grown.coerceAtMost(base * MAX_BACKOFF_MULTIPLIER)
     }
 
     private fun failPending(error: Throwable) {
@@ -169,7 +183,13 @@ internal class OneBotForwardWebSocket(settings: OneBotSettings) : AbstractOneBot
                     return
                 }
             }
-            report(OneBotEventCodec.decode(answer))
+            val event = try {
+                OneBotEventCodec.decode(answer)
+            } catch (e: Exception) {
+                failure = e
+                return
+            }
+            report(event)
         }
 
         override fun onClose(code: Int, reason: String, remote: Boolean) {
@@ -181,11 +201,6 @@ internal class OneBotForwardWebSocket(settings: OneBotSettings) : AbstractOneBot
             failure = ex
         }
 
-        /** The headers this connection presents, which carry the token when the instance has one. */
-        private fun headers(): Map<String, String> = buildMap {
-            settings.token?.let { put(OneBotAuth.AUTHORIZATION, OneBotAuth.bearer(it)) }
-        }
-
         override fun close() {
             stopping.set(true)
             super.close()
@@ -193,4 +208,12 @@ internal class OneBotForwardWebSocket(settings: OneBotSettings) : AbstractOneBot
     }
 
     private val echoes = Echo()
+
+    private companion object {
+        /** How long [stop] waits for the connect loop to end before returning anyway. */
+        const val STOP_JOIN_MILLIS = 1_000L
+
+        const val MAX_BACKOFF_MULTIPLIER = 20L
+        const val MAX_SHIFT = 10
+    }
 }

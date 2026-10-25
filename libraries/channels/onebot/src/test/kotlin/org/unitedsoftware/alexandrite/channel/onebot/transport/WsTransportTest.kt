@@ -61,6 +61,38 @@ class WsTransportTest {
     }
 
     @Test
+    fun `a forward connection reconnects after the implementation drops it`() {
+        val peer = ImplementationServer()
+        val port = peer.startAndPort()
+        val connection = OneBotForwardWebSocket(settings("ws://127.0.0.1:" + port))
+        try {
+            runBlocking {
+                connection.start()
+                assertTrue(connection.state.value.isOpen, "the connection did not open")
+                peer.dropConnection()
+                withTimeout(5_000) {
+                    while (connection.state.value.isOpen) kotlinx.coroutines.delay(10)
+                }
+                withTimeout(5_000) {
+                    while (!connection.state.value.isOpen) kotlinx.coroutines.delay(10)
+                }
+            }
+        } finally {
+            connection.close()
+            peer.stop()
+        }
+    }
+
+    @Test
+    fun `a forward connection's backoff grows and caps as failures repeat`() {
+        val connection = OneBotForwardWebSocket(settings("ws://127.0.0.1:1"))
+        assertEquals(100L, connection.backOff(1))
+        assertEquals(200L, connection.backOff(2))
+        assertEquals(400L, connection.backOff(3))
+        assertEquals(2_000L, connection.backOff(20))
+    }
+
+    @Test
     fun `a forward connection brings the token of its instance`() {
         val peer = ImplementationServer()
         val port = peer.startAndPort()
@@ -175,12 +207,21 @@ class WsTransportTest {
         var offered: String? = null
             private set
 
+        @Volatile
+        private var connected: WebSocket? = null
+
         override fun onStart() {
             ready.countDown()
         }
 
         override fun onOpen(connection: WebSocket, handshake: ClientHandshake) {
             offered = handshake.getFieldValue(OneBotAuth.AUTHORIZATION)
+            connected = connection
+        }
+
+        /** Closes the connection a client has open, so that it sees the implementation drop it. */
+        fun dropConnection() {
+            connected?.close()
         }
 
         override fun onMessage(connection: WebSocket, message: String) {

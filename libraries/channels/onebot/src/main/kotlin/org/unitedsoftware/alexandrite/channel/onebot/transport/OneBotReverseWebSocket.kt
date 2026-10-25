@@ -100,7 +100,13 @@ internal class OneBotReverseWebSocket(private val settings: OneBotSettings) :
             val answer = element as? JsonObject ?: return
             val echo = (answer["echo"] as? JsonPrimitive)?.content
             if (echo == null) {
-                report(OneBotEventCodec.decode(answer))
+                val event = try {
+                    OneBotEventCodec.decode(answer)
+                } catch (e: Exception) {
+                    failure = e
+                    return
+                }
+                report(event)
                 return
             }
             val waiting = awaiting.remove(echo) ?: return
