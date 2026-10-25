@@ -4,6 +4,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import org.slf4j.LoggerFactory
+import org.unitedsoftware.alexandrite.channel.common.link.LinkDecision
 import org.unitedsoftware.alexandrite.channel.qqbot.config.QqBotInstanceConfig
 import org.unitedsoftware.alexandrite.channel.qqbot.gateway.QqBotGateway
 import org.unitedsoftware.alexandrite.channel.qqbot.i18n.TextKeys
@@ -20,6 +21,7 @@ import org.unitedsoftware.alexandrite.channel.qqbot.tools.QqBotApis
 import org.unitedsoftware.alexandrite.sdk.channel.ChannelInstance
 import org.unitedsoftware.alexandrite.sdk.channel.MessageKind
 import org.unitedsoftware.alexandrite.sdk.channel.OutboundMessage
+import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 import org.unitedsoftware.alexandrite.sdk.chat.ChatKind
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import org.unitedsoftware.alexandrite.sdk.di.Lifecycle
@@ -29,6 +31,9 @@ import org.unitedsoftware.alexandrite.sdk.turn.Capacity
 import org.unitedsoftware.alexandrite.sdk.turn.CommandInvocation
 import org.unitedsoftware.alexandrite.sdk.turn.Submission
 import org.unitedsoftware.alexandrite.sdk.turn.TurnSubmitter
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -56,6 +61,8 @@ internal class QqBotInbox(
     private val index: QqBotMessageIndex,
     private val gate: QqBotAccessGate,
     private val operators: QqBotOperators,
+    private val links: QqBotOperatorLinks,
+    private val clock: Clock,
     /** The agent, null while the runtime has none. */
     private val submitter: TurnSubmitter?,
 ) : Lifecycle {
@@ -160,6 +167,11 @@ internal class QqBotInbox(
         }
         val kind = if (!event.groupOpenid.isNullOrEmpty()) ChatKind.GROUP else ChatKind.DIRECT
         if (!gate.admit(chat, kind, null, message.sender)) return
+        val link = QqBotLinkCommands.of(message.text)
+        if (link != null) {
+            handleLink(link, message)
+            return
+        }
         val press = QqBotApprovalCommands.of(message.text)
         if (press != null) {
             logger.info("{}: {} answers an approval of {}", PLUGIN, message.sender.address, press.id)
@@ -187,6 +199,91 @@ internal class QqBotInbox(
         logger.info("{}: the message {} of {} becomes a turn for the agent", PLUGIN, event.id, message.chat)
         report(message, submitter?.submit(Submission.Message(message)))
     }
+
+    /**
+     * Answers a `/link`, `/links` or `/unlink` command of [message], which this instance takes wherever it is sent:
+     * asking for a code and reading or revoking a link are an operator's own business, in whichever chat already
+     * recognizes them as one.
+     */
+    private suspend fun handleLink(
+        link: QqBotLinkCommands.Parsed,
+        message: org.unitedsoftware.alexandrite.sdk.channel.IncomingMessage,
+    ) {
+        when (link) {
+            QqBotLinkCommands.Parsed.Issue -> {
+                if (!message.sender.isOperator) {
+                    sender.send(message.chat, notice(texts.text(TextKeys.REFUSED_ADMIN, null, "command" to "link")))
+                    return
+                }
+                val code = links.issue(message.sender.address)
+                sender.send(
+                    message.chat,
+                    notice(
+                        texts.text(
+                            TextKeys.LINK_CODE,
+                            null,
+                            "code" to code.text,
+                            "minutes" to links.codeLifetime.inWholeMinutes,
+                        ),
+                    ),
+                )
+            }
+
+            is QqBotLinkCommands.Parsed.Redeem -> {
+                val decision = links.redeem(link.code, message.chat, message.sender.address.user)
+                sender.send(message.chat, notice(linkDecisionText(decision)))
+            }
+
+            QqBotLinkCommands.Parsed.List -> {
+                if (!message.sender.isOperator) {
+                    sender.send(message.chat, notice(texts.text(TextKeys.REFUSED_ADMIN, null, "command" to "links")))
+                    return
+                }
+                val mine = links.of(message.sender.address)
+                val said = if (mine.isEmpty()) {
+                    texts.text(TextKeys.LINKS_EMPTY, null)
+                } else {
+                    mine.joinToString("\n") {
+                        texts.text(TextKeys.LINKS_ENTRY, null, "chat" to it.chat.chat, "alias" to it.alias)
+                    }
+                }
+                sender.send(message.chat, notice(said))
+            }
+
+            is QqBotLinkCommands.Parsed.Unlink -> {
+                if (!message.sender.isOperator) {
+                    sender.send(message.chat, notice(texts.text(TextKeys.REFUSED_ADMIN, null, "command" to "unlink")))
+                    return
+                }
+                val chat = link.chat
+                if (chat == null) {
+                    sender.send(message.chat, notice(texts.text(TextKeys.UNLINK_USAGE, null)))
+                    return
+                }
+                val target = ChatAddress(instance.id, chat)
+                val mine = links.of(message.sender.address).firstOrNull { it.chat == target }
+                val removed = mine != null && links.unlink(mine.chat, mine.alias)
+                sender.send(
+                    message.chat,
+                    notice(texts.text(if (removed) TextKeys.UNLINK_DONE else TextKeys.UNLINK_NONE, null)),
+                )
+            }
+        }
+    }
+
+    /** What a chat is told after [decision] answers a `/link <code>`. */
+    private fun linkDecisionText(decision: LinkDecision): String = when (decision) {
+        is LinkDecision.Linked -> texts.text(TextKeys.LINK_LINKED, null)
+        is LinkDecision.Rejected -> texts.text(TextKeys.LINK_REJECTED, null, "tries" to decision.triesLeft)
+        is LinkDecision.Locked -> texts.text(TextKeys.LINK_LOCKED, null, "minutes" to minutesUntil(decision.until))
+        LinkDecision.OwnCode -> texts.text(TextKeys.LINK_OWN_CODE, null)
+        LinkDecision.Malformed -> texts.text(TextKeys.LINK_MALFORMED, null)
+        is LinkDecision.Failed -> texts.text(TextKeys.LINK_FAILED, null)
+    }
+
+    /** The whole minutes from now until [until], at least one. */
+    private fun minutesUntil(until: Instant): Long =
+        Duration.between(clock.instant(), until).toMinutes().coerceAtLeast(1)
 
     /** [text] as a notice this chat did not ask the agent for. */
     private fun notice(text: String): OutboundMessage = OutboundMessage.builder(text, MessageKind.NOTICE).build()

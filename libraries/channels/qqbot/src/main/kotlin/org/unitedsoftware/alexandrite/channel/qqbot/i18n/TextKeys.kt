@@ -20,4 +20,24 @@ internal object TextKeys {
 
     /** Takes `{code}` and `{minutes}`. */
     const val PAIRING_CODE: String = "pairing.code"
+
+    /** Takes `{code}` and `{minutes}`. */
+    const val LINK_CODE: String = "link.code"
+    const val LINK_LINKED: String = "link.linked"
+    const val LINK_OWN_CODE: String = "link.own_code"
+    const val LINK_MALFORMED: String = "link.malformed"
+
+    /** Takes `{tries}`. */
+    const val LINK_REJECTED: String = "link.rejected"
+
+    /** Takes `{minutes}`. */
+    const val LINK_LOCKED: String = "link.locked"
+    const val LINK_FAILED: String = "link.failed"
+    const val LINKS_EMPTY: String = "links.empty"
+
+    /** Takes `{chat}` and `{alias}`, one line per link. */
+    const val LINKS_ENTRY: String = "links.entry"
+    const val UNLINK_USAGE: String = "unlink.usage"
+    const val UNLINK_DONE: String = "unlink.done"
+    const val UNLINK_NONE: String = "unlink.none"
 }

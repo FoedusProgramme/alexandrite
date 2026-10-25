@@ -659,6 +659,80 @@ class QqBotChannelIntegrationTest {
         }
     }
 
+    @OptIn(InternalAlexandriteApi::class)
+    @Test
+    fun `an admin links their group-scoped id to themselves, there alone, and may later unlink it`() {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        api.on(SEND_DIRECT, """{"id":"sent1","timestamp":"2026-07-21T10:00:00+08:00"}""")
+        api.on(SEND_GROUP, """{"id":"sent2","timestamp":"2026-07-21T10:00:00+08:00"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        val submitter = RecordingTurnSubmitter()
+        try {
+            runBlocking {
+                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                    .config(config(api.base, platform.url, admins = setOf("u1")))
+                    .turnSubmitter(submitter)
+                    .build()
+                    .run {
+                        assertTrue(platform.awaitConnection(), "the gateway was not connected")
+                        val channel = get(directory).channel(instance) ?: error("the instance has no channel")
+                        val group = ChatAddress(instance, "group:g1")
+                        val member = UserAddress(instance, "member1")
+
+                        platform.push(LINK_ISSUE_EVENT)
+                        val issued = assertNotNull(api.awaitRequest(SEND_DIRECT, timeoutMillis = 2_000))
+                        val code = assertNotNull(CODE.find(issued.body), "no code in: ${issued.body}").value
+
+                        assertFalse(channel.isOperator(group, member), "no code was spent for this member yet")
+                        platform.push(LINK_REDEEM_EVENT.replace("CODE", code))
+                        assertNotNull(api.awaitRequest(SEND_GROUP, timeoutMillis = 2_000))
+                        assertTrue(channel.isOperator(group, member), "the alias now operates this instance in g1")
+                        assertFalse(
+                            channel.isOperator(ChatAddress(instance, "group:g2"), member),
+                            "the alias operates the instance in g1 alone",
+                        )
+
+                        platform.push(LINKS_EVENT)
+                        val listed = awaitRequestMatching(api, SEND_DIRECT) { "group:g1" in it.body }
+                        assertTrue("member1" in listed.body, listed.body)
+
+                        val before = api.calls(SEND_DIRECT).size
+                        platform.push(UNLINK_EVENT)
+                        awaitMoreRequests(api, SEND_DIRECT, before)
+                        assertFalse(channel.isOperator(group, member), "the link was revoked")
+                    }
+            }
+        } finally {
+            platform.stop()
+            api.close()
+        }
+    }
+
+    /** The next call of [path] that [predicate] takes, waiting for it at most 2 seconds. */
+    private suspend fun awaitRequestMatching(
+        api: FakeApiServer,
+        path: String,
+        predicate: (org.unitedsoftware.alexandrite.channel.qqbot.testing.PlatformRequest) -> Boolean,
+    ): org.unitedsoftware.alexandrite.channel.qqbot.testing.PlatformRequest {
+        val deadline = System.nanoTime() + 2_000_000_000L
+        while (System.nanoTime() < deadline) {
+            api.calls(path).lastOrNull { predicate(it) }?.let { return it }
+            delay(20)
+        }
+        error("no call of $path matched within the wait")
+    }
+
+    /** Waits at most 2 seconds for [path] to have more calls than [before]. */
+    private suspend fun awaitMoreRequests(api: FakeApiServer, path: String, before: Int) {
+        val deadline = System.nanoTime() + 2_000_000_000L
+        while (System.nanoTime() < deadline) {
+            if (api.calls(path).size > before) return
+            delay(20)
+        }
+        error("no new call of $path arrived within the wait")
+    }
+
     /** Whether the agent was asked for no turn within the time one would arrive in. */
     private suspend fun awaitNoSubmission(submitter: RecordingTurnSubmitter): Boolean {
         val deadline = System.nanoTime() + 500_000_000L
@@ -702,7 +776,12 @@ class QqBotChannelIntegrationTest {
 
         const val SEND_DIRECT = "/v2/users/u1/messages"
 
+        const val SEND_GROUP = "/v2/groups/g1/messages"
+
         const val STREAM_DIRECT = "/v2/users/u1/stream_messages"
+
+        /** The code an open platform pairing or link message carries, two groups of four characters. */
+        val CODE = Regex("[0-9A-Z]{4}-[0-9A-Z]{4}")
 
         const val APPROVAL_PRESS = """{"id":"event-approve","op":0,"s":2,"t":"C2C_MESSAGE_CREATE","d":""" +
             """{"id":"msg-approve","author":{"id":"u1","user_openid":"u1","username":"Ada","bot":false},""" +
@@ -742,5 +821,26 @@ class QqBotChannelIntegrationTest {
             """"bot":false},"content":"<@bot1> hello","group_openid":"g1","message_type":0,""" +
             """"mentions":[{"id":"bot1","member_openid":"bot1","bot":true}],""" +
             """"timestamp":"2026-07-21T10:00:04+08:00"}}"""
+
+        /** The admin u1, in their own single chat, asks for a link code. */
+        const val LINK_ISSUE_EVENT = """{"id":"event-link-issue","op":0,"s":6,"t":"C2C_MESSAGE_CREATE","d":""" +
+            """{"id":"msg-link-issue","author":{"id":"u1","user_openid":"u1","username":"Ada","bot":false},""" +
+            """"content":"/link","message_type":0,"timestamp":"2026-07-21T10:00:05+08:00"}}"""
+
+        /** Member1 of group g1, who is no admin, spends a code; `CODE` is replaced with the one the admin got. */
+        const val LINK_REDEEM_EVENT = """{"id":"event-link-redeem","op":0,"s":7,"t":"GROUP_AT_MESSAGE_CREATE",""" +
+            """"d":{"id":"msg-link-redeem","author":{"id":"m1","member_openid":"member1","username":"小明",""" +
+            """"bot":false},"content":"/link CODE","group_openid":"g1","message_type":0,""" +
+            """"timestamp":"2026-07-21T10:00:06+08:00"}}"""
+
+        /** The admin u1 lists their own links. */
+        const val LINKS_EVENT = """{"id":"event-links","op":0,"s":8,"t":"C2C_MESSAGE_CREATE","d":""" +
+            """{"id":"msg-links","author":{"id":"u1","user_openid":"u1","username":"Ada","bot":false},""" +
+            """"content":"/links","message_type":0,"timestamp":"2026-07-21T10:00:07+08:00"}}"""
+
+        /** The admin u1 revokes their link of group g1. */
+        const val UNLINK_EVENT = """{"id":"event-unlink","op":0,"s":9,"t":"C2C_MESSAGE_CREATE","d":""" +
+            """{"id":"msg-unlink","author":{"id":"u1","user_openid":"u1","username":"Ada","bot":false},""" +
+            """"content":"/unlink group:g1","message_type":0,"timestamp":"2026-07-21T10:00:08+08:00"}}"""
     }
 }
