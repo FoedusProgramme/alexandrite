@@ -277,7 +277,7 @@ class WebTest {
     fun `fetch exposes only side model answer and taints before model failure`() = runBlocking {
         val context = testToolContext()
         val answers = Answers()
-        val tool = FetchTool(WebConfig(), WebPages { WebPage(URI(it), "raw source") }, answers)
+        val tool = FetchTool(WebConfig(), WebPages { WebPage(URI(it), "raw source") }, answers, emptyList())
         assertEquals(ToolRisk.NETWORK_READ, tool.definition.risk)
         val result = tool.execute(args("url" to "https://example.com", "prompt" to "question"), context)
         assertFalse(result.isError)
@@ -301,7 +301,7 @@ class WebTest {
     @Test
     fun `a fetch's review names its host as untrusted content, and a search's its output`() = runBlocking {
         val context = testToolContext()
-        val fetch = FetchTool(WebConfig(), WebPages { WebPage(URI(it), "page") }, Answers())
+        val fetch = FetchTool(WebConfig(), WebPages { WebPage(URI(it), "page") }, Answers(), emptyList())
 
         val review = fetch.review(args("url" to "https://Docs.Example.org/a", "prompt" to "q"), context)
         val malformed = fetch.review(args("url" to "nowhere", "prompt" to "q"), context)
@@ -316,7 +316,7 @@ class WebTest {
     fun `a fetch that a redirect takes to another site answers from the page it reached`() = runBlocking {
         val context = testToolContext()
         val answers = Answers()
-        fun tool(to: String) = FetchTool(WebConfig(), WebPages { WebPage(URI(to), "page") }, answers)
+        fun tool(to: String) = FetchTool(WebConfig(), WebPages { WebPage(URI(to), "page") }, answers, emptyList())
         suspend fun FetchTool.result() = execute(args("url" to "https://example.com/a", "prompt" to "q"), context)
 
         val results = listOf("https://elsewhere.test/b", "https://docs.example.com/b").map { tool(it).result() }
@@ -327,7 +327,7 @@ class WebTest {
     @Test
     fun `a refused or failed fetch tells the model why, and a slow one that it timed out`() = runBlocking {
         val context = testToolContext()
-        fun tool(pages: WebPages) = FetchTool(WebConfig(timeoutSeconds = 1), pages, Answers())
+        fun tool(pages: WebPages) = FetchTool(WebConfig(timeoutSeconds = 1), pages, Answers(), emptyList())
         suspend fun FetchTool.text() = execute(args("url" to "https://example.com", "prompt" to "q"), context).content
             .filterIsInstance<TextPart>().single().text
 

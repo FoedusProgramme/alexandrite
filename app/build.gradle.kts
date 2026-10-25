@@ -18,6 +18,7 @@ dependencies {
     implementation(project(":libraries:providers:openai-responses"))
     implementation(project(":libraries:providers:deepseek"))
     implementation(project(":libraries:providers:openrouter"))
+    implementation(project(":libraries:providers:pleochroic"))
     implementation(project(":libraries:providers:lmstudio"))
     implementation(project(":libraries:providers:anthropic-compatible"))
     implementation(project(":libraries:stores:sqlite"))

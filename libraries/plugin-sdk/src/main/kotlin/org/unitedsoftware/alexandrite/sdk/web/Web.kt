@@ -34,6 +34,19 @@ public class WebQuery(public val text: String, public val limit: Int) {
 @Poko
 public class WebSearchResult(public val title: String, public val url: String, public val snippet: String)
 
+/** A page-fetching service contributed by a plugin, which the host's settings choose by its [id]. */
+@ContributedSpi
+public interface WebFetchBackend {
+    /** Lowercase letters, digits and `-`, as [WebSearchBackend.ID] takes them, such as `pleochroic`. */
+    public val id: String
+
+    public suspend fun fetch(url: String): FetchedPage
+}
+
+/** A page a fetch backend read, its [text] already reduced to what the backend gives (plain text, Markdown, …). */
+@Poko
+public class FetchedPage(public val url: String, public val text: String)
+
 /** A [question] about the text of the page at [url], for the turn's agent's web model to answer from that text alone. */
 @Poko
 public class PageQuestion(

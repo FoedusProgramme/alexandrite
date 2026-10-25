@@ -25,6 +25,12 @@ internal class WebConfig(
     val braveApiKey: Secret? = null,
     /** The key of the built-in Tavily backend, best given as an environment reference. */
     val tavilyApiKey: Secret? = null,
+    /** The id of the fetch backend that `web.fetch` uses, the direct fetch below when left out. */
+    val fetchBackend: String? = null,
+    /** The `apiBase` of a signed-in Pleochroic account or a self-hosted `standalone-service`. */
+    val pleochroicApiBase: String? = null,
+    /** The key of the Pleochroic account or `standalone-service`, best given as an environment reference. */
+    val pleochroicApiKey: Secret? = null,
 ) {
     val normalizedPrivateHosts: Set<String> get() = allowedPrivateHosts.map(::normalizeAllowedHost).toSet()
 
@@ -36,8 +42,15 @@ internal class WebConfig(
         require(searchBackend == null || WebSearchBackend.ID.matches(searchBackend)) {
             "searchBackend '$searchBackend' is no backend id: lowercase letters, digits and '-', such as \"brave\""
         }
+        require(fetchBackend == null || WebSearchBackend.ID.matches(fetchBackend)) {
+            "fetchBackend '$fetchBackend' is no backend id: lowercase letters, digits and '-', such as \"pleochroic\""
+        }
         require(braveApiKey == null || braveApiKey.reveal().isNotBlank()) { "braveApiKey may not be blank" }
         require(tavilyApiKey == null || tavilyApiKey.reveal().isNotBlank()) { "tavilyApiKey may not be blank" }
+        require(pleochroicApiBase == null || pleochroicApiBase.isNotBlank()) { "pleochroicApiBase may not be blank" }
+        require(pleochroicApiKey == null || pleochroicApiKey.reveal().isNotBlank()) {
+            "pleochroicApiKey may not be blank"
+        }
     }
 }
 
