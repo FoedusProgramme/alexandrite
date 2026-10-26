@@ -758,6 +758,114 @@ class InitTest {
         assertContains(Files.readString(cli.secrets), "$variable=fixture-secret")
     }
 
+    // Import from the signed-in Pleochroic account's own sync (its SyncRunner/PendingSync-backed entry).
+
+    private fun pleochroicSignedInConfig(server: FakeModelServer) =
+        """{"providers": {"pleochroic": {"endpoints": {"default": {
+            "baseUrl": "${server.baseUrl}", "apiKey": "${'$'}{env:PLEOCHROIC_KEY}"}}}}}"""
+
+    /** Queues the fixed response every one of these tests needs once the change feed itself answers: the
+     * signed-in account's own provider endpoint is itself a tracked config item, pushed in the same run. */
+    private fun FakeModelServer.enqueueOwnEndpointPush() {
+        enqueue(FakeResponse.builder().body("""{"rev": "rev-1"}""").build(), "/config/provider/pleochroic%2Fdefault")
+    }
+
+    @Test
+    fun `import pulls a Pleochroic skill and MCP server, and never writes the mcp secret in plain text`() {
+        val server = FakeModelServer()
+        try {
+            cli.config(pleochroicSignedInConfig(server))
+            cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+            server.enqueue(
+                FakeResponse.builder().body(
+                    """{"changes": [
+                        {"seq": 1, "area": "skill", "kind": "global", "id": "my-skill", "rev": "rev-1",
+                            "deleted": false},
+                        {"seq": 2, "area": "config", "kind": "mcp", "id": "notes", "rev": "rev-9", "deleted": false}
+                    ], "cursor": 2, "more": false}""",
+                ).build(),
+                "/sync/changes",
+            )
+            server.enqueue(
+                FakeResponse.builder().body(
+                    """{"rev": "rev-1", "files": [{"path": "SKILL.md", "encoding": "utf8", "content": "# Hi"}]}""",
+                ).build(),
+                "/skills/global/my-skill",
+            )
+            server.enqueue(
+                FakeResponse.builder().body(
+                    """{"rev": "rev-9", "data": {"command": "mcp-server",
+                        "env": {"API_TOKEN": "hunter2-secret"}}}""",
+                ).build(),
+                "/config/mcp/notes",
+            )
+            server.enqueueOwnEndpointPush()
+            cli.machine.answers += listOf("", "1,2")
+
+            // --force: the config file this test wrote to seed the signed-in account already exists, which else
+            // asks to confirm overwriting it first (declined by the "" above, dropping the import step silently).
+            val printed = cli("init", "--force", "--only", "import")
+
+            assertEquals(0, printed.code, printed.out + printed.err)
+            assertContains(printed.out, "Imported 2.")
+            assertEquals(
+                "# Hi",
+                Files.readString(cli.configFile.resolveSibling("skills/my-skill/SKILL.md")),
+            )
+            assertEquals("\"mcp-server\"", "${file().at("mcp.servers.notes.command")}")
+            val envRef = file().at("mcp.servers.notes.env.API_TOKEN").toString().removeSurrounding("\"")
+            assertTrue(envRef.startsWith("\${env:") && envRef.endsWith("}"), envRef)
+            val variable = envRef.removePrefix("\${env:").removeSuffix("}")
+            assertContains(Files.readString(cli.secrets), "$variable=hunter2-secret")
+            val rawConfig = Files.readString(cli.configFile)
+            assertFalse("hunter2-secret" in rawConfig, rawConfig)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `import finds nothing from an empty Pleochroic account, and says so`() {
+        val server = FakeModelServer()
+        try {
+            cli.config(pleochroicSignedInConfig(server))
+            cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+            server.enqueue(
+                FakeResponse.builder().body("""{"changes": [], "cursor": 0, "more": false}""").build(),
+                "/sync/changes",
+            )
+            server.enqueueOwnEndpointPush()
+            cli.machine.answers += ""
+
+            // --force: see the note above the success test about the config file this test pre-wrote.
+            val printed = cli("init", "--force", "--only", "import")
+
+            assertEquals(0, printed.code, printed.out + printed.err)
+            assertContains(printed.out, "No skills or MCP servers were found to import.")
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `import degrades quietly when the Pleochroic account's sync cannot be reached`() {
+        val server = FakeModelServer()
+        try {
+            cli.config(pleochroicSignedInConfig(server))
+            cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+            server.enqueue(FakeResponse.builder(500).body("""{"error": "boom"}""").build(), "/sync/changes")
+            cli.machine.answers += ""
+
+            val printed = cli("init", "--force", "--only", "import")
+
+            assertEquals(0, printed.code, printed.out + printed.err)
+            assertContains(printed.out, "No skills or MCP servers were found to import.")
+            assertFalse(Files.exists(cli.secrets))
+        } finally {
+            server.close()
+        }
+    }
+
     // On the terminal.
 
     @Test
