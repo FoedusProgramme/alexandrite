@@ -33,13 +33,22 @@ class OneBotConfigTest {
         assertEquals(emptySet(), instance(admins = emptySet()).admins)
     }
 
+    @Test
+    fun `an approval timeout is between one and 1440 minutes`() {
+        assertFailsWith<IllegalArgumentException> { instance(approvalMinutes = 0) }
+        assertFailsWith<IllegalArgumentException> { instance(approvalMinutes = 1_441) }
+        assertEquals(1_440, instance(approvalMinutes = 1_440).approvalMinutes)
+    }
+
     private fun instance(
         admins: Set<String> = emptySet(),
         allowedChats: List<String> = emptyList(),
+        approvalMinutes: Int = 10,
     ): OneBotInstanceConfig = OneBotInstanceConfig(
         transport = "ws",
         endpoint = "ws://127.0.0.1:3001",
         admins = admins,
         allowedChats = allowedChats,
+        approvalMinutes = approvalMinutes,
     )
 }

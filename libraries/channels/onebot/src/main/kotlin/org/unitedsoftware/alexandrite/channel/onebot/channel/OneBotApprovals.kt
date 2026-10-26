@@ -113,8 +113,8 @@ internal class OneBotApprovals(
         }
     }
 
-    /** Whether [name] is a command this desk answers. */
-    fun answers(name: String): Boolean = name == APPROVE || name == DENY
+    /** Whether [name] is a command this desk answers, in any case. */
+    fun answers(name: String): Boolean = name.equals(APPROVE, ignoreCase = true) || name.equals(DENY, ignoreCase = true)
 
     /**
      * Takes the approval command [command] that [by] wrote in [event], and the text to reply with, null when the reply
@@ -128,9 +128,18 @@ internal class OneBotApprovals(
         val code = words.firstOrNull { !it.equals(ALWAYS, ignoreCase = true) }
         return when (val resolution = resolve(chat, event, code)) {
             Resolution.None -> text(TextKeys.APPROVAL_NOTHING_WAITS, language(chat))
+
             is Resolution.Listing -> listing(resolution.requests, language(chat))
+
             is Resolution.Ambiguous -> several(resolution.ids, language(chat))
-            is Resolution.One -> decide(resolution.id, by, command.name == APPROVE, always, language(chat))
+
+            is Resolution.One -> decide(
+                resolution.id,
+                by,
+                command.name.equals(APPROVE, ignoreCase = true),
+                always,
+                language(chat),
+            )
         }
     }
 
@@ -323,7 +332,7 @@ internal class OneBotApprovals(
                     language,
                     "id" to request.id,
                     "name" to named(answer.by),
-                    "rule" to request.alwaysRules.firstOrNull()?.display.orEmpty(),
+                    "rule" to request.alwaysRules.joinToString(", ") { it.display },
                 )
             } else {
                 text(
@@ -365,8 +374,18 @@ internal class OneBotApprovals(
         ).append("\n\n")
         append(body(request, language))
         append("\n\n").append(text(TextKeys.APPROVAL_ANSWER, language))
-        request.alwaysRules.firstOrNull()?.let {
-            append(' ').append(text(TextKeys.APPROVAL_ALWAYS_RULE, language, "rule" to it.display))
+        if (request.alwaysRules.size == 1) {
+            append(' ').append(
+                text(TextKeys.APPROVAL_ALWAYS_RULE, language, "rule" to request.alwaysRules.first().display),
+            )
+        } else if (request.alwaysRules.size > 1) {
+            append(' ').append(
+                text(
+                    TextKeys.APPROVAL_ALWAYS_RULES,
+                    language,
+                    "rules" to request.alwaysRules.joinToString(", ") { it.display },
+                ),
+            )
         }
     }
 

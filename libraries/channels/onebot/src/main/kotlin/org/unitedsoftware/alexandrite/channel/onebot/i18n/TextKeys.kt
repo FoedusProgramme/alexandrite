@@ -39,6 +39,9 @@ internal object TextKeys {
     /** Takes `{rule}`. */
     const val APPROVAL_ALWAYS_RULE: String = "approval.always_rule"
 
+    /** Takes `{rules}`, the rules joined for a request that may grant several. */
+    const val APPROVAL_ALWAYS_RULES: String = "approval.always_rules"
+
     /** Takes `{id}` and `{name}`. */
     const val APPROVAL_OUTCOME_ALLOWED: String = "approval.outcome_allowed"
 
