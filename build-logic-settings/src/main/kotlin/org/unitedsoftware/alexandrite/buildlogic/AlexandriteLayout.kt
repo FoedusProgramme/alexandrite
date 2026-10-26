@@ -46,6 +46,9 @@ enum class Layer {
     /** OS sandboxes that commands run in. */
     SANDBOX,
 
+    /** Finding and bringing in another tool's skills and MCP servers. */
+    DISCOVERY,
+
     /** Doubles for plugin authors. */
     TESTKIT,
 
@@ -201,6 +204,7 @@ object AlexandriteLayout {
             jarPrefix = "alexandrite-sandbox-",
             packagePrefix = "$PACKAGE.sandbox.",
         ),
+        Location.Slot("libraries/discovery", Layer.DISCOVERY),
         Location.Slot("libraries/testkit", Layer.TESTKIT),
         Location.Slot("build-ksp-plugin", Layer.KSP, jarName = "alexandrite-ksp"),
         Location.Slot("bom", Layer.BOM),
@@ -239,6 +243,7 @@ object AlexandriteLayout {
         Layer.AUTOMATION to setOf(Layer.SDK, Layer.INTERNAL, Layer.AUTOMATION_COMMON),
         Layer.AUTOMATION_COMMON to emptySet(),
         Layer.SANDBOX to setOf(Layer.SDK, Layer.INTERNAL),
+        Layer.DISCOVERY to setOf(Layer.SDK, Layer.INTERNAL),
         Layer.TESTKIT to setOf(Layer.SDK, Layer.INTERNAL, Layer.RUNTIME),
         Layer.EXAMPLE to setOf(Layer.SDK, Layer.CHANNEL_COMMON, Layer.PROVIDER_COMMON),
         Layer.BOM to emptySet(),
@@ -258,6 +263,7 @@ object AlexandriteLayout {
             Layer.AUTOMATION,
             Layer.AUTOMATION_COMMON,
             Layer.SANDBOX,
+            Layer.DISCOVERY,
         ),
     )
 
@@ -273,6 +279,7 @@ object AlexandriteLayout {
         Layer.ACCOUNT to setOf(Layer.TESTKIT),
         Layer.AUTOMATION to setOf(Layer.TESTKIT),
         Layer.SANDBOX to setOf(Layer.TESTKIT),
+        Layer.DISCOVERY to setOf(Layer.TESTKIT),
         Layer.KSP to setOf(Layer.SDK),
         Layer.EXAMPLE to setOf(Layer.TESTKIT),
         Layer.APP to setOf(Layer.TESTKIT, Layer.EXAMPLE),

@@ -33,6 +33,7 @@ class AlexandriteLayoutTest {
     private val schedule = ":libraries:automations:schedule"
     private val seatbelt = ":libraries:sandboxes:seatbelt"
     private val bubblewrap = ":libraries:sandboxes:bubblewrap"
+    private val discovery = ":libraries:discovery"
     private val testkit = ":libraries:testkit"
     private val ksp = ":build-ksp-plugin"
     private val bom = ":bom"
@@ -43,7 +44,7 @@ class AlexandriteLayoutTest {
     private val libraries =
         listOf(sdk, internals, runtime, agent, tools, mcp, commands, telegram, channelCommon, openAi, anthropic) +
             vendors +
-            listOf(providerCommon, sqlite, automationCommon, testkit)
+            listOf(providerCommon, sqlite, automationCommon, discovery, testkit)
     private val builtIn = libraries + ksp + bom + app
     private val all = builtIn + notes
     private val indexed =
@@ -151,6 +152,7 @@ class AlexandriteLayoutTest {
             providerCommon to "alexandrite-provider-common",
             sqlite to "alexandrite-store-sqlite",
             automationCommon to "alexandrite-automation-common",
+            discovery to "alexandrite-discovery",
             testkit to "alexandrite-testkit",
             ksp to "alexandrite-ksp",
             bom to "alexandrite-bom",
@@ -189,6 +191,7 @@ class AlexandriteLayoutTest {
             providerCommon to null,
             sqlite to "stores.sqlite",
             automationCommon to null,
+            discovery to null,
             testkit to null,
             ksp to null,
             bom to null,
@@ -367,7 +370,7 @@ class AlexandriteLayoutTest {
     // Discovery.
 
     @Test
-    fun `today's tree yields today's twenty-two modules in path order`() {
+    fun `today's tree yields today's twenty-three modules in path order`() {
         val discovery = AlexandriteLayout.discover(today)
         assertNull(discovery.failure)
         assertEquals(all.sorted(), discovery.modules.map { it.path })
@@ -380,7 +383,7 @@ class AlexandriteLayoutTest {
         val shuffled = (today + added).shuffled(Random(7))
         val paths = AlexandriteLayout.discover(shuffled).modules.map { it.path }
         assertEquals(paths.sorted(), paths)
-        assertEquals(25, paths.size)
+        assertEquals(26, paths.size)
     }
 
     @Test
@@ -925,7 +928,7 @@ class AlexandriteLayoutTest {
             assertNotNull(violation(app, ksp)),
             ":libraries:channels:*, $channelCommon, :libraries:providers:*, :libraries:provider-common, " +
                 ":libraries:stores:*, :libraries:accounts:*, :libraries:automations:*, $automationCommon, " +
-                ":libraries:sandboxes:*; $testkit, :examples:* only from configurations named test*;",
+                ":libraries:sandboxes:*, $discovery; $testkit, :examples:* only from configurations named test*;",
         )
         assertContains(
             assertNotNull(violation(notes, internals)),
