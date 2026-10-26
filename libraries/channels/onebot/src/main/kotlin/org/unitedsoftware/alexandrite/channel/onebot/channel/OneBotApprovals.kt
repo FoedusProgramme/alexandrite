@@ -162,6 +162,12 @@ internal class OneBotApprovals(
     /** Sends the message with [waiting]'s request to [chat], and says what went wrong when it was not shown. */
     private suspend fun post(waiting: Pending, chat: ChatAddress, language: LanguageTag?): String? {
         val text = render(waiting.request, language)
+        // Register the chat before the platform can take the message: a reply or a written id can answer the
+        // request as soon as the platform has the message, which may be before send() returns here (the same race
+        // QqBotApprovals.show() avoids the same way). The set starts empty and is never read until a message id is
+        // added to it or the chat is removed below, so an admin's reply cannot match before there is a message to
+        // reply to — only the plain-written-id path reads the chat's mere presence, by design.
+        val carried = waiting.carried.getOrPut(chat) { ConcurrentHashMap.newKeySet() }
         // An approval is worth more than one try: an implementation that times out on a message often takes the next
         // one, and a request nobody was shown refuses the call for a reason that is nobody's. What the platform said
         // is kept, so that a request that reached no chat is not answered as though no admin could be reached.
@@ -185,7 +191,6 @@ internal class OneBotApprovals(
             }
             val delivered = delivery as? Delivery.Delivered
             if (delivered != null) {
-                val carried = waiting.carried.getOrPut(chat) { ConcurrentHashMap.newKeySet() }
                 delivered.messages.forEach { carried += it.id }
                 return null
             }
@@ -202,6 +207,9 @@ internal class OneBotApprovals(
             }
             if (attempt < APPROVAL_TRIES) delay(APPROVAL_RETRY_MILLIS)
         }
+        // Nothing ever reached this chat after all: undo the registration above, so it is not offered as a chat
+        // this request waits in (the plain-written-id path would otherwise treat it as one).
+        waiting.carried.remove(chat)
         return why ?: "the platform took no message of it"
     }
 
