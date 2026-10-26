@@ -75,6 +75,8 @@ class AppTextsTest {
                 "alexandrite-automation-heartbeat",
                 "alexandrite-automation-schedule",
                 "alexandrite-channel-telegram",
+                "alexandrite-channel-onebot",
+                "alexandrite-channel-qqbot",
                 "alexandrite-commands",
                 "alexandrite-mcp",
             ),

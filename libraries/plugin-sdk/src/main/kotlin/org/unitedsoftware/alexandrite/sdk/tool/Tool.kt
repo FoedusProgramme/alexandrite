@@ -3,6 +3,7 @@ package org.unitedsoftware.alexandrite.sdk.tool
 import dev.drewhamilton.poko.Poko
 import kotlinx.serialization.json.JsonObject
 import org.unitedsoftware.alexandrite.sdk.InternalAlexandriteApi
+import org.unitedsoftware.alexandrite.sdk.chat.ChannelMessageRef
 import org.unitedsoftware.alexandrite.sdk.chat.ToolCallId
 import org.unitedsoftware.alexandrite.sdk.chat.TurnInfo
 import org.unitedsoftware.alexandrite.sdk.di.ContributedSpi
@@ -77,6 +78,9 @@ public interface ToolContext {
 
     /** The model executing this call, null outside a model turn. */
     public val model: ModelRef? get() = null
+
+    /** The message of the channel this turn answers, which a tool that acts on it is given. */
+    public val trigger: ChannelMessageRef? get() = null
 
     /** The directory where the turn's agent keeps its own files, which may not exist yet, null when it has none. */
     public val workspace: Path?

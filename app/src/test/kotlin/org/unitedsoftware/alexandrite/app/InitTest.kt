@@ -97,6 +97,7 @@ class InitTest {
             "sk-test",
             "2,1",
             "y",
+            "3",
             bot.token,
             "n",
             "n",
@@ -369,6 +370,122 @@ class InitTest {
     }
 
     @Test
+    fun `init sets up a OneBot connection and its admin`() {
+        cli.environment = mapOf("DEEPSEEK_KEY" to "sk-test")
+        cli.config(
+            """{"providers": {"deepseek": {"endpoints": {"deepseek": {"apiKey": "${'$'}{env:DEEPSEEK_KEY}"}}}}, """ +
+                """"agent": {"agents": {"main": {"model": "deepseek/deepseek-chat"}}}}""",
+        )
+        cli.machine.answers += listOf("", "1", "ws://127.0.0.1:3001", "secret-token", "111,222")
+
+        val printed = cli("init", "--only", "channels", "--force")
+
+        assertEquals(0, printed.code, printed.out + printed.err)
+        assertContains(printed.out, "The agent main answers on ws://127.0.0.1:3001.")
+        assertEquals(
+            """{"transport":"ws","endpoint":"ws://127.0.0.1:3001",""" +
+                """"accessToken":"${'$'}{env:ALEXANDRITE_ONEBOT_MAIN_TOKEN}","admins":["111","222"],""" +
+                """"allowedChats":["private:111","private:222"]}""",
+            "${file().at("channels.onebot.instances.main")}",
+        )
+        assertEquals("""{"home":"private:111"}""", "${file().at("agent.agents.main.channels.onebot:main")}")
+        assertContains(Files.readString(cli.secrets), "ALEXANDRITE_ONEBOT_MAIN_TOKEN=secret-token")
+    }
+
+    @Test
+    fun `init leaves a OneBot connection without an admin unattached, with a warning`() {
+        cli.environment = mapOf("DEEPSEEK_KEY" to "sk-test")
+        cli.config(
+            """{"providers": {"deepseek": {"endpoints": {"deepseek": {"apiKey": "${'$'}{env:DEEPSEEK_KEY}"}}}}, """ +
+                """"agent": {"agents": {"main": {"model": "deepseek/deepseek-chat"}}}}""",
+        )
+        cli.machine.answers += listOf("", "1", "ws://127.0.0.1:3001", "", "")
+
+        val printed = cli("init", "--only", "channels", "--force")
+
+        assertEquals(0, printed.code, printed.out + printed.err)
+        assertContains(printed.out, "No admin was given: nobody can approve")
+        assertNull(file().at("channels.onebot.instances.main.admins"))
+        assertEquals(
+            """{"onebot:main":{}}""",
+            "${file().at("agent.agents.main.channels")}",
+        )
+    }
+
+    @Test
+    fun `init sets up a QQ bot and its admin`() {
+        cli.environment = mapOf("DEEPSEEK_KEY" to "sk-test")
+        cli.config(
+            """{"providers": {"deepseek": {"endpoints": {"deepseek": {"apiKey": "${'$'}{env:DEEPSEEK_KEY}"}}}}, """ +
+                """"agent": {"agents": {"main": {"model": "deepseek/deepseek-chat"}}}}""",
+        )
+        cli.machine.answers += listOf("", "2", "APPID123", "app-secret", "OPENID1,OPENID2")
+
+        val printed = cli("init", "--only", "channels", "--force")
+
+        assertEquals(0, printed.code, printed.out + printed.err)
+        assertContains(printed.out, "The agent main answers as the bot APPID123.")
+        assertEquals(
+            """{"appId":"APPID123","appSecret":"${'$'}{env:ALEXANDRITE_QQBOT_MAIN_APPSECRET}",""" +
+                """"admins":["OPENID1","OPENID2"]}""",
+            "${file().at("channels.qqbot.instances.main")}",
+        )
+        assertEquals("""{"home":"private:OPENID1"}""", "${file().at("agent.agents.main.channels.qqbot:main")}")
+        assertContains(Files.readString(cli.secrets), "ALEXANDRITE_QQBOT_MAIN_APPSECRET=app-secret")
+    }
+
+    @Test
+    fun `the non-interactive init sets up Telegram alone when OneBot and QQ give it nothing to go on`() {
+        cli.environment = mapOf(TELEGRAM_TOKEN_VARIABLE to bot.token)
+
+        val printed =
+            cli("init", "--non-interactive", "--only", "channels", "--admin", "1001", "--api-base-url", bot.baseUrl)
+
+        assertEquals(0, printed.code, printed.out + printed.err)
+        assertContains(printed.out, "Alexandrite Test Bot")
+        assertEquals("[1001]", "${file().at("channels.telegram.instances.main.adminUserIds")}")
+        assertNull(file().at("channels.onebot.instances"))
+        assertNull(file().at("channels.qqbot.instances"))
+    }
+
+    @Test
+    fun `the non-interactive init takes OneBot and QQ from the environment`() {
+        cli.environment = mapOf(
+            ONEBOT_ENDPOINT_VARIABLE to "ws://127.0.0.1:3001",
+            ONEBOT_ADMIN_VARIABLE to "111",
+            QQBOT_APP_ID_VARIABLE to "APPID123",
+            QQBOT_APP_SECRET_VARIABLE to "app-secret",
+            QQBOT_ADMIN_VARIABLE to "OPENID1",
+        )
+
+        val printed = cli("init", "--non-interactive", "--only", "channels")
+
+        assertEquals(0, printed.code, printed.out + printed.err)
+        assertEquals("""["111"]""", "${file().at("channels.onebot.instances.main.admins")}")
+        assertEquals("""["OPENID1"]""", "${file().at("channels.qqbot.instances.main.admins")}")
+        assertNull(file().at("channels.telegram.instances"))
+    }
+
+    @Test
+    fun `init keeps an already configured OneBot endpoint and QQ AppID`() {
+        cli.config(
+            """{"channels": {"onebot": {"instances": {"main": {"transport": "ws", """ +
+                """"endpoint": "ws://127.0.0.1:3001", "accessToken": "tok", "admins": ["111"]}}}, """ +
+                """"qqbot": {"instances": {"main": {"appId": "APPID123", "appSecret": "s3cret", """ +
+                """"admins": ["OPENID1"]}}}}}""",
+        )
+        cli.machine.answers += listOf("", "1,2")
+
+        val printed = cli("init", "--only", "channels", "--force")
+
+        assertEquals(0, printed.code, printed.out + printed.err)
+        assertContains(printed.out, "The configured OneBot endpoint ws://127.0.0.1:3001 is kept.")
+        assertContains(printed.out, "The configured QQ bot APPID123 is kept.")
+        assertEquals("""["111"]""", "${file().at("channels.onebot.instances.main.admins")}")
+        assertEquals("""["OPENID1"]""", "${file().at("channels.qqbot.instances.main.admins")}")
+    }
+
+    @Test
     fun `the service step without systemd says how to run Alexandrite`() {
         cli.config("{}")
         cli.machine.programs = { Executed(if (it.contains("show-environment")) 1 else 0, "") }
@@ -630,7 +747,9 @@ class InitTest {
         assertContains(printed.out, "Imported 2.")
         assertEquals(
             "Body",
-            Files.readString(cli.configFile.resolveSibling("skills/sample/SKILL.md")).substringAfterLast("---\n").trim(),
+            Files.readString(
+                cli.configFile.resolveSibling("skills/sample/SKILL.md"),
+            ).substringAfterLast("---\n").trim(),
         )
         assertEquals("\"uvx\"", "${file().at("mcp.servers.fixture.command")}")
         assertEquals("""["mcp-server-fixture"]""", "${file().at("mcp.servers.fixture.args")}")

@@ -126,7 +126,7 @@ class ToolExecutorTest {
 
     private suspend fun ToolExecutor.executed(tool: Tool, timeout: Duration = 120.seconds): ToolCallEnd {
         val name = tool.definition.name
-        return execute(turn, call, mapOf(name to tool), timeout, setOf(name), taint, DirectCalls)
+        return execute(turn, call, mapOf(name to tool), timeout, setOf(name), taint, DirectCalls, null)
     }
 
     private fun ToolResultEntry.text(): String = content.joinToString("") { (it as TextPart).text }
@@ -158,7 +158,7 @@ class ToolExecutorTest {
                 val edits = ToolCallPart(ToolCallId("call-1"), "fs.edit", "{}")
                 executor(
                     gate,
-                ).execute(turn, edits, mapOf("fs.edit" to edit), 120.seconds, setOf("fs.edit"), taint, calls)
+                ).execute(turn, edits, mapOf("fs.edit" to edit), 120.seconds, setOf("fs.edit"), taint, calls, null)
                 ended.single()
             }
 

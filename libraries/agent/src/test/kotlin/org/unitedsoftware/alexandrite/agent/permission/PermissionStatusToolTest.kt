@@ -90,6 +90,7 @@ class PermissionStatusToolTest {
         ConversationDirectories(ConventionalAgentPlaces(hostPaths(null)), settings("{}")),
         null,
         taint,
+        null,
     )
 
     private suspend fun status(

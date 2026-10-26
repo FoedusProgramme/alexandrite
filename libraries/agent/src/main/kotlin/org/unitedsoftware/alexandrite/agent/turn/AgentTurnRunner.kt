@@ -1082,6 +1082,7 @@ internal class AgentTurnRunner(
                                     callable,
                                     taint,
                                     tracked,
+                                    plan.trigger,
                                 )
                                 reads.reason(turn, call.name, end.tainting)?.let { taint.mark(it) }
                                 taint.record()

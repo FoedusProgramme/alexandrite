@@ -95,7 +95,7 @@ class JobsTest {
             NoTaintLedger,
         )
         val name = tool.definition.name
-        return executor.execute(turn, call, mapOf(name to tool), timeout, setOf(name), taint, DirectCalls)
+        return executor.execute(turn, call, mapOf(name to tool), timeout, setOf(name), taint, DirectCalls, null)
     }
 
     private suspend fun recorded(): Set<RunId> = JobRecords(records.of("alexandrite-agent")).all().keys

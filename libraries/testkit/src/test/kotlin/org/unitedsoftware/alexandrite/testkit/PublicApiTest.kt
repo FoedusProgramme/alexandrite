@@ -52,8 +52,9 @@ class PublicApiTest {
 
         suspend fun tools(): List<Any?> {
             val tool = recordingTool("notes.find", ToolRisk.READ_ONLY) { _, context -> ToolResult("in ${'$'}{context.call}") }
-            val result = tool.execute(JsonObject(emptyMap()), testToolContext(workspace = Path.of("/srv/work")))
-            return listOf(result, tool.calls, testHardFloor())
+            val context = testToolContext(workspace = Path.of("/srv/work"))
+            val result = tool.execute(JsonObject(emptyMap()), context)
+            return listOf(result, tool.calls, context.trigger, testHardFloor())
         }
 
         suspend fun harness(index: PluginIndex, backend: PluginIndex): List<Any?> {

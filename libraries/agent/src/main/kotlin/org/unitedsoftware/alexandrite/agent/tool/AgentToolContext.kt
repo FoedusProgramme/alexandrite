@@ -9,6 +9,7 @@ import org.unitedsoftware.alexandrite.agent.sandbox.CallSandboxes
 import org.unitedsoftware.alexandrite.agent.trust.CallTrust
 import org.unitedsoftware.alexandrite.agent.trust.TurnTaint
 import org.unitedsoftware.alexandrite.agent.workspace.Workspaces
+import org.unitedsoftware.alexandrite.sdk.chat.ChannelMessageRef
 import org.unitedsoftware.alexandrite.sdk.chat.ToolCallId
 import org.unitedsoftware.alexandrite.sdk.chat.TurnInfo
 import org.unitedsoftware.alexandrite.sdk.chat.TurnKind
@@ -32,6 +33,8 @@ internal class AgentToolContext(
     private val directories: ConversationDirectories,
     clearance: Clearance?,
     val taint: TurnTaint,
+    /** The message of the channel this turn answers, which a tool that acts on it is given. */
+    trigger: ChannelMessageRef?,
     /** What a sub-agent run that the call starts takes from its turn, null outside a turn. */
     val delegating: DelegatingTurn? = null,
     /** Whether the call's review asked for it to run as a background job from its start. */
@@ -84,6 +87,8 @@ internal class AgentToolContext(
 
     override val workspace: Path?
         get() = workspaces.paths[turn.agent]
+
+    override val trigger: ChannelMessageRef? = trigger
 
     override val conversationDirectory: Path
         get() = directories.path(turn)
