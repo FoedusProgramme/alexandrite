@@ -219,7 +219,7 @@ class InitTest {
         assertContains(printed.out, "No ALEXANDRITE_TELEGRAM_TOKEN is set, so Telegram is left out.")
         assertContains(
             printed.out,
-            "Skipped Telegram and other channels: set it up later with alexandrite init --only channels",
+            "Skipped channels: set it up later with alexandrite init --only channels",
         )
         assertEquals("\"deepseek/deepseek-chat\"", "${file().at("agent.agents.main.model")}")
         assertEquals("""{"language":"de-DE","zone":"Europe/Berlin"}""", "${file().at("app")}")
