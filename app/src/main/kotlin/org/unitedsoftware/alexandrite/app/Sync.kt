@@ -310,7 +310,7 @@ internal fun writeSyncState(cli: Cli, state: SyncState) {
  * never written in place of a `${'$'}{env:NAME}` reference (a pulled document already names one, same as a local one).
  */
 @OptIn(InternalAlexandriteApi::class)
-private class CliHostConfig(private val cli: Cli) : HostConfig {
+internal class CliHostConfig(private val cli: Cli) : HostConfig {
     override suspend fun get(path: String): JsonElement? {
         val config = quietConfig() ?: return null
         return if (path.isEmpty()) config else config.at(path)

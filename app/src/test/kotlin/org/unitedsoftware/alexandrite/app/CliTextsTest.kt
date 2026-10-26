@@ -64,10 +64,10 @@ class CliTextsTest {
             chinese("init.redo", "step" to Text("init.name.model"), "how" to how),
         )
         assertEquals(
-            "已跳过 Telegram：之后可以用 alexandrite init --only model 设置。",
+            "已跳过 Telegram 和其他渠道：之后可以用 alexandrite init --only model 设置。",
             chinese(
                 "init.redo",
-                "step" to Text("init.name.telegram"),
+                "step" to Text("init.name.channels"),
                 "how" to how,
             ),
         )

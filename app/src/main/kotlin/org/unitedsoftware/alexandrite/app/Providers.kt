@@ -101,7 +101,10 @@ internal fun keyHeaders(kind: ProviderKind, key: String?): Map<String, String> =
 
 /** What a models request found. */
 internal sealed interface Listing {
-    class Models(val ids: List<String>) : Listing
+    /** [inputModalities] is the `architecture.input_modalities` an OpenRouter- or Pleochroic-shaped listing gives
+     * some models (`"text"`, `"image"`, `"audio"`, …), by model id; empty for a model the listing says nothing
+     * about, and for every model of a listing that gives none of them at all (most providers don't). */
+    class Models(val ids: List<String>, val inputModalities: Map<String, Set<String>> = emptyMap()) : Listing
 
     /** The endpoint refuses the key, or wants one. */
     class Refused(val reason: Text) : Listing
@@ -125,7 +128,16 @@ internal fun listModels(cli: Cli, kind: ProviderKind, base: String, key: String?
     } catch (e: IllegalArgumentException) {
         null
     } ?: return Listing.Unchecked(Text("models.no_list", "base" to base))
-    return Listing.Models(data.mapNotNull { (it as? JsonObject)?.get("id").text }.distinct())
+    val models = data.mapNotNull { it as? JsonObject }
+    val ids = models.mapNotNull { it["id"].text }.distinct()
+    val modalities = models.mapNotNull { model ->
+        val id = model["id"].text ?: return@mapNotNull null
+        val listed = ((model["architecture"] as? JsonObject)?.get("input_modalities") as? JsonArray)
+            ?.mapNotNull { it.text }?.toSet()
+            ?: return@mapNotNull null
+        id to listed
+    }.toMap()
+    return Listing.Models(ids, modalities)
 }
 
 private sealed interface Fetch {

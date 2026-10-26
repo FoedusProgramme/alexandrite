@@ -1,24 +1,44 @@
 package org.unitedsoftware.alexandrite.app
 
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import org.unitedsoftware.alexandrite.account.pleochroic.AREA_CONFIG
+import org.unitedsoftware.alexandrite.account.pleochroic.AREA_SKILL
+import org.unitedsoftware.alexandrite.account.pleochroic.HostConfigSyncLocal
+import org.unitedsoftware.alexandrite.account.pleochroic.HttpSyncTransport
+import org.unitedsoftware.alexandrite.account.pleochroic.KIND_MCP
 import org.unitedsoftware.alexandrite.account.pleochroic.PLEOCHROIC_PORTAL_URL
+import org.unitedsoftware.alexandrite.account.pleochroic.PendingSync
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncConflictException
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncRunner
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncServiceException
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
 import org.unitedsoftware.alexandrite.app.tui.Choice
+import org.unitedsoftware.alexandrite.discovery.DiscoveredMcpServer
+import org.unitedsoftware.alexandrite.discovery.DiscoveredSkill
+import org.unitedsoftware.alexandrite.discovery.discoverAll
+import org.unitedsoftware.alexandrite.discovery.importSkill
+import org.unitedsoftware.alexandrite.discovery.secretArgs
+import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
 import org.unitedsoftware.alexandrite.internal.time.zoneOrNull
 import org.unitedsoftware.alexandrite.runtime.config.EnvReferences
 import org.unitedsoftware.alexandrite.sdk.chat.LanguageTag
 import java.io.IOException
 import java.nio.file.Files
+import kotlin.time.Duration.Companion.seconds
 
-/** The steps of `init`, each named by [id]. */
+/** The steps of `init`, each named by [id], in the order [Setup.run] offers them. */
 internal enum class InitStep(val id: String) {
-    MODEL("model"),
-    TELEGRAM("telegram"),
-    ADMIN("admin"),
     LANGUAGE("language"),
+    MODEL("model"),
+    CHANNELS("channels"),
+    ACCOUNT("account"),
+    IMPORT("import"),
+    SEARCH("search"),
+    BROWSER("browser"),
     SERVICE("service"),
 }
 
@@ -33,11 +53,14 @@ internal class InitOptions(
     val provider: ProviderKind? = null,
     val endpoint: String? = null,
     val baseUrl: String? = null,
-    /** A self-hosted standalone-service's address and token, for the Pleochroic provider only. */
+    /** A self-hosted standalone-service's address and token: the Pleochroic provider choice of the model step, or
+     * the account step's own self-hosted choice, either reaches it. */
     val serviceUrl: String? = null,
     val serviceToken: String? = null,
     /** The portal a Pleochroic device login signs in through; only a test overrides it. */
     val portalBaseUrl: String = PLEOCHROIC_PORTAL_URL,
+    /** Asks the account step for a device login non-interactively, the same login `--service-url` bypasses. */
+    val pleochroicAccount: Boolean = false,
     /** The models of the endpoint, the first the agent's default. */
     val models: List<String> = emptyList(),
     val agent: String? = null,
@@ -46,6 +69,10 @@ internal class InitOptions(
     val zone: String? = null,
     /** The Bot API's address, Telegram's own when null. */
     val apiBaseUrl: String? = null,
+    val searchBackend: String? = null,
+    val fetchBackend: String? = null,
+    /** The address of a self-hosted SearXNG instance, for the search step's `searxng` choice. */
+    val searxngUrl: String? = null,
     /** Whether an existing config file may be changed without asking. */
     val force: Boolean = false,
 )
@@ -54,33 +81,36 @@ internal class InitOptions(
 internal const val API_KEY_VARIABLE = "ALEXANDRITE_API_KEY"
 internal const val TELEGRAM_TOKEN_VARIABLE = "ALEXANDRITE_TELEGRAM_TOKEN"
 
-/** The Telegram instance `init` sets up. */
-private const val INSTANCE = "main"
-
 /** How often a step asks again for an answer it cannot use. */
-private const val ATTEMPTS = 3
+internal const val INIT_ATTEMPTS = 3
 
 /** Sets Alexandrite up step by step, and returns the exit code. */
 internal fun init(cli: Cli, options: InitOptions): Int = cli.onTerminal { Setup(cli, options).run() }
 
 /** One run of `init`: what its steps found, the changes they make and the secrets they save. */
-private class Setup(private val cli: Cli, private val options: InitOptions) {
-    private val interactive = options.interactive && cli.machine.interactive
+private class Setup(override val cli: Cli, override val options: InitOptions) : ChannelSetupContext {
+    override val interactive = options.interactive && cli.machine.interactive
     private val ui: Ui get() = cli.ui
     private val changes = mutableListOf<ConfigChangeView>()
     private val secrets = linkedMapOf<String, String>()
     private val skipped = mutableListOf<InitStep>()
-    private var config = JsonObject(emptyMap())
-    private lateinit var agent: String
+    override var config = JsonObject(emptyMap())
+    override lateinit var agent: String
 
     /** The rows of the summary, by the key of their label. */
     private val summary = linkedMapOf<String, String>()
 
-    private val telegramApi: String
-        get() = options.apiBaseUrl ?: (config.at("$TELEGRAM_INSTANCES.$INSTANCE.apiBaseUrl").text ?: TELEGRAM_API)
+    override fun change(view: ConfigChangeView) {
+        changes += view
+    }
 
-    /** The bot this run set up, and its token. */
-    private var bot: Pair<BotCheck.Bot, String>? = null
+    override fun secret(variable: String, value: String) {
+        secrets[variable] = value
+    }
+
+    override fun summarize(key: String, value: String) {
+        summary[key] = value
+    }
 
     fun run(): Int {
         if (ui.rich) ui.intro(cli.t("init.title"))
@@ -99,13 +129,25 @@ private class Setup(private val cli: Cli, private val options: InitOptions) {
             }
         }
         agent = agentId() ?: return ExitCode.USAGE
-        for (step in listOf(InitStep.MODEL, InitStep.TELEGRAM, InitStep.ADMIN, InitStep.LANGUAGE)) {
+        val asked = listOf(
+            InitStep.LANGUAGE,
+            InitStep.MODEL,
+            InitStep.CHANNELS,
+            InitStep.ACCOUNT,
+            InitStep.IMPORT,
+            InitStep.SEARCH,
+            InitStep.BROWSER,
+        )
+        for (step in asked) {
             if (step !in steps) continue
             val code = when (step) {
+                InitStep.LANGUAGE -> language()
                 InitStep.MODEL -> model()
-                InitStep.TELEGRAM -> telegram()
-                InitStep.ADMIN -> admin()
-                else -> language()
+                InitStep.CHANNELS -> channels()
+                InitStep.ACCOUNT -> account()
+                InitStep.IMPORT -> import()
+                InitStep.SEARCH -> webBackends()
+                else -> browser()
             }
             if (code != ExitCode.OK) return code
         }
@@ -140,7 +182,7 @@ private class Setup(private val cli: Cli, private val options: InitOptions) {
         return null
     }
 
-    private val agentConfig: JsonObject? get() = config.at("$AGENTS.$agent") as? JsonObject
+    override val agentConfig: JsonObject? get() = config.at("$AGENTS.$agent") as? JsonObject
 
     /** Whether the step [step] goes ahead: always without a terminal, else when the person agrees. */
     private fun begins(step: InitStep): Boolean {
@@ -174,13 +216,15 @@ private class Setup(private val cli: Cli, private val options: InitOptions) {
         val variable = if (endpoint == kind.endpoint) kind.keyVariable else keyVariable(endpoint)
         var key: String? = null
         var listed: List<String>? = null
-        for (attempt in 1..ATTEMPTS) {
+        var modalities: Map<String, Set<String>> = emptyMap()
+        for (attempt in 1..INIT_ATTEMPTS) {
             key = key(kind, variable) ?: return ExitCode.FAILURE
             val given = key.ifEmpty { null }
             val listing =
                 ui.busy({ cli.t("init.model.checking", "base" to base) }) { listModels(cli, kind, base, given) }
             if (listing is Listing.Models) {
                 listed = listing.ids
+                modalities = listing.inputModalities
                 val text = if (given == null) "init.model.listed_keyless" else "init.model.listed"
                 ui.good(cli.t(text, "base" to base, "count" to listing.ids.size))
                 break
@@ -191,7 +235,7 @@ private class Setup(private val cli: Cli, private val options: InitOptions) {
             } else {
                 cli.fail(cli.texts((listing as Listing.Refused).reason))
             }
-            if (!interactive || attempt == ATTEMPTS) return ExitCode.FAILURE
+            if (!interactive || attempt == INIT_ATTEMPTS) return ExitCode.FAILURE
         }
         val models = chooseModels(listed) ?: return ExitCode.FAILURE
         val root = "providers.${kind.id}.endpoints.$endpoint"
@@ -207,7 +251,7 @@ private class Setup(private val cli: Cli, private val options: InitOptions) {
             changes += ConfigChangeView("$root.baseUrl", remove = true)
         }
         summary["init.summary.provider"] = "${title(kind)} · $base"
-        finishModelStep(endpoint, models.map { "$endpoint/$it" })
+        finishModelStep(endpoint, models.map { "$endpoint/$it" }, modalities)
         return ExitCode.OK
     }
 
@@ -242,7 +286,8 @@ private class Setup(private val cli: Cli, private val options: InitOptions) {
         changes += ConfigChangeView("$root.baseUrl", JsonPrimitive(base))
         changes += webBackendChanges(config, signedIn.status, base, key)
         summary["init.summary.provider"] = pleochroicSummary(kind, signedIn)
-        finishModelStep(endpoint, models.map { "$endpoint/$it" })
+        val modalities = (listing as? Listing.Models)?.inputModalities.orEmpty()
+        finishModelStep(endpoint, models.map { "$endpoint/$it" }, modalities)
         return ExitCode.OK
     }
 
@@ -253,28 +298,56 @@ private class Setup(private val cli: Cli, private val options: InitOptions) {
     }
 
     /** What every provider's model step finishes with, once it has [endpoint] and [named] (its chosen models,
-     * `<endpoint>/<model>`): the agent's default description and models, the summary line, and, when a Telegram
-     * instance is already set up but serves no agent yet, wiring this agent to it. */
-    private fun finishModelStep(endpoint: String, named: List<String>) {
+     * `<endpoint>/<model>`): the agent's default description and models, a side-model offer for each media kind
+     * the default model's [inputModalities] say it cannot take ([offerSideModels]), the summary line, and, when a
+     * Telegram instance is already set up but serves no agent yet, wiring this agent to it. */
+    private fun finishModelStep(endpoint: String, named: List<String>, inputModalities: Map<String, Set<String>>) {
         if (agentConfig == null) {
             changes += ConfigChangeView("$AGENTS.$agent.description", JsonPrimitive(cli.t("init.agent")))
         }
         changes += defaultModels(agent, agentConfig, named)
         ui.good(cli.t("init.model.chosen", "agent" to agent, "models" to named.joinToString()))
+        offerSideModels(endpoint, named.firstOrNull(), inputModalities)
         summary["init.summary.models"] = cli.t("init.summary.models_value", "models" to named.joinToString())
-        val instance = config.at("$TELEGRAM_INSTANCES.$INSTANCE") as? JsonObject
-        val served = agents(config).any { it.channels["telegram:$INSTANCE"] != null }
+        val instance = config.at("$TELEGRAM_INSTANCES.$CHANNEL_INSTANCE") as? JsonObject
+        val served = agents(config).any { it.channels["telegram:$CHANNEL_INSTANCE"] != null }
         if (instance != null && !served) {
             val home = (instance["adminUserIds"] as? JsonArray)?.firstOrNull()?.let { (it as? JsonPrimitive)?.content }
             changes += ConfigChangeView(
-                "$AGENTS.$agent.channels.telegram:$INSTANCE",
+                "$AGENTS.$agent.channels.telegram:$CHANNEL_INSTANCE",
                 JsonObject(listOfNotNull(home?.let { "home" to JsonPrimitive(it) }).toMap()),
             )
         }
     }
 
-    /** Whether the agent has a model, or gets one in this run. */
-    private val hasModel: Boolean
+    /**
+     * Asks, for each media kind the default model [named] (bare, `<endpoint>/<model>` already stripped by the
+     * caller — null when there is no default to check) cannot take, according to [inputModalities] (empty when the
+     * listing gave none at all, for most providers — then nothing is asked, there being nothing to reason from),
+     * whether to set a side model for it ([RolesConfig]'s `image`, `audio` and `video` roles; `file` is left out,
+     * no listing this version reads names a "file" input modality to check against). Skippable at each question,
+     * and asked only at a terminal.
+     */
+    private fun offerSideModels(endpoint: String, named: String?, inputModalities: Map<String, Set<String>>) {
+        if (!interactive || named == null || inputModalities.isEmpty()) return
+        val bare = named.substringAfter('/')
+        val takes = inputModalities[bare] ?: return
+        for (kind in listOf("image", "audio", "video")) {
+            if (kind in takes) continue
+            val capable = inputModalities.filterValues { kind in it }.keys.filter { it != bare }.sorted()
+            if (capable.isEmpty()) continue
+            val kindName = cli.t("init.model.role.$kind")
+            if (!cli.confirm(cli.t("init.model.role_ask", "kind" to kindName), default = false)) continue
+            val picked = ui.choose(
+                prompt("init.model.role_pick", "init.model.role_pick_title", "kind" to kindName),
+                capable.map { Choice(it, it, key = it) },
+            ) { cli.t("init.model.no_such_provider", "answer" to it) } ?: continue
+            changes += ConfigChangeView("$AGENTS.$agent.roles.$kind", JsonPrimitive("$endpoint/$picked"))
+            ui.good(cli.t("init.model.role_set", "kind" to kindName, "model" to picked))
+        }
+    }
+
+    override val hasModel: Boolean
         get() = agentConfig?.let { AgentEntry(agent, it).models }.orEmpty().isNotEmpty() ||
             changes.any { it.path == "$AGENTS.$agent.model" || it.path == "$AGENTS.$agent.models" }
 
@@ -322,7 +395,7 @@ private class Setup(private val cli: Cli, private val options: InitOptions) {
         } else {
             prompt("init.model.key_optional", "init.model.key_optional_title", "provider" to title(kind))
         }
-        repeat(ATTEMPTS) {
+        repeat(INIT_ATTEMPTS) {
             val typed = ui.secret(prompt)?.trim() ?: return null.also { cli.fail(cli.t("init.no_answer")) }
             val key = typed.ifEmpty { environment.orEmpty() }
             if (key.isNotEmpty() || !kind.keyRequired) return key
@@ -371,112 +444,462 @@ private class Setup(private val cli: Cli, private val options: InitOptions) {
             if (listed.size > 10) ", …" else ""
     }
 
-    // Telegram.
+    // Channels.
 
-    private fun telegram(): Int {
-        val given = cli.environment[TELEGRAM_TOKEN_VARIABLE]?.takeIf { it.isNotEmpty() }
-        if (!interactive && given == null) {
+    /** Every channel plugin built into this binary whose questions this run asks: every one of [CHANNEL_SETUPS]
+     * when there is more than one (picked from, so more than one may be set up in the same run), the only one
+     * outright when there is exactly one — today always Telegram, so this never yet asks "which channel". */
+    private fun chooseChannels(): List<ChannelSetup> {
+        if (CHANNEL_SETUPS.size <= 1) return CHANNEL_SETUPS
+        val picked = ui.pick(
+            prompt("init.channels.pick", "init.channels.pick_title"),
+            CHANNEL_SETUPS.map { it.title(cli) },
+            cli.t("init.model.pick_hint"),
+        ).orEmpty()
+        return CHANNEL_SETUPS.filter { it.title(cli) in picked }
+    }
+
+    private fun channels(): Int {
+        if (CHANNEL_SETUPS.isEmpty()) {
+            ui.warn(cli.t("init.channels.none"))
+            skip(InitStep.CHANNELS)
+            return ExitCode.OK
+        }
+        if (!interactive && CHANNEL_SETUPS.none { it.hasNonInteractiveInput(cli) }) {
             ui.warn(cli.t("init.telegram.no_token", "variable" to TELEGRAM_TOKEN_VARIABLE))
-            skip(InitStep.TELEGRAM)
+            skip(InitStep.CHANNELS)
             return ExitCode.OK
         }
-        if (!begins(InitStep.TELEGRAM)) return ExitCode.OK
-        if (interactive && given == null) ui.say(cli.t("init.telegram.about"))
-        var checked: Pair<BotCheck.Bot, String>? = null
-        for (attempt in 1..ATTEMPTS) {
-            checked = askBot(cli, telegramApi, given.takeIf { attempt == 1 })
-            if (checked != null || !interactive) break
-        }
-        val (found, token) = checked ?: return ExitCode.FAILURE
-        configuredBot(cli, config, token)?.takeIf { it != INSTANCE }?.let {
-            return cli.fail(cli.t("channel.same_bot", "instance" to it))
-        }
-        bot = checked
-        summary["init.summary.bot"] = described(cli, found)
-        val variable = telegramVariable(INSTANCE)
-        secrets[variable] = token
-        changes += ConfigChangeView("$TELEGRAM_INSTANCES.$INSTANCE.botToken", JsonPrimitive(EnvReferences.of(variable)))
-        options.apiBaseUrl?.let {
-            changes += ConfigChangeView("$TELEGRAM_INSTANCES.$INSTANCE.apiBaseUrl", JsonPrimitive(it))
-        }
-        if (agentConfig?.objectAt("channels")?.get("telegram:$INSTANCE") != null) {
-            ui.good(cli.t("init.telegram.chosen", "bot" to described(cli, found), "agent" to agent))
-        } else if (hasModel) {
-            changes += ConfigChangeView("$AGENTS.$agent.channels.telegram:$INSTANCE", JsonObject(emptyMap()))
-            ui.good(cli.t("init.telegram.chosen", "bot" to described(cli, found), "agent" to agent))
-        } else {
-            ui.warn(cli.t("init.telegram.no_model", "agent" to agent))
+        if (!begins(InitStep.CHANNELS)) return ExitCode.OK
+        for (setup in chooseChannels()) {
+            val code = setup.setUp(this)
+            if (code != ExitCode.OK) return code
         }
         return ExitCode.OK
     }
 
-    // Admin.
+    // Pleochroic account.
 
-    private fun admin(): Int {
-        val instance = config.at("$TELEGRAM_INSTANCES.$INSTANCE") as? JsonObject
-        val current = bot ?: instance?.let { existingBot(it) }
-        if (current == null) {
-            ui.warn(cli.t("init.admin.no_bot"))
-            skip(InitStep.ADMIN)
-            return ExitCode.OK
+    /** The signed-in Pleochroic account's `apiBase` and key: this run's own pending sign-in (steps "model" or
+     * "account", not yet written to the config file) first, else what a previous run already wrote there. Reads
+     * no file beyond the secrets one (already open for this run), so it never prints the "config file is missing"
+     * a fresh install would otherwise get from [Cli.rawConfig]. */
+    private fun pleochroicCredentials(): Pair<String, String>? {
+        val pendingBase = changes.firstOrNull { it.path == "$PLEOCHROIC_PROVIDER.baseUrl" }?.value as? JsonPrimitive
+        val pendingKey = changes.firstOrNull { it.path == "$PLEOCHROIC_PROVIDER.apiKey" }?.value as? JsonPrimitive
+        if (pendingBase != null && pendingKey != null) {
+            val variable = EnvReferences.whole(pendingKey.content)
+            val key = if (variable == null) pendingKey.content else secrets[variable]
+            return key?.let { pendingBase.content to it }
         }
-        if (!begins(InitStep.ADMIN)) return ExitCode.OK
-        val admins = options.admins.ifEmpty {
-            if (cli.status()?.instances?.any { it.id == "telegram:$INSTANCE" } == true) {
-                return cli.fail(cli.t("claim.running"))
-            }
-            var claimant: Claimant? = null
-            while (claimant == null) {
-                claimant = claimAdmin(cli, telegramApi, current.second, current.first)
-                if (claimant == null && !(interactive && cli.confirm(cli.t("init.admin.again"), default = true))) {
-                    if (!interactive) return ExitCode.FAILURE
-                    skip(InitStep.ADMIN)
-                    return ExitCode.OK
-                }
-            }
-            summary["init.summary.admin"] = claimant.described
-            listOf(claimant.id)
-        }
-        summary.putIfAbsent("init.summary.admin", admins.joinToString())
-        val root = "$TELEGRAM_INSTANCES.$INSTANCE"
-        changes += ConfigChangeView("$root.adminUserIds", ids((instance?.get("adminUserIds") as? JsonArray), admins))
-        val serves = agentConfig?.objectAt("channels")?.get("telegram:$INSTANCE") != null ||
-            changes.any { it.path == "$AGENTS.$agent.channels.telegram:$INSTANCE" }
-        if (serves) {
-            changes +=
-                ConfigChangeView("$AGENTS.$agent.channels.telegram:$INSTANCE.home", JsonPrimitive("${admins.first()}"))
-        }
-        ui.good(cli.t("init.admin.chosen", "admins" to admins.joinToString(), "agent" to agent))
-        return ExitCode.OK
-    }
-
-    /** The bot of the configured [instance] and its token, null after printing why there is none. */
-    private fun existingBot(instance: JsonObject): Pair<BotCheck.Bot, String>? {
-        val written = instance["botToken"].text ?: return null
-        val variable = EnvReferences.whole(written)
-        val token = if (variable == null) {
-            written
+        val endpoint = config.at(PLEOCHROIC_PROVIDER) as? JsonObject ?: return null
+        val baseUrl = endpoint["baseUrl"].text ?: return null
+        val rawKey = endpoint["apiKey"].text ?: return null
+        val variable = EnvReferences.whole(rawKey)
+        val key = if (variable == null) {
+            rawKey
         } else {
             try {
                 withSecrets(cli.environment, cli.secrets)[variable]
             } catch (e: IOException) {
                 null
             }
-        } ?: return null
-        val base = instance["apiBaseUrl"].text ?: telegramApi
-        return when (val checked = ui.busy({ cli.t("bot.checking") }) { telegramBot(cli, base, token) }) {
-            is BotCheck.Bot -> checked to token
+        }
+        return key?.let { baseUrl to it }
+    }
 
-            is BotCheck.Refused -> {
-                cli.fail(cli.texts(checked.reason))
-                null
+    /**
+     * The three choices for a Pleochroic account: sign in by device login, sign in to a self-hosted
+     * `standalone-service` (`--service-url`/`--service-token`), or not at all. Skipped entirely when the model
+     * step already signed in with Pleochroic as the provider — there is then nothing left to ask.
+     */
+    private fun account(): Int {
+        if (pleochroicCredentials() != null) {
+            ui.say(cli.t("init.account.already"))
+            skip(InitStep.ACCOUNT)
+            return ExitCode.OK
+        }
+        val wantsSelfHosted = options.serviceUrl != null && options.serviceToken != null
+        if (!interactive && !wantsSelfHosted && !options.pleochroicAccount) {
+            skip(InitStep.ACCOUNT)
+            return ExitCode.OK
+        }
+        if (!begins(InitStep.ACCOUNT)) return ExitCode.OK
+        var serviceUrl = options.serviceUrl
+        var serviceToken = options.serviceToken
+        if (!wantsSelfHosted && !options.pleochroicAccount) {
+            if (!interactive) return ExitCode.OK
+            val choice = ui.choose(
+                prompt("init.account.choice", "init.account.choice_title"),
+                listOf(
+                    Choice(cli.t("init.account.choice.sign_in"), "sign-in", key = "sign-in"),
+                    Choice(cli.t("init.account.choice.self_hosted"), "self-hosted", key = "self-hosted"),
+                    Choice(cli.t("init.account.choice.none"), "none", key = "none"),
+                ),
+            ) { cli.t("init.model.no_such_provider", "answer" to it) } ?: return cli.fail(cli.t("init.no_answer"))
+            when (choice) {
+                "none" -> return ExitCode.OK
+
+                "self-hosted" -> {
+                    serviceUrl = ui.ask(cli.t("init.account.self_hosted_url"))
+                        ?: return cli.fail(cli.t("init.no_answer"))
+                    serviceToken = ui.secret(cli.t("init.account.self_hosted_token"))
+                        ?: return cli.fail(cli.t("init.no_answer"))
+                }
+            }
+        }
+        val signedIn = pleochroicSignIn(cli, serviceUrl, serviceToken, null, options.portalBaseUrl)
+            ?: return ExitCode.FAILURE
+        changes += ConfigChangeView("$PLEOCHROIC_PROVIDER.baseUrl", JsonPrimitive(signedIn.apiBase))
+        changes += ConfigChangeView("$PLEOCHROIC_PROVIDER.apiKey", JsonPrimitive(signedIn.key))
+        changes += webBackendChanges(config, signedIn.status, signedIn.apiBase, signedIn.key)
+        ui.good(cli.t("pleochroic.logged_in", "account" to (signedIn.account.label ?: cli.t("pleochroic.unnamed"))))
+        summary["init.summary.account"] = signedIn.account.label ?: cli.t("pleochroic.unnamed")
+        return ExitCode.OK
+    }
+
+    // Import skills and MCP servers.
+
+    private fun import(): Int {
+        if (!interactive) {
+            skip(InitStep.IMPORT)
+            return ExitCode.OK
+        }
+        if (!begins(InitStep.IMPORT)) return ExitCode.OK
+        val takenSkills = findSkillDirectoriesQuiet(globalSkillsRoot()).toSet()
+        val takenMcp = (config.at("mcp.servers") as? JsonObject)?.keys.orEmpty()
+        val localItems = mutableListOf<ImportItem>()
+        var duplicates = 0
+        for (source in discoverAll(cli.home)) {
+            for (skill in source.skills) {
+                if (skill.name in takenSkills) {
+                    duplicates++
+                    continue
+                }
+                localItems += ImportItem.LocalSkill("${source.label} · ${skill.name}", skill)
+            }
+            for (mcpServer in source.mcpServers) {
+                if (mcpServer.name in takenMcp) {
+                    duplicates++
+                    continue
+                }
+                localItems += ImportItem.LocalMcp("${source.label} MCP · ${mcpServer.name}", mcpServer)
+            }
+        }
+        val (pleochroicItems, pleochroicDuplicates) = pleochroicImportItems(takenSkills, takenMcp)
+        duplicates += pleochroicDuplicates
+        val items = localItems + pleochroicItems
+        if (items.isEmpty()) {
+            ui.say(
+                if (duplicates >
+                    0
+                ) {
+                    cli.t("init.import.only_duplicates", "count" to duplicates)
+                } else {
+                    cli.t("init.import.none")
+                },
+            )
+            return ExitCode.OK
+        }
+        if (duplicates > 0) ui.warn(cli.t("init.import.duplicates", "count" to duplicates))
+        val picked = ui.pick(cli.t("init.import.pick"), items.map { it.label }, cli.t("init.model.pick_hint"))
+            .orEmpty()
+        val chosen = items.filter { it.label in picked }
+        if (chosen.isEmpty()) return ExitCode.OK
+        var skillsRoot: java.nio.file.Path? = null
+        val importedNames = mutableSetOf<String>()
+        val pleochroicKeys = mutableSetOf<String>()
+        for (item in chosen) {
+            when (item) {
+                is ImportItem.LocalSkill -> {
+                    val root = skillsRoot ?: globalSkillsRoot().also { skillsRoot = it }
+                    importSkill(item.skill, root, takenSkills + importedNames)?.let { importedNames += it }
+                }
+
+                is ImportItem.LocalMcp -> importMcp(item.server)
+
+                is ImportItem.Pleochroic -> pleochroicKeys += item.key
+            }
+        }
+        if (pleochroicKeys.isNotEmpty()) applyPleochroicImport(pleochroicKeys)
+        ui.good(cli.t("init.import.done", "count" to chosen.size))
+        summary["init.summary.import"] = cli.t("init.summary.import_value", "count" to chosen.size)
+        return ExitCode.OK
+    }
+
+    private sealed interface ImportItem {
+        val label: String
+
+        class LocalSkill(override val label: String, val skill: DiscoveredSkill) : ImportItem
+
+        class LocalMcp(override val label: String, val server: DiscoveredMcpServer) : ImportItem
+
+        class Pleochroic(override val label: String, val key: String) : ImportItem
+    }
+
+    private fun globalSkillsRoot(): java.nio.file.Path =
+        cli.locations.configFile.toAbsolutePath().parent.resolve("skills")
+
+    private fun findSkillDirectoriesQuiet(root: java.nio.file.Path): List<String> = try {
+        if (!Files.isDirectory(root)) {
+            emptyList()
+        } else {
+            Files.newDirectoryStream(root).use { stream -> stream.map { it.fileName.toString() } }
+        }
+    } catch (e: IOException) {
+        emptyList()
+    }
+
+    /** Writes [server] at `mcp.servers.<name>`: `command`/`cwd`/`url` literally, `env` and `headers` as given
+     * (`mcp.servers.<name>.env`/`headers`'s values are `Secret`-typed, so [writeChanges] moves each of them into
+     * the secrets file on its own — the same way `tools.web.braveApiKey` and the Pleochroic provider's own
+     * `apiKey` already do), and an argument [secretArgs] finds embedded in [DiscoveredMcpServer.args] (a `List`,
+     * which [writeChanges] does not itself look inside) moved by hand, the one case this step still manages. */
+    private fun importMcp(server: DiscoveredMcpServer) {
+        val root = "mcp.servers.${server.name}"
+        server.command?.let { changes += ConfigChangeView("$root.command", JsonPrimitive(it)) }
+        server.cwd?.let { changes += ConfigChangeView("$root.cwd", JsonPrimitive(it)) }
+        server.url?.let { changes += ConfigChangeView("$root.url", JsonPrimitive(it)) }
+        if (server.args.isNotEmpty()) {
+            val embedded = secretArgs(server)
+            val args = server.args.mapIndexed { index, value ->
+                embedded[index]?.let { secretValue ->
+                    val variable = mcpSecretVariable(server.name, "ARG_$index")
+                    secrets[variable] = secretValue
+                    EnvReferences.of(variable)
+                } ?: value
+            }
+            changes += ConfigChangeView("$root.args", JsonArray(args.map(::JsonPrimitive)))
+        }
+        if (server.env.isNotEmpty()) {
+            changes += ConfigChangeView("$root.env", JsonObject(server.env.mapValues { JsonPrimitive(it.value) }))
+        }
+        if (server.headers.isNotEmpty()) {
+            changes +=
+                ConfigChangeView("$root.headers", JsonObject(server.headers.mapValues { JsonPrimitive(it.value) }))
+        }
+    }
+
+    private fun mcpSecretVariable(serverName: String, key: String): String {
+        fun clean(text: String) = text.uppercase().replace(Regex("[^A-Z0-9]+"), "_").trim('_')
+        return "ALEXANDRITE_MCP_${clean(serverName)}_${clean(key)}"
+    }
+
+    /** The Pleochroic account's own skills and MCP servers that are not yet set up here ([ImportItem.Pleochroic],
+     * one per pending sync item of area `skill` or kind `mcp`), and how many of its own were already present.
+     * Empty, never a failure, when the account is not signed in or the sync run could not reach it at all —
+     * this is a bonus to the local sources, not something the step depends on. */
+    private fun pleochroicImportItems(takenSkills: Set<String>, takenMcp: Set<String>): Pair<List<ImportItem>, Int> {
+        val (apiBase, key) = pleochroicCredentials() ?: return emptyList<ImportItem>() to 0
+        return try {
+            val local = HostConfigSyncLocal(CliHostConfig(cli), cli.locations.configFile, cli.secrets)
+            val http = pleochroicHttp()
+            http.use { transport ->
+                val state = readSyncState(cli)
+                val runner = SyncRunner(local, HttpSyncTransport(transport, apiBase, key))
+                val (_, next) = runBlocking { runner.run(state) }
+                writeSyncState(cli, next)
+                pleochroicNextState = next
+                val pending = PendingSync(local, HttpSyncTransport(transport, apiBase, key))
+                val reviews = runBlocking { pending.review(next) }
+                val items = mutableListOf<ImportItem>()
+                var duplicates = 0
+                for (review in reviews) {
+                    val relevant = review.change.area == AREA_SKILL ||
+                        (review.change.area == AREA_CONFIG && review.change.kind == KIND_MCP)
+                    if (!relevant || review.change.deleted) continue
+                    val taken = if (review.change.area == AREA_SKILL) takenSkills else takenMcp
+                    if (review.change.id in taken) {
+                        duplicates++
+                        continue
+                    }
+                    items += ImportItem.Pleochroic("${cli.t("provider.pleochroic")} · ${review.summary}", review.key)
+                }
+                items to duplicates
+            }
+        } catch (e: SyncServiceException) {
+            emptyList<ImportItem>() to 0
+        } catch (e: SyncConflictException) {
+            emptyList<ImportItem>() to 0
+        }
+    }
+
+    /** The sync state [pleochroicImportItems] last read, so [applyPleochroicImport] resolves the same pending
+     * changes against it rather than reading the sync state file twice over. */
+    private var pleochroicNextState: org.unitedsoftware.alexandrite.account.pleochroic.SyncState? = null
+
+    private fun applyPleochroicImport(keys: Set<String>) {
+        val (apiBase, key) = pleochroicCredentials() ?: return
+        val state = pleochroicNextState ?: readSyncState(cli)
+        try {
+            pleochroicHttp().use { transport ->
+                val local = HostConfigSyncLocal(CliHostConfig(cli), cli.locations.configFile, cli.secrets)
+                val pending = PendingSync(local, HttpSyncTransport(transport, apiBase, key))
+                val (_, next) = runBlocking { pending.apply(state, keys) }
+                writeSyncState(cli, next)
+            }
+        } catch (e: SyncServiceException) {
+            ui.warn(cli.t("init.import.pleochroic_failed"))
+        } catch (e: SyncConflictException) {
+            ui.warn(cli.t("init.import.pleochroic_failed"))
+        }
+    }
+
+    private fun pleochroicHttp() = org.unitedsoftware.alexandrite.internal.http.HttpTransport(
+        HttpTimeouts(10.seconds, 30.seconds, 30.seconds),
+    )
+
+    // Web search and fetch.
+
+    private fun webBackends(): Int {
+        val requested = options.searchBackend != null || options.fetchBackend != null
+        if (!interactive && !requested) {
+            skip(InitStep.SEARCH)
+            return ExitCode.OK
+        }
+        if (!begins(InitStep.SEARCH)) return ExitCode.OK
+        val pleochroic = pleochroicCredentials()
+        val searchChoices =
+            listOfNotNull("pleochroic".takeIf { pleochroic != null }, "brave", "tavily", "searxng", "duckduckgo")
+        val search = when (val picked = chooseBackend("init.search.backend", searchChoices, options.searchBackend)) {
+            is BackendPick.Failed -> return ExitCode.FAILURE
+            is BackendPick.None -> null
+            is BackendPick.Id -> picked.id
+        }
+        if (search != null) {
+            changes += ConfigChangeView("tools.web.searchBackend", JsonPrimitive(search))
+            configureBackend(search, pleochroic)
+        } else if (config.at("tools.web.searchBackend") != null) {
+            changes += ConfigChangeView("tools.web.searchBackend", remove = true)
+        }
+        val fetchChoices = listOfNotNull("pleochroic".takeIf { pleochroic != null })
+        val fetchRequested = options.fetchBackend?.takeIf { it != "direct" }
+        val fetch = when (val picked = chooseBackend("init.search.fetch", fetchChoices, fetchRequested)) {
+            is BackendPick.Failed -> return ExitCode.FAILURE
+            is BackendPick.None -> null
+            is BackendPick.Id -> picked.id
+        }
+        if (fetch != null) {
+            changes += ConfigChangeView("tools.web.fetchBackend", JsonPrimitive(fetch))
+            configureBackend(fetch, pleochroic)
+        } else if (config.at("tools.web.fetchBackend") != null) {
+            changes += ConfigChangeView("tools.web.fetchBackend", remove = true)
+        }
+        if (search != null || fetch != null) {
+            summary["init.summary.search"] = listOfNotNull(
+                search?.let { cli.t("init.search.id.$it") },
+                fetch?.let { cli.t("init.search.id.$it") },
+            ).joinToString(" · ").ifEmpty { cli.t("init.search.none") }
+        }
+        return ExitCode.OK
+    }
+
+    /** What [chooseBackend] answers: a backend [Id], explicitly [None] of the choices offered, or [Failed] (a
+     * named, unknown backend from the command line) — distinct from [None] so the step can tell "nothing chosen"
+     * from "something named that is not a choice". */
+    private sealed interface BackendPick {
+        class Id(val id: String) : BackendPick
+
+        object None : BackendPick
+
+        object Failed : BackendPick
+    }
+
+    /** The backend chosen among [choices] (plus "none"): [requested] when given (validated against [choices]
+     * first), else an interactive choice at a terminal, else [BackendPick.None]. */
+    private fun chooseBackend(promptKey: String, choices: List<String>, requested: String?): BackendPick {
+        if (requested != null) {
+            if (requested !in choices) {
+                cli.fail(
+                    cli.t("init.search.no_such_backend", "answer" to requested, "backends" to choices.joinToString()),
+                )
+                return BackendPick.Failed
+            }
+            return BackendPick.Id(requested)
+        }
+        if (!interactive) return BackendPick.None
+        val none = "none"
+        val offered = listOf(none) + choices
+        val chosen = ui.choose(
+            prompt(promptKey, "${promptKey}_title"),
+            offered.map {
+                Choice(
+                    if (it ==
+                        none
+                    ) {
+                        cli.t("init.search.none")
+                    } else {
+                        cli.t("init.search.id.$it")
+                    },
+                    it,
+                    key = it,
+                )
+            },
+        ) { cli.t("init.search.no_such_backend", "answer" to it, "backends" to offered.joinToString()) }
+        return if (chosen == null || chosen == none) BackendPick.None else BackendPick.Id(chosen)
+    }
+
+    /** Asks for, or takes from the environment, whatever [id] needs: a key for `brave`/`tavily`, an instance
+     * address for `searxng`, nothing for `duckduckgo`, and the signed-in account's own address and key, already
+     * known, for `pleochroic`. */
+    private fun configureBackend(id: String, pleochroic: Pair<String, String>?) {
+        when (id) {
+            "brave" -> backendKey("BRAVE_API_KEY", "init.search.brave_key")?.let {
+                changes += ConfigChangeView("tools.web.braveApiKey", JsonPrimitive(it))
+            }
+
+            "tavily" -> backendKey("TAVILY_API_KEY", "init.search.tavily_key")?.let {
+                changes += ConfigChangeView("tools.web.tavilyApiKey", JsonPrimitive(it))
+            }
+
+            "searxng" -> {
+                val url = options.searxngUrl
+                    ?: (
+                        if (interactive) {
+                            ui.ask(
+                                cli.t("init.search.searxng_url"),
+                                config.at("tools.web.searxngUrl").text,
+                            )
+                        } else {
+                            null
+                        }
+                        )
+                url?.let { changes += ConfigChangeView("tools.web.searxngUrl", JsonPrimitive(it.trimEnd('/'))) }
+            }
+
+            "pleochroic" -> pleochroic?.let { (base, key) ->
+                changes += ConfigChangeView("tools.web.pleochroicApiBase", JsonPrimitive(base))
+                changes += ConfigChangeView("tools.web.pleochroicApiKey", JsonPrimitive(key))
             }
         }
     }
 
-    private fun ids(existing: JsonArray?, added: List<Long>): JsonArray {
-        val kept = existing?.mapNotNull { (it as? JsonPrimitive)?.longOrNull }.orEmpty()
-        return JsonArray((kept + added).distinct().map(::JsonPrimitive))
+    private fun backendKey(variable: String, promptKey: String): String? {
+        cli.environment[variable]?.takeIf(String::isNotEmpty)?.let { return it }
+        if (!interactive) return null
+        return ui.secret(cli.t(promptKey))?.trim()?.takeIf(String::isNotEmpty)
+    }
+
+    // Browser automation.
+
+    /** Browser backends a plugin has contributed to this build (an [org.unitedsoftware.alexandrite.sdk.web.WebBrowserBackend],
+     * by id), which `init` would otherwise list and let the person choose among; none ship built in, so this is
+     * always empty today, and the step always takes its one-line "none available" branch. A future build that
+     * bundles one lists its id here, with no other change to the step. */
+    private val browserBackends: List<String> = emptyList()
+
+    private fun browser(): Int {
+        if (!begins(InitStep.BROWSER)) return ExitCode.OK
+        if (browserBackends.isEmpty()) {
+            ui.say(cli.t("init.browser.none"))
+            return ExitCode.OK
+        }
+        val chosen = ui.choose(
+            prompt("init.browser.pick", "init.browser.pick_title"),
+            browserBackends.map { Choice(it, it, key = it) },
+        ) { cli.t("init.search.no_such_backend", "answer" to it, "backends" to browserBackends.joinToString()) }
+        chosen?.let { changes += ConfigChangeView("tools.web.browserBackend", JsonPrimitive(it)) }
+        return ExitCode.OK
     }
 
     // Language and zone.

@@ -75,10 +75,11 @@ internal val COMMANDS: List<CliCommand> = listOf(
     CliCommand(
         listOf("init"),
         "[--non-interactive] [--only <step>]... [--skip <step>]... [--provider <provider>] [--endpoint <name>] " +
-            "[--base-url <url>] [$SERVICE_URL <url> $SERVICE_TOKEN <token>] [--model <model>]... [$AGENT <id>] " +
-            "[--admin <user id>]... [--language <tag>] [--zone <zone>] [--api-base-url <url>] [--force]",
+            "[--base-url <url>] [$SERVICE_URL <url> $SERVICE_TOKEN <token>] [--pleochroic] [--model <model>]... " +
+            "[$AGENT <id>] [--admin <user id>]... [--language <tag>] [--zone <zone>] [--api-base-url <url>] " +
+            "[--search-backend <id>] [--fetch-backend <id>] [--searxng-url <url>] [--force]",
         SETUP,
-        flags = setOf("--non-interactive", "--force"),
+        flags = setOf("--non-interactive", "--force", "--pleochroic"),
         options = setOf(
             "--only",
             "--skip",
@@ -93,6 +94,9 @@ internal val COMMANDS: List<CliCommand> = listOf(
             "--language",
             "--zone",
             "--api-base-url",
+            "--search-backend",
+            "--fetch-backend",
+            "--searxng-url",
         ),
     ) { given ->
         noArguments(given, "init")
@@ -111,12 +115,16 @@ internal val COMMANDS: List<CliCommand> = listOf(
             baseUrl = given.option("--base-url"),
             serviceUrl = serviceUrl,
             serviceToken = serviceToken,
+            pleochroicAccount = given.flag("--pleochroic"),
             models = given.all("--model"),
             agent = given.option(AGENT)?.let { requireId(it, "what.agent_id") },
             admins = admins(given),
             language = given.option("--language"),
             zone = given.option("--zone"),
             apiBaseUrl = given.option("--api-base-url"),
+            searchBackend = given.option("--search-backend"),
+            fetchBackend = given.option("--fetch-backend"),
+            searxngUrl = given.option("--searxng-url"),
             force = given.flag("--force"),
         )
         CliAction.Act { init(it, options) }
