@@ -68,4 +68,16 @@ class QqBotConfigTest {
             QqBotInstanceConfig(appId = "10000", appSecret = Secret("secret"), syncLanguage = "中文")
         }
     }
+
+    @Test
+    fun `an approval wait outside a minute and a day is refused, the bounds themselves are not`() {
+        assertFailsWith<IllegalArgumentException> {
+            QqBotInstanceConfig(appId = "10000", appSecret = Secret("secret"), approvalMinutes = 0)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            QqBotInstanceConfig(appId = "10000", appSecret = Secret("secret"), approvalMinutes = 1_441)
+        }
+        val bounded = QqBotInstanceConfig(appId = "10000", appSecret = Secret("secret"), approvalMinutes = 1_440)
+        assertEquals(1_440L, bounded.approvalMinutes)
+    }
 }

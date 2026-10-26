@@ -13,6 +13,7 @@ internal object TextKeys {
     const val APPROVAL_ALLOWED: String = "approval.allowed"
     const val APPROVAL_DENIED: String = "approval.denied"
     const val APPROVAL_EXPIRED: String = "approval.expired"
+    const val APPROVAL_WITHDRAWN: String = "approval.withdrawn"
     const val APPROVAL_ADMINS_ONLY: String = "approval.admins_only"
     const val APPROVAL_NOTHING_WAITING: String = "approval.nothing_waiting"
     const val APPROVAL_UNREACHABLE: String = "approval.unreachable"

@@ -1,8 +1,12 @@
 package org.unitedsoftware.alexandrite.channel.qqbot.channel
 
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
+import org.unitedsoftware.alexandrite.channel.common.approval.ApprovalEnding
+import org.unitedsoftware.alexandrite.channel.common.approval.ApprovalRegistry
+import org.unitedsoftware.alexandrite.channel.common.approval.PendingApproval
+import org.unitedsoftware.alexandrite.channel.common.approval.carrying
+import org.unitedsoftware.alexandrite.channel.common.approval.decideApproval
 import org.unitedsoftware.alexandrite.channel.qqbot.config.QqBotInstanceConfig
 import org.unitedsoftware.alexandrite.channel.qqbot.i18n.TextKeys
 import org.unitedsoftware.alexandrite.sdk.channel.ApprovalAnswer
@@ -17,8 +21,6 @@ import org.unitedsoftware.alexandrite.sdk.chat.LanguageTag
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import org.unitedsoftware.alexandrite.sdk.di.Lifecycle
 import org.unitedsoftware.alexandrite.sdk.i18n.Texts
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.minutes
 
@@ -37,15 +39,15 @@ internal class QqBotApprovals(
     private val sender: QqBotSender,
     private val progress: QqBotProgress,
     private val texts: Texts,
+    /** The chats this instance serves, whose pairing an admin's own direct chat may need before it can answer. */
+    private val gate: QqBotAccessGate,
 ) : Lifecycle {
-    private val pending = ConcurrentHashMap<String, Pending>()
+    private val pending = ApprovalRegistry()
 
     /** The answer of the first administrator who presses a button of [request], else how the request ended. */
     suspend fun ask(request: ApprovalRequest): ApprovalAnswer {
-        val waiting = Pending(request)
-        if (pending.putIfAbsent(request.id, waiting) != null) {
-            return ApprovalAnswer.Unavailable("another request has the id ${request.id}")
-        }
+        val waiting = pending.register(request)
+            ?: return ApprovalAnswer.Unavailable("another request has the id ${request.id}")
         try {
             val shown = show(waiting)
             if (shown.isEmpty()) {
@@ -62,17 +64,17 @@ internal class QqBotApprovals(
                 request.turn.id,
                 shown.size,
             )
-            val answered = withTimeoutOrNull(config.approvalMinutes.minutes) { waiting.ending.await() }
-            val answer = answered ?: ApprovalAnswer.Expired
-            waiting.ending.complete(answer)
-            conclude(waiting, answer)
-            return answer
+            withTimeoutOrNull(config.approvalMinutes.minutes) { waiting.ending.await() }
+            waiting.ending.complete(ApprovalEnding.Expired)
+            val ending = waiting.ending.await()
+            conclude(waiting, ending)
+            return ending.answer
         } catch (e: CancellationException) {
-            waiting.ending.complete(ApprovalAnswer.Unavailable("the turn was withdrawn"))
-            conclude(waiting, ApprovalAnswer.Unavailable("the turn was withdrawn"))
+            waiting.ending.complete(ApprovalEnding.Withdrawn)
+            conclude(waiting, ApprovalEnding.Withdrawn)
             throw e
         } finally {
-            pending.remove(request.id)
+            pending.forget(request.id)
         }
     }
 
@@ -83,69 +85,79 @@ internal class QqBotApprovals(
     suspend fun answer(name: String, id: String, always: Boolean, by: ChatUser, chat: ChatAddress): String? {
         val waiting = pending[id]
             ?: return text(TextKeys.APPROVAL_NOTHING_WAITING, null)
-        if (chat !in waiting.chats) return null
-        if (!by.isOperator) return text(TextKeys.APPROVAL_ADMINS_ONLY, waiting.request.turn.language)
-        val answer = if (name == QqBotApprovalCommands.DENY) {
-            ApprovalAnswer.Denied(by)
-        } else {
-            ApprovalAnswer.Allowed(by, always && waiting.request.alwaysRules.isNotEmpty())
-        }
-        if (!waiting.ending.complete(answer)) return null
+        if (!waiting.carries(chat)) return null
+        val allow = name != QqBotApprovalCommands.DENY
+        val answer = decideApproval(waiting.request, by, allow, always)
+            ?: return text(TextKeys.APPROVAL_ADMINS_ONLY, waiting.request.turn.language)
+        if (!waiting.ending.complete(ApprovalEnding.Answered(answer))) return null
         logger.info("{}: approval {} of {} answered by {}", instance.id, id, waiting.request.tool, by.address)
         return null
     }
 
     override fun onStop() {
-        pending.values.forEach { it.ending.complete(ApprovalAnswer.Unavailable("the bot stopped")) }
+        pending.stopAll("the bot stopped")
     }
 
     /** Shows the request of [waiting] in each chat it is meant for, returning the chats that took it. */
-    private suspend fun show(waiting: Pending): List<ChatAddress> {
+    private suspend fun show(waiting: PendingApproval): List<ChatAddress> {
         val request = waiting.request
         val shown = mutableListOf<ChatAddress>()
         for (chat in recipients(request)) {
-            // Register the chat before the platform can send its press: the button can be pressed as soon as the
-            // message is delivered, which may be before sendApproval returns here.
-            waiting.chats += chat
-            val delivery = sender.sendApproval(
-                chat,
-                render(request),
-                request.id,
-                text(TextKeys.APPROVAL_ALLOW, request.turn.language),
-                text(TextKeys.APPROVAL_DENY, request.turn.language),
-                request.alwaysRules.firstOrNull()?.let {
-                    text(TextKeys.APPROVAL_ALWAYS_SHORT, request.turn.language)
-                },
-            )
-            if (delivery is Delivery.Delivered) {
+            // carrying() registers the chat before send() can take the message: the button can be pressed as soon
+            // as the message is delivered, which may be before sendApproval returns here, and undoes the
+            // registration whenever nothing ends up shown after all — a cancellation included.
+            val delivered = waiting.carrying(chat) {
+                sender.sendApproval(
+                    chat,
+                    render(request),
+                    request.id,
+                    text(TextKeys.APPROVAL_ALLOW, request.turn.language),
+                    text(TextKeys.APPROVAL_DENY, request.turn.language),
+                    request.alwaysRules.firstOrNull()?.let {
+                        text(TextKeys.APPROVAL_ALWAYS_SHORT, request.turn.language)
+                    },
+                ) is Delivery.Delivered
+            }
+            if (delivered) {
                 shown += chat
             } else {
-                waiting.chats.remove(chat)
-                logger.warn("{}: approval {} was not shown in {}: {}", instance.id, request.id, chat, delivery)
+                logger.warn("{}: approval {} was not shown in {}", instance.id, request.id, chat)
             }
         }
         return shown
     }
 
-    /** The chats [request] is shown in: the chat of the turn, and the administrators' own chats for a member's turn. */
+    /**
+     * The chats [request] is shown in: the chat of the turn, and the administrators' own paired chats for a
+     * member's turn.
+     */
     private fun recipients(request: ApprovalRequest): List<ChatAddress> {
         val chats = mutableListOf(request.turn.chat)
         if (!request.turn.actorIsOperator) {
             config.admins.mapTo(chats) { ChatAddress(instance.id, "private:$it") }
         }
-        return chats.distinct()
+        return chats.distinct().filter { gate.isPaired(it) }
     }
 
-    /** Says [answer] in every chat that showed [waiting]. */
-    private suspend fun conclude(waiting: Pending, answer: ApprovalAnswer) {
+    /** Says how [waiting] ended in every chat that carries it. */
+    private suspend fun conclude(waiting: PendingApproval, ending: ApprovalEnding) {
         val request = waiting.request
-        val said = when (answer) {
-            is ApprovalAnswer.Allowed -> text(TextKeys.APPROVAL_ALLOWED, request.turn.language, "id" to request.id)
-            is ApprovalAnswer.Denied -> text(TextKeys.APPROVAL_DENIED, request.turn.language, "id" to request.id)
-            ApprovalAnswer.Expired -> text(TextKeys.APPROVAL_EXPIRED, request.turn.language, "id" to request.id)
-            else -> return
+        val said = when (ending) {
+            ApprovalEnding.Expired -> text(TextKeys.APPROVAL_EXPIRED, request.turn.language, "id" to request.id)
+
+            ApprovalEnding.Withdrawn -> text(TextKeys.APPROVAL_WITHDRAWN, request.turn.language, "id" to request.id)
+
+            is ApprovalEnding.Answered -> when (ending.answer) {
+                is ApprovalAnswer.Allowed ->
+                    text(TextKeys.APPROVAL_ALLOWED, request.turn.language, "id" to request.id)
+
+                is ApprovalAnswer.Denied ->
+                    text(TextKeys.APPROVAL_DENIED, request.turn.language, "id" to request.id)
+
+                else -> return
+            }
         }
-        for (chat in waiting.chats) {
+        for (chat in waiting.carriedChats) {
             try {
                 sender.send(chat, OutboundMessage.builder(said, MessageKind.NOTICE).build())
             } catch (e: CancellationException) {
@@ -183,12 +195,6 @@ internal class QqBotApprovals(
 
     private fun text(key: String, language: LanguageTag?, vararg args: Pair<String, Any?>): String =
         texts.text(key, language, *args)
-
-    private class Pending(val request: ApprovalRequest) {
-        val ending = CompletableDeferred<ApprovalAnswer>()
-
-        val chats = CopyOnWriteArrayList<ChatAddress>()
-    }
 
     private companion object {
         const val MAX_ARGUMENTS = 1_500

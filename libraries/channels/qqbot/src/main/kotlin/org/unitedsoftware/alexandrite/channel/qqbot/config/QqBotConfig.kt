@@ -2,6 +2,8 @@ package org.unitedsoftware.alexandrite.channel.qqbot.config
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.unitedsoftware.alexandrite.channel.common.approval.MAX_APPROVAL_MINUTES
+import org.unitedsoftware.alexandrite.channel.common.approval.isApprovalMinutes
 import org.unitedsoftware.alexandrite.channel.common.command.COMMAND_NAME
 import org.unitedsoftware.alexandrite.channel.common.command.CommandWho
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
@@ -83,7 +85,9 @@ public class QqBotInstanceConfig(
         require(firstByteTimeoutMillis > 0) { "A first byte timeout is positive, was $firstByteTimeoutMillis." }
         require(idleTimeoutMillis > 0) { "An idle timeout is positive, was $idleTimeoutMillis." }
         require(reconnectIntervalMillis > 0) { "A reconnect interval is positive, was $reconnectIntervalMillis." }
-        require(approvalMinutes > 0) { "An approval wait is at least a minute, was $approvalMinutes." }
+        require(isApprovalMinutes(approvalMinutes)) {
+            "An approval waits between 1 and $MAX_APPROVAL_MINUTES minutes, was $approvalMinutes."
+        }
         syncLanguage?.let { language ->
             require(runCatching { LanguageTag.of(language) }.isSuccess) {
                 "syncLanguage is a BCP 47 language tag, was '$language'."
