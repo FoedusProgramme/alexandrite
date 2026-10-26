@@ -2,6 +2,8 @@ package org.unitedsoftware.alexandrite.channel.onebot.config
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.unitedsoftware.alexandrite.channel.common.approval.MAX_APPROVAL_MINUTES
+import org.unitedsoftware.alexandrite.channel.common.approval.isApprovalMinutes
 import org.unitedsoftware.alexandrite.channel.common.command.COMMAND_NAME
 import org.unitedsoftware.alexandrite.channel.common.command.CommandWho
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
@@ -128,7 +130,7 @@ public class OneBotInstanceConfig(
         require(firstByteTimeoutMillis > 0) { "A first byte timeout is positive, was $firstByteTimeoutMillis." }
         require(idleTimeoutMillis > 0) { "An idle timeout is positive, was $idleTimeoutMillis." }
         require(reconnectIntervalMillis > 0) { "A reconnect interval is positive, was $reconnectIntervalMillis." }
-        require(approvalMinutes in 1..MAX_APPROVAL_MINUTES) {
+        require(isApprovalMinutes(approvalMinutes.toLong())) {
             "An approval waits between 1 and $MAX_APPROVAL_MINUTES minutes, was $approvalMinutes."
         }
         if (kind.isReceiver) {
@@ -188,8 +190,6 @@ public class OneBotInstanceConfig(
         public const val DEFAULT_RECONNECT: Long = 3_000L
 
         public const val DEFAULT_APPROVAL_MINUTES: Int = 10
-
-        public const val MAX_APPROVAL_MINUTES: Int = 1_440
 
         public const val MAX_PORT: Int = 65_535
 

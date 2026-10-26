@@ -1,6 +1,5 @@
 package org.unitedsoftware.alexandrite.channel.onebot.channel
 
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -9,6 +8,14 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
+import org.unitedsoftware.alexandrite.channel.common.approval.ApprovalEnding
+import org.unitedsoftware.alexandrite.channel.common.approval.ApprovalResolution
+import org.unitedsoftware.alexandrite.channel.common.approval.PendingApproval
+import org.unitedsoftware.alexandrite.channel.common.approval.alwaysRulesText
+import org.unitedsoftware.alexandrite.channel.common.approval.answerWords
+import org.unitedsoftware.alexandrite.channel.common.approval.carrying
+import org.unitedsoftware.alexandrite.channel.common.approval.decideApproval
+import org.unitedsoftware.alexandrite.channel.common.approval.resolveApproval
 import org.unitedsoftware.alexandrite.channel.onebot.config.OneBotInstanceConfig
 import org.unitedsoftware.alexandrite.channel.onebot.i18n.TextKeys
 import org.unitedsoftware.alexandrite.channel.onebot.mapping.OneBotChats
@@ -81,7 +88,7 @@ internal class OneBotApprovals(
         try {
             // The chats here are never empty, so what the platform said is why posting into one was refused.
             val why = chats.mapNotNull { post(waiting, it, languageOf(waiting.request, it)) }.firstOrNull()
-            if (waiting.carried.isEmpty()) {
+            if (waiting.core.carriedChats.isEmpty()) {
                 logger.warn("{} could not show approval {} in any chat: {}", instance.id, request.id, why)
                 return if (why ==
                     null
@@ -97,16 +104,16 @@ internal class OneBotApprovals(
                 request.id,
                 request.tool,
                 request.turn.id,
-                waiting.carried.size,
+                waiting.core.carriedChats.size,
             )
-            withTimeoutOrNull(config.approvalMinutes.minutes) { waiting.ending.await() }
-            waiting.ending.complete(Ending.Expired)
-            val ending = waiting.ending.await()
+            withTimeoutOrNull(config.approvalMinutes.minutes) { waiting.core.ending.await() }
+            waiting.core.ending.complete(ApprovalEnding.Expired)
+            val ending = waiting.core.ending.await()
             conclude(waiting, ending)
             return ending.answer
         } catch (e: CancellationException) {
-            waiting.ending.complete(Ending.Withdrawn)
-            conclude(waiting, Ending.Withdrawn)
+            waiting.core.ending.complete(ApprovalEnding.Withdrawn)
+            conclude(waiting, ApprovalEnding.Withdrawn)
             throw e
         } finally {
             pending.remove(request.id)
@@ -123,21 +130,19 @@ internal class OneBotApprovals(
     suspend fun answer(event: OneBotEvent.Message, command: OneBotCommands.Parsed, by: ChatUser): String? {
         val chat = OneBotChats.addressOf(instance.id, event)
         if (!by.isOperator) return text(TextKeys.APPROVAL_ADMINS_ONLY, language(chat))
-        val words = command.arguments.split(' ').filter { it.isNotBlank() }
-        val always = words.any { it.equals(ALWAYS, ignoreCase = true) }
-        val code = words.firstOrNull { !it.equals(ALWAYS, ignoreCase = true) }
-        return when (val resolution = resolve(chat, event, code)) {
-            Resolution.None -> text(TextKeys.APPROVAL_NOTHING_WAITS, language(chat))
+        val words = answerWords(command.arguments.split(' ').filter { it.isNotBlank() })
+        return when (val resolution = resolve(chat, event, words.code)) {
+            ApprovalResolution.None -> text(TextKeys.APPROVAL_NOTHING_WAITS, language(chat))
 
-            is Resolution.Listing -> listing(resolution.requests, language(chat))
+            is ApprovalResolution.Listing -> listing(resolution.requests, language(chat))
 
-            is Resolution.Ambiguous -> several(resolution.ids, language(chat))
+            is ApprovalResolution.Ambiguous -> several(resolution.ids, language(chat))
 
-            is Resolution.One -> decide(
+            is ApprovalResolution.One -> decide(
                 resolution.id,
                 by,
                 command.name.equals(APPROVE, ignoreCase = true),
-                always,
+                words.always,
                 language(chat),
             )
         }
@@ -148,7 +153,9 @@ internal class OneBotApprovals(
     }
 
     override fun onStop() {
-        pending.values.forEach { it.ending.complete(Ending.Answered(ApprovalAnswer.Unavailable("the bot stopped"))) }
+        pending.values.forEach {
+            it.core.ending.complete(ApprovalEnding.Answered(ApprovalAnswer.Unavailable("the bot stopped")))
+        }
     }
 
     /**
@@ -171,83 +178,67 @@ internal class OneBotApprovals(
     /** Sends the message with [waiting]'s request to [chat], and says what went wrong when it was not shown. */
     private suspend fun post(waiting: Pending, chat: ChatAddress, language: LanguageTag?): String? {
         val text = render(waiting.request, language)
-        // Register the chat before the platform can take the message: a reply or a written id can answer the
-        // request as soon as the platform has the message, which may be before send() returns here (the same race
-        // QqBotApprovals.show() avoids the same way). The set starts empty and is never read until a message id is
-        // added to it or the chat is removed below, so an admin's reply cannot match before there is a message to
-        // reply to — only the plain-written-id path reads the chat's mere presence, by design.
-        val carried = waiting.carried.getOrPut(chat) { ConcurrentHashMap.newKeySet() }
         // An approval is worth more than one try: an implementation that times out on a message often takes the next
         // one, and a request nobody was shown refuses the call for a reason that is nobody's. What the platform said
         // is kept, so that a request that reached no chat is not answered as though no admin could be reached.
         var why: String? = null
-        for (attempt in 1..APPROVAL_TRIES) {
-            val delivery = try {
-                sender.send(chat, OutboundMessage.builder(text, MessageKind.REPLY).build())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                why = e.message
-                logger.warn(
-                    "{} could not show approval {} in chat {} (try {}): {}",
-                    instance.id,
-                    waiting.request.id,
-                    chat,
-                    attempt,
-                    e.message,
-                )
-                null
+        // carrying() registers the chat before send() can take the message, so a reply or a written id can never
+        // race ahead of the registration (the same race QqBotApprovals avoids the same way), and undoes it whenever
+        // nothing ends up sent after all — a cancellation included, since its `finally` runs either way.
+        val delivered = waiting.core.carrying(chat) {
+            for (attempt in 1..APPROVAL_TRIES) {
+                val delivery = try {
+                    sender.send(chat, OutboundMessage.builder(text, MessageKind.REPLY).build())
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    why = e.message
+                    logger.warn(
+                        "{} could not show approval {} in chat {} (try {}): {}",
+                        instance.id,
+                        waiting.request.id,
+                        chat,
+                        attempt,
+                        e.message,
+                    )
+                    null
+                }
+                val delivered = delivery as? Delivery.Delivered
+                if (delivered != null) {
+                    waiting.messageIds.getOrPut(chat) { ConcurrentHashMap.newKeySet() } +=
+                        delivered.messages.map { it.id }
+                    return@carrying true
+                }
+                if (delivery != null) {
+                    why = delivery.toString()
+                    logger.warn(
+                        "{} could not show approval {} in chat {} (try {}): {}",
+                        instance.id,
+                        waiting.request.id,
+                        chat,
+                        attempt,
+                        delivery,
+                    )
+                }
+                if (attempt < APPROVAL_TRIES) delay(APPROVAL_RETRY_MILLIS)
             }
-            val delivered = delivery as? Delivery.Delivered
-            if (delivered != null) {
-                delivered.messages.forEach { carried += it.id }
-                return null
-            }
-            if (delivery != null) {
-                why = delivery.toString()
-                logger.warn(
-                    "{} could not show approval {} in chat {} (try {}): {}",
-                    instance.id,
-                    waiting.request.id,
-                    chat,
-                    attempt,
-                    delivery,
-                )
-            }
-            if (attempt < APPROVAL_TRIES) delay(APPROVAL_RETRY_MILLIS)
+            false
         }
-        // Nothing ever reached this chat after all: undo the registration above, so it is not offered as a chat
-        // this request waits in (the plain-written-id path would otherwise treat it as one).
-        waiting.carried.remove(chat)
-        return why ?: "the platform took no message of it"
+        return if (delivered) null else (why ?: "the platform took no message of it")
     }
 
     /** What the command of [chat] names, read from the message it replied to and else from its id. */
-    private fun resolve(chat: ChatAddress, event: OneBotEvent.Message, code: String?): Resolution {
+    private fun resolve(chat: ChatAddress, event: OneBotEvent.Message, code: String?): ApprovalResolution {
         val replied = event.message.segments.filterIsInstance<OneBotSegment.Reply>().firstOrNull()?.id?.value
         if (replied != null) {
-            val held = pending.values.filter { replied in (it.carried[chat] ?: emptySet()) }
+            val held = pending.values.filter { replied in (it.messageIds[chat] ?: emptySet()) }
             return when (held.size) {
-                1 -> Resolution.One(held.single().request.id)
-                0 -> Resolution.None
-                else -> Resolution.Ambiguous(held.map { it.request.id })
+                1 -> ApprovalResolution.One(held.single().request.id)
+                0 -> ApprovalResolution.None
+                else -> ApprovalResolution.Ambiguous(held.map { it.request.id })
             }
         }
-        val waiting = pending.values.filter { chat in it.carried.keys }
-        if (code ==
-            null
-        ) {
-            return if (waiting.isEmpty()) Resolution.None else Resolution.Listing(waiting.map { it.request })
-        }
-        // An id written out is matched exactly first: a request whose id is the whole of what was written is the one
-        // meant, even when the id of another request starts with the same letters.
-        waiting.firstOrNull { it.request.id == code }?.let { return Resolution.One(it.request.id) }
-        val matched = waiting.filter { it.request.id.startsWith(code) }
-        return when (matched.size) {
-            1 -> Resolution.One(matched.single().request.id)
-            0 -> Resolution.None
-            else -> Resolution.Ambiguous(matched.map { it.request.id })
-        }
+        return resolveApproval(pending.values.map { it.core }, chat, code)
     }
 
     /**
@@ -259,13 +250,9 @@ internal class OneBotApprovals(
      */
     private fun decide(id: String, by: ChatUser, allowed: Boolean, always: Boolean, language: LanguageTag?): String? {
         val waiting = pending[id] ?: return text(TextKeys.APPROVAL_NOT_PENDING, language)
-        val request = waiting.request
-        val answer = if (allowed) {
-            ApprovalAnswer.Allowed(by, always && request.alwaysRules.isNotEmpty())
-        } else {
-            ApprovalAnswer.Denied(by)
-        }
-        if (!waiting.ending.complete(Ending.Answered(answer))) {
+        val answer = decideApproval(waiting.request, by, allowed, always)
+            ?: return text(TextKeys.APPROVAL_ADMINS_ONLY, language)
+        if (!waiting.core.ending.complete(ApprovalEnding.Answered(answer))) {
             return text(TextKeys.APPROVAL_NOT_PENDING, language)
         }
         return null
@@ -293,12 +280,12 @@ internal class OneBotApprovals(
         text(TextKeys.APPROVAL_SEVERAL, language, "ids" to ids.joinToString(", "))
 
     /** Says how [waiting] ended, in each chat that was shown it. */
-    private fun conclude(waiting: Pending, ending: Ending) {
+    private fun conclude(waiting: Pending, ending: ApprovalEnding) {
         val request = waiting.request
-        logger.info("{}: approval {} of turn {} {}", instance.id, request.id, request.turn.id, ending.logged)
+        logger.info("{}: approval {} of turn {} {}", instance.id, request.id, request.turn.id, ending.logged())
         // The standard has no way to change a message, so how a request ended is said in a message of its own rather
         // than written into the one that carried it.
-        val chats = waiting.carried.keys.toList()
+        val chats = waiting.core.carriedChats.toList()
         scope.launch {
             for (chat in chats) {
                 val line = outcome(request, ending, language(chat)) ?: continue
@@ -319,40 +306,54 @@ internal class OneBotApprovals(
         }
     }
 
-    /** The line that tells how [request] ended in [language], null for no line. */
-    private fun outcome(request: ApprovalRequest, ending: Ending, language: LanguageTag?): String? = when (ending) {
-        Ending.Expired -> text(TextKeys.APPROVAL_OUTCOME_EXPIRED, language, "id" to request.id)
+    /** What the log calls [this]. */
+    private fun ApprovalEnding.logged(): String = when (this) {
+        ApprovalEnding.Expired -> "expired"
 
-        Ending.Withdrawn -> text(TextKeys.APPROVAL_OUTCOME_WITHDRAWN, language, "id" to request.id)
+        ApprovalEnding.Withdrawn -> "is withdrawn"
 
-        is Ending.Answered -> when (val answer = ending.answer) {
-            is ApprovalAnswer.Allowed -> if (answer.always) {
-                text(
-                    TextKeys.APPROVAL_OUTCOME_ALLOWED_ALWAYS,
-                    language,
-                    "id" to request.id,
-                    "name" to named(answer.by),
-                    "rule" to request.alwaysRules.joinToString(", ") { it.display },
-                )
-            } else {
-                text(
-                    TextKeys.APPROVAL_OUTCOME_ALLOWED,
-                    language,
-                    "id" to request.id,
-                    "name" to named(answer.by),
-                )
-            }
-
-            is ApprovalAnswer.Denied -> text(
-                TextKeys.APPROVAL_OUTCOME_DENIED,
-                language,
-                "id" to request.id,
-                "name" to named(answer.by),
-            )
-
-            else -> null
+        is ApprovalEnding.Answered -> when (val answer = answer) {
+            is ApprovalAnswer.Allowed -> "is allowed by ${answer.by.address}"
+            is ApprovalAnswer.Denied -> "is denied by ${answer.by.address}"
+            else -> "ends: $answer"
         }
     }
+
+    /** The line that tells how [request] ended in [language], null for no line. */
+    private fun outcome(request: ApprovalRequest, ending: ApprovalEnding, language: LanguageTag?): String? =
+        when (ending) {
+            ApprovalEnding.Expired -> text(TextKeys.APPROVAL_OUTCOME_EXPIRED, language, "id" to request.id)
+
+            ApprovalEnding.Withdrawn -> text(TextKeys.APPROVAL_OUTCOME_WITHDRAWN, language, "id" to request.id)
+
+            is ApprovalEnding.Answered -> when (val answer = ending.answer) {
+                is ApprovalAnswer.Allowed -> if (answer.always) {
+                    text(
+                        TextKeys.APPROVAL_OUTCOME_ALLOWED_ALWAYS,
+                        language,
+                        "id" to request.id,
+                        "name" to named(answer.by),
+                        "rule" to alwaysRulesText(request.alwaysRules),
+                    )
+                } else {
+                    text(
+                        TextKeys.APPROVAL_OUTCOME_ALLOWED,
+                        language,
+                        "id" to request.id,
+                        "name" to named(answer.by),
+                    )
+                }
+
+                is ApprovalAnswer.Denied -> text(
+                    TextKeys.APPROVAL_OUTCOME_DENIED,
+                    language,
+                    "id" to request.id,
+                    "name" to named(answer.by),
+                )
+
+                else -> null
+            }
+        }
 
     /** [request] as the message an approver reads in [language]. */
     private fun render(request: ApprovalRequest, language: LanguageTag?): String = buildString {
@@ -380,11 +381,7 @@ internal class OneBotApprovals(
             )
         } else if (request.alwaysRules.size > 1) {
             append(' ').append(
-                text(
-                    TextKeys.APPROVAL_ALWAYS_RULES,
-                    language,
-                    "rules" to request.alwaysRules.joinToString(", ") { it.display },
-                ),
+                text(TextKeys.APPROVAL_ALWAYS_RULES, language, "rules" to alwaysRulesText(request.alwaysRules)),
             )
         }
     }
@@ -415,53 +412,19 @@ internal class OneBotApprovals(
         return if (said.length <= MAX_BODY) said else said.take(MAX_BODY) + "\n…"
     }
 
-    /** One request on its way, with the messages that carry it by the chat they are in. */
+    /** One request on its way, with the ids of the messages that carry it, by the chat each was sent to. */
     private class Pending(val request: ApprovalRequest) {
-        val ending = CompletableDeferred<Ending>()
+        val core = PendingApproval(request)
 
-        /** The ids of the messages that carry the request, by the chat each was sent to. */
-        val carried = ConcurrentHashMap<ChatAddress, MutableSet<String>>()
-    }
-
-    /** What a command names. */
-    private sealed interface Resolution {
-        data object None : Resolution
-
-        class One(val id: String) : Resolution
-
-        class Ambiguous(val ids: List<String>) : Resolution
-
-        class Listing(val requests: List<ApprovalRequest>) : Resolution
-    }
-
-    private sealed interface Ending {
-        val answer: ApprovalAnswer
-        val logged: String
-
-        class Answered(override val answer: ApprovalAnswer) : Ending {
-            override val logged: String
-                get() = when (answer) {
-                    is ApprovalAnswer.Allowed -> "is allowed by ${answer.by.address}"
-                    is ApprovalAnswer.Denied -> "is denied by ${answer.by.address}"
-                    else -> "ends: $answer"
-                }
-        }
-
-        data object Expired : Ending {
-            override val answer: ApprovalAnswer = ApprovalAnswer.Expired
-            override val logged: String = "expired"
-        }
-
-        data object Withdrawn : Ending {
-            override val answer: ApprovalAnswer = ApprovalAnswer.Unavailable("the request was withdrawn")
-            override val logged: String = "is withdrawn"
-        }
+        /** The ids of the messages that carry the request, by the chat each was sent to: `channel-common`'s own
+         * [PendingApproval] tracks only whether a chat carries the request, not which message of it does, which
+         * only this channel's reply-based answering needs. */
+        val messageIds = ConcurrentHashMap<ChatAddress, MutableSet<String>>()
     }
 
     private companion object {
         const val APPROVE = "approve"
         const val DENY = "deny"
-        const val ALWAYS = "always"
 
         val UNREACHABLE = ApprovalAnswer.Unavailable("no administrator can be reached")
 
