@@ -10,15 +10,19 @@ private const val OPENCLAW_CONFIG_FILE = "openclaw.json"
 private const val OPENCLAW_SKILLS_DIR = "skills"
 
 /**
- * OpenClaw: `~/.openclaw/openclaw.json`'s MCP servers (its documentation names both a nested `mcp.servers.<name>`
- * table and a top-level `mcpServers.<name>` one across different versions; both are read, the nested one first),
- * and the skills under `skills/` plus any directory `skills.load.extraDirs` names. A header value written
- * `${VAR}` (OpenClaw's own substitution syntax, unlike Alexandrite's `${env:VAR}`) is resolved against this
+ * OpenClaw: `~/.openclaw/openclaw.json`'s MCP servers, at `mcp.servers.<name>` (confirmed against the project's own
+ * `docs/gateway/config-extensions.md` at `github.com/openclaw/openclaw`; an earlier reading of this function also
+ * checked a top-level `mcpServers.<name>` a secondary source had named, which that canonical doc does not — this
+ * version reads only the nested table). A server has no `env` field there (only `headers`, for a remote one), so
+ * [DiscoveredMcpServer.env] is always empty for this source; a header value written `${VAR}` (OpenClaw's own
+ * substitution syntax, confirmed by the same doc, unlike Alexandrite's `${env:VAR}`) is resolved against this
  * process's own environment where that variable is set, left as is otherwise, so a caller sees the same value
  * OpenClaw itself would use.
  *
- * Unlike the other three sources, this reading was not checked against a real OpenClaw installation (none was
- * reachable while writing it) — only against its own published documentation. Treat it as best effort.
+ * The skills side was not confirmed the same way: the doc names `skills.load.extraDirs` (read below) but no
+ * default skills root beside it, so `skills/` here is this function's own guess, not something OpenClaw documents.
+ * No real OpenClaw installation was reachable to check either side against, only its published documentation —
+ * treat this source as best effort.
  *
  * Null when `~/.openclaw` does not exist at all; present with empty lists when its config could not be read.
  */
@@ -26,10 +30,8 @@ public fun discoverOpenClaw(home: Path): DiscoveredSource? {
     val root = home.resolve(".openclaw")
     if (!Files.isDirectory(root)) return null
     val json = readJsonObject(root.resolve(OPENCLAW_CONFIG_FILE))
-    val nested = (json?.get("mcp") as? JsonObject)?.get("servers")
-    val servers = (mcpServersOf(nested) + mcpServersOf(json?.get("mcpServers")))
-        .distinctBy { it.name }
-        .map(::resolveShellStyleReferences)
+    val nested = json?.obj("mcp")?.get("servers")
+    val servers = mcpServersOf(nested).map(::resolveShellStyleReferences)
     val extraDirs = json?.obj("skills")?.obj("load")?.array("extraDirs")
         ?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty()
     val roots = listOf(root.resolve(OPENCLAW_SKILLS_DIR)) + extraDirs.map(Path::of)

@@ -239,12 +239,13 @@ class DiscoveryTest {
     }
 
     @Test
-    fun `openclaw reads either a nested or a top-level mcp server table and resolves its own var syntax`() {
+    fun `openclaw reads the nested mcp servers table and resolves its own var syntax in headers, never env`() {
         write(
             ".openclaw/openclaw.json",
-            """{"mcp": {"servers": {"nested": {"command": "uvx", "args": ["mcp-server-fetch"]}}},
-                "mcpServers": {"legacy": {"url": "https://mcp.example.com",
-                    "headers": {"Authorization": "${'$'}{OPENCLAW_FIXTURE_VAR}"}}}}""",
+            """{"mcp": {"servers": {"fetcher": {"command": "uvx", "args": ["mcp-server-fetch"],
+                "url": "https://mcp.example.com",
+                "headers": {"Authorization": "${'$'}{OPENCLAW_FIXTURE_VAR}"}}}},
+                "mcpServers": {"legacy": {"url": "https://old.example.com"}}}""",
         )
         write(".openclaw/skills/sample/SKILL.md", "---\nname: sample\n---\nBody")
 
@@ -252,10 +253,13 @@ class DiscoveryTest {
 
         assertEquals("openclaw", source.id)
         assertEquals(listOf("sample"), source.skills.map { it.name })
-        assertEquals(setOf("nested", "legacy"), source.mcpServers.map { it.name }.toSet())
-        val legacy = source.mcpServers.single { it.name == "legacy" }
+        // The real schema nests servers under "mcp.servers" only: a top-level "mcpServers" (as a non-canonical
+        // source once suggested) is not read.
+        assertEquals(listOf("fetcher"), source.mcpServers.map { it.name })
+        val fetcher = source.mcpServers.single()
         // The variable is not set in this process, so its literal reference is kept as is.
-        assertEquals("\${OPENCLAW_FIXTURE_VAR}", legacy.headers["Authorization"])
+        assertEquals("\${OPENCLAW_FIXTURE_VAR}", fetcher.headers["Authorization"])
+        assertEquals(emptyMap(), fetcher.env)
     }
 
     // discoverAll.
