@@ -9,6 +9,7 @@ internal object TextKeys {
     const val APPROVAL_ALLOW: String = "approval.allow"
     const val APPROVAL_DENY: String = "approval.deny"
     const val APPROVAL_ALWAYS: String = "approval.always"
+    const val APPROVAL_ALWAYS_SHORT: String = "approval.always_short"
     const val APPROVAL_ALLOWED: String = "approval.allowed"
     const val APPROVAL_DENIED: String = "approval.denied"
     const val APPROVAL_EXPIRED: String = "approval.expired"

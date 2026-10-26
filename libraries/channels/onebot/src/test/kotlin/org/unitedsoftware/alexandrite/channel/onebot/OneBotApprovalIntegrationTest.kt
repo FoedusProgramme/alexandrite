@@ -19,6 +19,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChatUser
 import org.unitedsoftware.alexandrite.sdk.chat.TurnInfo
 import org.unitedsoftware.alexandrite.sdk.chat.UserAddress
 import org.unitedsoftware.alexandrite.sdk.di.key
+import org.unitedsoftware.alexandrite.sdk.tool.RuleSubject
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
 import org.unitedsoftware.alexandrite.testkit.PluginHarness
 import org.unitedsoftware.alexandrite.testkit.PluginHarness.Running
@@ -221,6 +222,62 @@ class OneBotApprovalIntegrationTest {
                         sent.last().params.contains("is allowed by"),
                         "the outcome of the answer was not said: ${sent.last().params}",
                     )
+                }
+            }
+        } finally {
+            peer.stop()
+        }
+    }
+
+    @Test
+    fun `an approval that grants several rules shows all of them`() {
+        val peer = ApprovalPeer()
+        val port = peer.startAndPort()
+        try {
+            runBlocking {
+                harness(peer, port) {
+                    val request = request("many1").toBuilder().alwaysRules(
+                        listOf(
+                            RuleSubject("command.exec", listOf("a"), "host a.example"),
+                            RuleSubject("command.exec", listOf("b"), "host b.example"),
+                        ),
+                    ).build()
+                    val asking = async(start = CoroutineStart.UNDISPATCHED) { front().askApproval(request) }
+                    val carried = waiting { peer.awaitSent(1) }.last()
+                    assertTrue(
+                        carried.params.contains("host a.example"),
+                        "the first rule was not shown: ${carried.params}",
+                    )
+                    assertTrue(
+                        carried.params.contains("host b.example"),
+                        "the second rule was not shown: ${carried.params}",
+                    )
+                    peer.report(command(replyTo = carried.id, text = "/approve always"))
+                    assertIs<ApprovalAnswer.Allowed>(asking.await())
+                    val sent = waiting { peer.awaitQuiet() }
+                    assertTrue(
+                        sent.last().params.contains("host a.example") &&
+                            sent.last().params.contains("host b.example"),
+                        "the outcome named only some of the rules: ${sent.last().params}",
+                    )
+                }
+            }
+        } finally {
+            peer.stop()
+        }
+    }
+
+    @Test
+    fun `an approval command is answered in any case`() {
+        val peer = ApprovalPeer()
+        val port = peer.startAndPort()
+        try {
+            runBlocking {
+                harness(peer, port) {
+                    val asking = async(start = CoroutineStart.UNDISPATCHED) { front().askApproval(request("case1")) }
+                    val carried = waiting { peer.awaitSent(1) }.last().id
+                    peer.report(command(replyTo = carried, text = "/Approve"))
+                    assertIs<ApprovalAnswer.Allowed>(asking.await())
                 }
             }
         } finally {

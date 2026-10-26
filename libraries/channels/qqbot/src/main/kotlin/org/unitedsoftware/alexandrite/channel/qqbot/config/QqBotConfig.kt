@@ -34,8 +34,9 @@ public class QqBotInstanceConfig(
     /** Whether a single chat is answered with the platform's streaming message, false to send one message instead. */
     public val streaming: Boolean = true,
     /**
-     * The accounts that may operate this instance, by the open id a single chat names them by, which is the chat an
-     * approval of theirs is shown in. A group's administrators are its platform `member_role`, not this list.
+     * The accounts that may operate this instance, by the open id the chat they write in names them by: the
+     * `user_openid` of a single chat, the `member_openid` of a group. A group's administrators are also its platform
+     * `member_role`; this list is matched against the open id of the chat, not against a global account id.
      */
     public val admins: Set<String> = emptySet(),
     /** Whether the bot publishes its slash commands as the single-chat menu and command panels when it opens. */

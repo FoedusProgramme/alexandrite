@@ -30,6 +30,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 import org.unitedsoftware.alexandrite.sdk.chat.RunId
 import org.unitedsoftware.alexandrite.sdk.chat.ToolCallId
 import org.unitedsoftware.alexandrite.sdk.di.key
+import org.unitedsoftware.alexandrite.sdk.tool.RuleSubject
 import org.unitedsoftware.alexandrite.sdk.tool.ToolActivity
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
 import org.unitedsoftware.alexandrite.sdk.turn.Submission
@@ -317,7 +318,7 @@ class QqBotChannelIntegrationTest {
     }
 
     @Test
-    fun `a streamed answer with a file sends the file and closes the stream`() = runBlocking {
+    fun `a streamed answer with a file sends the file and closes the stream`() = runBlocking<Unit> {
         val api = FakeApiServer()
         api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
         api.on(STREAM_DIRECT, """{"id":"stream1","timestamp":"2026-07-21T10:00:00+08:00"}""")
@@ -383,6 +384,11 @@ class QqBotChannelIntegrationTest {
                             ToolRisk.EXEC,
                             "{}",
                             "it runs a command",
+                        ).alwaysRules(
+                            listOf(
+                                RuleSubject("command.exec", listOf("a"), "host a.example"),
+                                RuleSubject("command.exec", listOf("b"), "host b.example"),
+                            ),
                         ).build()
                         val waiting = async(start = CoroutineStart.UNDISPATCHED) { channel.askApproval(request) }
                         assertTrue(sendReached.await(5, TimeUnit.SECONDS), "the approval message was not sent")
@@ -392,6 +398,9 @@ class QqBotChannelIntegrationTest {
                         assertTrue("\"keyboard\"" in shown.body, shown.body)
                         assertTrue("\"data\":\"/approve req1\"" in shown.body, shown.body)
                         assertTrue("\"data\":\"/deny req1\"" in shown.body, shown.body)
+                        assertTrue("\"data\":\"/approve req1 always\"" in shown.body, shown.body)
+                        assertTrue("host a.example" in shown.body, shown.body)
+                        assertTrue("host b.example" in shown.body, shown.body)
                         assertTrue("\"enter\":true" in shown.body, shown.body)
 
                         platform.push(APPROVAL_PRESS)
@@ -434,6 +443,11 @@ class QqBotChannelIntegrationTest {
                             ToolRisk.EXEC,
                             "{}",
                             "it runs a command",
+                        ).alwaysRules(
+                            listOf(
+                                RuleSubject("command.exec", listOf("a"), "host a.example"),
+                                RuleSubject("command.exec", listOf("b"), "host b.example"),
+                            ),
                         ).build()
                         val waiting = async(start = CoroutineStart.UNDISPATCHED) { channel.askApproval(request) }
                         assertNotNull(api.awaitRequest(SEND_DIRECT))
@@ -483,7 +497,7 @@ class QqBotChannelIntegrationTest {
     }
 
     @Test
-    fun `a detached background run keeps writing to the reply's stream until it closes`() = runBlocking {
+    fun `a detached background run keeps writing to the reply's stream until it closes`() = runBlocking<Unit> {
         val api = FakeApiServer()
         api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
         api.on(STREAM_DIRECT, """{"id":"stream1","timestamp":"2026-07-21T10:00:00+08:00"}""")

@@ -299,7 +299,7 @@ internal class QqBotChannel(
         /** How long tool lines of a non-streaming chat wait before they are told again; the first is told at once. */
         const val NOTICE_INTERVAL_MS: Long = 8_000L
 
-        /** What this channel can do in a group: text and markdown, no streaming, no files and no live events. */
+        /** What this channel can do in a group: text and markdown, no streaming, but files and tool notices. */
         val CAPABILITIES: ChannelCapabilities = ChannelCapabilities.builder()
             .markups(setOf(Markup.PLAIN, Markup.MARKDOWN))
             .streaming(false)

@@ -115,7 +115,7 @@ internal class QqBotApprovals(
                 text(TextKeys.APPROVAL_ALLOW, request.turn.language),
                 text(TextKeys.APPROVAL_DENY, request.turn.language),
                 request.alwaysRules.firstOrNull()?.let {
-                    text(TextKeys.APPROVAL_ALWAYS, request.turn.language, "rule" to it.display)
+                    text(TextKeys.APPROVAL_ALWAYS_SHORT, request.turn.language)
                 },
             )
             if (delivery is Delivery.Delivered) {
@@ -175,6 +175,9 @@ internal class QqBotApprovals(
             ),
         )
         appendLine(text(TextKeys.APPROVAL_REASON, request.turn.language, "reason" to request.reason))
+        request.alwaysRules.forEach { rule ->
+            appendLine(text(TextKeys.APPROVAL_ALWAYS, request.turn.language, "rule" to rule.display))
+        }
         appendLine(text(TextKeys.APPROVAL_ARGUMENTS, request.turn.language))
         append(request.arguments.take(MAX_ARGUMENTS))
     }
