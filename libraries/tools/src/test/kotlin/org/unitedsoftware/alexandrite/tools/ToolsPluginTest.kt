@@ -79,9 +79,12 @@ class ToolsPluginTest {
     }
 
     @Test
-    fun `web search has the brave, tavily and pleochroic backends`() = runBlocking {
+    fun `web search has the brave, tavily, searxng, duckduckgo and pleochroic backends`() = runBlocking {
         PluginHarness.builder(AlexandriteToolsIndex()).hardFloor(testHardFloor()).build().run {
-            assertEquals(setOf("brave", "tavily", "pleochroic"), getAll<WebSearchBackend>().map { it.id }.toSet())
+            assertEquals(
+                setOf("brave", "tavily", "searxng", "duckduckgo", "pleochroic"),
+                getAll<WebSearchBackend>().map { it.id }.toSet(),
+            )
         }
         Unit
     }

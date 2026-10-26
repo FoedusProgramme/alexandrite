@@ -411,6 +411,55 @@ class WebTest {
             server.assertFinished()
         }
     }
+
+    @Test
+    fun `SearXNG's JSON API and DuckDuckGo's scraped HTML are both parsed into bounded results`() = runBlocking {
+        FakeModelServer().use { server ->
+            server.enqueue(
+                fakeResponse {
+                    body(
+                        """{"results": [
+                            {"title": "One", "url": "https://example.com/one", "content": "first"},
+                            {"title": "Two", "url": "https://example.com/two", "content": "second"}
+                        ]}""",
+                    )
+                },
+            )
+            server.enqueue(
+                fakeResponse {
+                    header("content-type", "text/html")
+                    body(
+                        """<div class="results">
+                            <div class="result">
+                                <a rel="nofollow" class="result__a"
+                                   href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fone&amp;rut=a">
+                                   Result <b>One</b></a>
+                                <a class="result__snippet" href="#">Snippet <b>one</b> text</a>
+                            </div>
+                            <div class="result">
+                                <a rel="nofollow" class="result__a"
+                                   href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Ftwo&amp;rut=b">
+                                   Result Two</a>
+                                <a class="result__snippet" href="#">Snippet two text</a>
+                            </div>
+                        </div>""",
+                    )
+                },
+            )
+            val http = SearchHttp(WebConfig())
+            val searxng = searxngResults(http.send(searxngCall("a & b", 5, server.baseUrl)), 5)
+            val duckDuckGo = duckDuckGoResults(http.sendText(duckDuckGoCall("a & b", server.baseUrl)), 1)
+            assertEquals(listOf("first", "second"), searxng.map { it.snippet })
+            assertEquals(listOf("https://example.com/one"), duckDuckGo.map { it.url })
+            assertEquals("Result One", duckDuckGo.single().title)
+            assertEquals("Snippet one text", duckDuckGo.single().snippet)
+            val requests = server.awaitRequests(2)
+            assertTrue(requests[0].path.contains("format=json"))
+            assertTrue(requests[1].path.contains("/html/"))
+            http.onDestroy()
+            server.assertFinished()
+        }
+    }
 }
 
 private fun args(vararg pairs: Pair<String, String>): JsonObject =

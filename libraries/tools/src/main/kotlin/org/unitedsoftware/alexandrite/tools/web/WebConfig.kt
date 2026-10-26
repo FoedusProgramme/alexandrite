@@ -31,6 +31,8 @@ internal class WebConfig(
     val pleochroicApiBase: String? = null,
     /** The key of the Pleochroic account or `standalone-service`, best given as an environment reference. */
     val pleochroicApiKey: Secret? = null,
+    /** The address of a self-hosted SearXNG instance, the built-in SearXNG backend's base URL (no trailing `/`). */
+    val searxngUrl: String? = null,
 ) {
     val normalizedPrivateHosts: Set<String> get() = allowedPrivateHosts.map(::normalizeAllowedHost).toSet()
 
@@ -51,6 +53,7 @@ internal class WebConfig(
         require(pleochroicApiKey == null || pleochroicApiKey.reveal().isNotBlank()) {
             "pleochroicApiKey may not be blank"
         }
+        require(searxngUrl == null || searxngUrl.isNotBlank()) { "searxngUrl may not be blank" }
     }
 }
 
