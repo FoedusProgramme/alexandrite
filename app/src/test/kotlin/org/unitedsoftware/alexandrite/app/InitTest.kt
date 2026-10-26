@@ -21,6 +21,8 @@ import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeBotApi
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeUser
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.FakeResponse
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
@@ -88,15 +90,18 @@ class InitTest {
         bot.send(ada, bot.direct(ada), "/start TEST-C0DE")
         cli.machine.answers += listOf(
             "",
-            "1",
+            "zh-CN",
+            "",
+            "",
+            "2",
             "sk-test",
             "2,1",
             "y",
             bot.token,
-            "",
-            "",
-            "zh-CN",
-            "",
+            "n",
+            "n",
+            "n",
+            "n",
             "",
         )
 
@@ -164,9 +169,7 @@ class InitTest {
             "init",
             "--non-interactive",
             "--only",
-            "telegram",
-            "--only",
-            "admin",
+            "channels",
             "--api-base-url",
             bot.baseUrl,
         )
@@ -187,7 +190,7 @@ class InitTest {
         cli.environment = mapOf(TELEGRAM_TOKEN_VARIABLE to bot.token)
 
         val printed =
-            cli("init", "--non-interactive", "--only", "telegram", "--only", "admin", "--api-base-url", bot.baseUrl)
+            cli("init", "--non-interactive", "--only", "channels", "--api-base-url", bot.baseUrl)
 
         assertEquals(1, printed.code)
         assertContains(printed.err, "Another program reads this bot's updates (Telegram says: Conflict: terminated")
@@ -213,8 +216,10 @@ class InitTest {
 
         assertEquals(0, printed.code, printed.out + printed.err)
         assertContains(printed.out, "No ALEXANDRITE_TELEGRAM_TOKEN is set, so Telegram is left out.")
-        assertContains(printed.out, "No Telegram bot is set up, so there is no admin to claim.")
-        assertContains(printed.out, "Skipped Telegram: set it up later with alexandrite init --only telegram")
+        assertContains(
+            printed.out,
+            "Skipped Telegram and other channels: set it up later with alexandrite init --only channels",
+        )
         assertEquals("\"deepseek/deepseek-chat\"", "${file().at("agent.agents.main.model")}")
         assertEquals("""{"language":"de-DE","zone":"Europe/Berlin"}""", "${file().at("app")}")
         assertEquals("DEEPSEEK_API_KEY=sk-env\n", Files.readString(cli.secrets))
@@ -376,14 +381,272 @@ class InitTest {
         assertNull(cli.machine.executed.firstOrNull { it.contains("enable") })
     }
 
+    // Pleochroic.
+
+    private fun deviceCodeBody(interval: Int = 0) = """{"deviceCode": "dc-1", "userCode": "BCDF-GHJK",
+        "verificationUri": "https://portal.pleochroic.co.uk/device",
+        "verificationUriComplete": "https://portal.pleochroic.co.uk/device?code=BCDF-GHJK",
+        "expiresIn": 600, "interval": $interval}"""
+
+    /** A raw [Cli] below [name] in [directory], bypassing the [Commands] harness so a test can override
+     * [InitOptions.portalBaseUrl] (no CLI flag reaches it, the portal being fixed in production). */
+    private fun rawCli(name: String, out: ByteArrayOutputStream, err: ByteArrayOutputStream): Cli {
+        val base = directory.resolve(name)
+        val machine = FakeMachine(interactive = false)
+        machine.live = true
+        return Cli(
+            Locations(base.resolve("config/alexandrite.json"), base.resolve("data"), base.resolve("cache")),
+            emptyMap(),
+            PrintStream(out, true),
+            PrintStream(err, true),
+            machine,
+            Platform.UNIX,
+            base.resolve("home"),
+            null,
+        )
+    }
+
+    @Test
+    fun `init signs in to a Pleochroic account by device login, retries through slow-downs, and shows the plan`() {
+        val portal = FakeModelServer()
+        val out = ByteArrayOutputStream()
+        val err = ByteArrayOutputStream()
+        val raw = rawCli("device-login", out, err)
+        try {
+            portal.enqueue(FakeResponse.builder().body(deviceCodeBody()).build(), "/api/device/code")
+            portal.enqueue(
+                FakeResponse.builder(400).body("""{"error": "authorization_pending"}""").build(),
+                "/api/device/token",
+            )
+            portal.enqueue(FakeResponse.builder(400).body("""{"error": "slow_down"}""").build(), "/api/device/token")
+            portal.enqueue(
+                FakeResponse.builder().body(
+                    """{"key": "plc-abc123", "apiBase": "${portal.baseUrl}", "account": {"username": "john",
+                        "name": "John", "plan": {"id": "intermodal", "name": "Intermodal"}}}""",
+                ).build(),
+                "/api/device/token",
+            )
+            portal.enqueue(
+                FakeResponse.builder().body(
+                    """{"account": {"name": "John", "plan": {"name": "Intermodal"}}, "scopes": ["models"],
+                        "services": {"search": {"enabled": true}, "fetch": {"enabled": true}}}""",
+                ).build(),
+                "/service",
+            )
+            portal.enqueue(FakeResponse.builder().body("""{"data": [{"id": "chroma-1"}]}""").build(), "/models")
+
+            val code = init(
+                raw,
+                InitOptions(
+                    interactive = false,
+                    steps = setOf(InitStep.MODEL),
+                    provider = providerKind("pleochroic"),
+                    models = listOf("chroma-1"),
+                    portalBaseUrl = portal.baseUrl,
+                ),
+            )
+
+            assertEquals(0, code, err.toString())
+            assertContains(out.toString(), "https://portal.pleochroic.co.uk/device?code=BCDF-GHJK")
+            assertEquals(3, portal.requests.count { it.path == "/api/device/token" })
+            val config = Json.parseToJsonElement(Files.readString(raw.locations.configFile)).jsonObject
+            assertEquals(
+                """{"apiKey":"${'$'}{env:PLEOCHROIC_API_KEY}","baseUrl":"${portal.baseUrl}"}""",
+                "${config.at("providers.pleochroic.endpoints.default")}",
+            )
+            assertEquals("\"default/chroma-1\"", "${config.at("agent.agents.main.model")}")
+            assertEquals("\"pleochroic\"", "${config.at("tools.web.searchBackend")}")
+            assertEquals("\"pleochroic\"", "${config.at("tools.web.fetchBackend")}")
+            assertEquals("\"${portal.baseUrl}\"", "${config.at("tools.web.pleochroicApiBase")}")
+            assertContains(out.toString(), "Pleochroic · John (Intermodal)")
+            assertEquals("PLEOCHROIC_API_KEY=plc-abc123\n", Files.readString(raw.secrets))
+        } finally {
+            portal.close()
+        }
+    }
+
+    @Test
+    fun `a denied Pleochroic device login during init writes nothing`() {
+        val portal = FakeModelServer()
+        val out = ByteArrayOutputStream()
+        val err = ByteArrayOutputStream()
+        val raw = rawCli("device-login-denied", out, err)
+        try {
+            portal.enqueue(FakeResponse.builder().body(deviceCodeBody()).build(), "/api/device/code")
+            portal.enqueue(
+                FakeResponse.builder(400).body("""{"error": "access_denied"}""").build(),
+                "/api/device/token",
+            )
+
+            val code = init(
+                raw,
+                InitOptions(
+                    interactive = false,
+                    steps = setOf(InitStep.MODEL),
+                    provider = providerKind("pleochroic"),
+                    portalBaseUrl = portal.baseUrl,
+                ),
+            )
+
+            assertEquals(1, code)
+            assertContains(err.toString(), "denied")
+            assertFalse(Files.exists(raw.locations.configFile))
+            assertFalse(Files.exists(raw.secrets))
+        } finally {
+            portal.close()
+        }
+    }
+
+    @Test
+    fun `init signs in to a self-hosted Pleochroic service instead of asking for a key`() {
+        models.enqueue(
+            FakeResponse.builder().body(
+                """{"account": {"name": "Acme"}, "scopes": ["models"],
+                    "services": {"search": {"enabled": true}, "fetch": {"enabled": true}}}""",
+            ).build(),
+            "/service",
+        )
+
+        val printed = cli(
+            "init", "--non-interactive", "--only", "model",
+            "--provider", "pleochroic",
+            "--service-url", models.baseUrl,
+            "--service-token", "plc-self-token",
+            "--model", "deepseek-chat",
+        )
+
+        assertEquals(0, printed.code, printed.out + printed.err)
+        assertContains(printed.out, "Pleochroic · Acme")
+        val config = file()
+        assertEquals(
+            """{"apiKey":"${'$'}{env:PLEOCHROIC_API_KEY}","baseUrl":"${models.baseUrl}"}""",
+            "${config.at("providers.pleochroic.endpoints.default")}",
+        )
+        assertEquals("\"default/deepseek-chat\"", "${config.at("agent.agents.main.model")}")
+        assertEquals("\"pleochroic\"", "${config.at("tools.web.searchBackend")}")
+        assertEquals("\"pleochroic\"", "${config.at("tools.web.fetchBackend")}")
+        assertEquals("\"${models.baseUrl}\"", "${config.at("tools.web.pleochroicApiBase")}")
+        assertEquals("PLEOCHROIC_API_KEY=plc-self-token\n", Files.readString(cli.secrets))
+        assertTrue(models.requests.none { it.path == "/api/device/code" })
+    }
+
+    @Test
+    fun `init's --service-url without --service-token, or the other way around, is a usage error`() {
+        assertEquals(ExitCode.USAGE, cli("init", "--service-url", "http://x/v1").code)
+        assertEquals(ExitCode.USAGE, cli("init", "--service-token", "tok").code)
+    }
+
+    @Test
+    fun `the account step is skipped when the model step already signed in to Pleochroic`() {
+        models.enqueue(
+            FakeResponse.builder().body(
+                """{"account": {"name": "Acme"}, "scopes": ["models"],
+                    "services": {"search": {"enabled": true}, "fetch": {"enabled": true}}}""",
+            ).build(),
+            "/service",
+        )
+
+        val printed = cli(
+            "init", "--non-interactive", "--only", "model", "--only", "account",
+            "--provider", "pleochroic",
+            "--service-url", models.baseUrl,
+            "--service-token", "plc-tok",
+            "--model", "deepseek-chat",
+        )
+
+        assertEquals(0, printed.code, printed.out + printed.err)
+        assertContains(printed.out, "Already signed in to a Pleochroic account as the model provider")
+        assertEquals(1, Files.readString(cli.secrets).lines().count { it.isNotBlank() })
+    }
+
+    // Vision and other side models.
+
+    @Test
+    fun `a model that cannot take images offers a side model from one that can`() {
+        cli.environment = mapOf(API_KEY_VARIABLE to "sk-env")
+        val vision = FakeModelServer()
+        try {
+            vision.enqueue(
+                FakeResponse.builder().body(
+                    """{"data": [
+                        {"id": "text-only", "architecture": {"input_modalities": ["text"]}},
+                        {"id": "vision-model", "architecture": {"input_modalities": ["text", "image"]}}
+                    ]}""",
+                ).build(),
+                "/models",
+            )
+            cli.machine.answers += listOf("", "", "1", "y", "")
+
+            val printed = cli("init", "--only", "model", "--provider", "deepseek", "--base-url", vision.baseUrl)
+
+            assertEquals(0, printed.code, printed.out + printed.err)
+            assertContains(printed.out, "The agent reads image with vision-model.")
+            assertEquals("\"deepseek/vision-model\"", "${file().at("agent.agents.main.roles.image")}")
+            assertEquals("\"deepseek/text-only\"", "${file().at("agent.agents.main.model")}")
+        } finally {
+            vision.close()
+        }
+    }
+
+    @Test
+    fun `no side model is offered when the listing gives no capabilities at all`() {
+        cli.environment = mapOf(API_KEY_VARIABLE to "sk-env")
+        cli.machine.answers += listOf("", "", "1")
+
+        val printed = cli("init", "--only", "model", "--provider", "deepseek", "--base-url", models.baseUrl)
+
+        assertEquals(0, printed.code, printed.out + printed.err)
+        assertNull(file().at("agent.agents.main.roles"))
+    }
+
+    // Import.
+
+    @Test
+    fun `import finds a locally discovered skill and MCP server and imports the ones picked`() {
+        val skill = cli.home.resolve(".codex/skills/sample/SKILL.md")
+        Files.createDirectories(skill.parent)
+        Files.writeString(skill, "---\nname: sample\n---\nBody")
+        val mcpConfig = cli.home.resolve(".codex/config.toml")
+        Files.writeString(
+            mcpConfig,
+            """
+            [mcp_servers.fixture]
+            command = "uvx"
+            args = ["mcp-server-fixture"]
+
+            [mcp_servers.fixture.env]
+            FIXTURE_TOKEN = "fixture-secret"
+            """.trimIndent(),
+        )
+        cli.environment = mapOf(API_KEY_VARIABLE to "sk-env")
+        cli.machine.answers += listOf("", "", "", "1,2")
+
+        val printed = cli(
+            "init", "--only", "model", "--only", "import",
+            "--provider", "deepseek", "--base-url", models.baseUrl, "--model", "deepseek-chat",
+        )
+
+        assertEquals(0, printed.code, printed.out + printed.err)
+        assertContains(printed.out, "Imported 2.")
+        assertEquals(
+            "Body",
+            Files.readString(cli.configFile.resolveSibling("skills/sample/SKILL.md")).substringAfterLast("---\n").trim(),
+        )
+        assertEquals("\"uvx\"", "${file().at("mcp.servers.fixture.command")}")
+        assertEquals("""["mcp-server-fixture"]""", "${file().at("mcp.servers.fixture.args")}")
+        val envRef = file().at("mcp.servers.fixture.env.FIXTURE_TOKEN").toString().removeSurrounding("\"")
+        val variable = envRef.removePrefix("\${env:").removeSuffix("}")
+        assertContains(Files.readString(cli.secrets), "$variable=fixture-secret")
+    }
+
     // On the terminal.
 
     @Test
     fun `init draws its prompts on the terminal, with the key masked and a summary at the end`() {
         val console = ScriptedConsole(
-            listOf(Key.Enter, Key.Enter) + typed("sk-test") + Key.Enter +
-                listOf(Key.Down, Key.Space, Key.Up, Key.Space, Key.Enter) +
-                listOf(Key.Enter) + typed("zh-CN") + Key.Enter + Key.Enter,
+            listOf(Key.Enter) + typed("zh-CN") + listOf(Key.Enter, Key.Enter) +
+                listOf(Key.Enter, Key.Down, Key.Enter) + typed("sk-test") + Key.Enter +
+                listOf(Key.Down, Key.Space, Key.Up, Key.Space, Key.Enter),
             width = 200,
         )
         cli.machine.console = console
@@ -394,12 +657,20 @@ class InitTest {
         assertEquals("", printed.out + printed.err)
         assertTrue(cli.machine.prompts.isEmpty(), "${cli.machine.prompts}")
         val screen = console.screen.lines()
+        assertEquals(
+            listOf(
+                "┌   Alexandrite setup",
+                "│",
+                "│  Setting Alexandrite up, with the config file ${cli.configFile}.",
+                "│",
+                "◈  Step 1 of 9: language and time zone.",
+            ),
+            screen.take(5),
+        )
+        val modelStart = screen.indexOf("◈  Step 2 of 9: the model.")
+        assertTrue(modelStart > 5, "$screen")
         val expected = listOf(
-            "┌   Alexandrite setup",
-            "│",
-            "│  Setting Alexandrite up, with the config file ${cli.configFile}.",
-            "│",
-            "◈  Step 1 of 6: the model.",
+            "◈  Step 2 of 9: the model.",
             "│",
             "◇  Set up a model provider now?",
             "│  Yes",
@@ -417,7 +688,7 @@ class InitTest {
             "│",
             "✓  The agent main uses deepseek/deepseek-reasoner, deepseek/deepseek-chat.",
         )
-        assertEquals(expected, screen.take(expected.size))
+        assertEquals(expected, screen.subList(modelStart, modelStart + expected.size))
         assertTrue(screen.any { it.startsWith("│  Provider            DeepSeek · ${models.baseUrl}  ") }, "$screen")
         assertTrue(screen.any { it.startsWith("│  Language and zone   zh-CN · Europe/Berlin  ") }, "$screen")
         assertEquals("└  Done.", screen.last())
@@ -456,7 +727,7 @@ class InitTest {
 
         assertEquals(0, plain.code, plain.err)
         assertEquals(0, dumb.code, dumb.err)
-        assertContains(plain.out, "Step 4 of 6: language and time zone.")
+        assertContains(plain.out, "Step 1 of 9: language and time zone.")
         assertContains(cli.machine.prompts, "Language of the agent's answers [en]: ")
         assertEquals("", "${console.written}")
     }

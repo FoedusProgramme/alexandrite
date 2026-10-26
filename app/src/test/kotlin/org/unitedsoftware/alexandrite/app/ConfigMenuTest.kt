@@ -102,7 +102,7 @@ class ConfigMenuTest {
         cli.machine.web["https://llm.example.com/v1/models"] = Fetched(200, """{"data": [{"id": "local-coder"}]}""")
 
         menu(
-            choose(2) + choose(2) + choose(3) + Key.Enter + typed("https://llm.example.com/v1") + Key.Enter +
+            choose(2) + choose(2) + choose(5) + Key.Enter + typed("https://llm.example.com/v1") + Key.Enter +
                 typed("sk-local") + Key.Enter + Key.Enter + Key.Escape + done,
         )
 

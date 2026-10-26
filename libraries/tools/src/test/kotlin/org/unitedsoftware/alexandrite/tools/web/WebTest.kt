@@ -277,7 +277,7 @@ class WebTest {
     fun `fetch exposes only side model answer and taints before model failure`() = runBlocking {
         val context = testToolContext()
         val answers = Answers()
-        val tool = FetchTool(WebConfig(), WebPages { WebPage(URI(it), "raw source") }, answers)
+        val tool = FetchTool(WebConfig(), WebPages { WebPage(URI(it), "raw source") }, answers, emptyList())
         assertEquals(ToolRisk.NETWORK_READ, tool.definition.risk)
         val result = tool.execute(args("url" to "https://example.com", "prompt" to "question"), context)
         assertFalse(result.isError)
@@ -301,7 +301,7 @@ class WebTest {
     @Test
     fun `a fetch's review names its host as untrusted content, and a search's its output`() = runBlocking {
         val context = testToolContext()
-        val fetch = FetchTool(WebConfig(), WebPages { WebPage(URI(it), "page") }, Answers())
+        val fetch = FetchTool(WebConfig(), WebPages { WebPage(URI(it), "page") }, Answers(), emptyList())
 
         val review = fetch.review(args("url" to "https://Docs.Example.org/a", "prompt" to "q"), context)
         val malformed = fetch.review(args("url" to "nowhere", "prompt" to "q"), context)
@@ -316,7 +316,7 @@ class WebTest {
     fun `a fetch that a redirect takes to another site answers from the page it reached`() = runBlocking {
         val context = testToolContext()
         val answers = Answers()
-        fun tool(to: String) = FetchTool(WebConfig(), WebPages { WebPage(URI(to), "page") }, answers)
+        fun tool(to: String) = FetchTool(WebConfig(), WebPages { WebPage(URI(to), "page") }, answers, emptyList())
         suspend fun FetchTool.result() = execute(args("url" to "https://example.com/a", "prompt" to "q"), context)
 
         val results = listOf("https://elsewhere.test/b", "https://docs.example.com/b").map { tool(it).result() }
@@ -327,7 +327,7 @@ class WebTest {
     @Test
     fun `a refused or failed fetch tells the model why, and a slow one that it timed out`() = runBlocking {
         val context = testToolContext()
-        fun tool(pages: WebPages) = FetchTool(WebConfig(timeoutSeconds = 1), pages, Answers())
+        fun tool(pages: WebPages) = FetchTool(WebConfig(timeoutSeconds = 1), pages, Answers(), emptyList())
         suspend fun FetchTool.text() = execute(args("url" to "https://example.com", "prompt" to "q"), context).content
             .filterIsInstance<TextPart>().single().text
 
@@ -407,6 +407,55 @@ class WebTest {
                 http.send(braveCall("q", 1, "fixture-key", server.baseUrl))
             }
             assertEquals("The search service answered with something other than a JSON object.", notObject.message)
+            http.onDestroy()
+            server.assertFinished()
+        }
+    }
+
+    @Test
+    fun `SearXNG's JSON API and DuckDuckGo's scraped HTML are both parsed into bounded results`() = runBlocking {
+        FakeModelServer().use { server ->
+            server.enqueue(
+                fakeResponse {
+                    body(
+                        """{"results": [
+                            {"title": "One", "url": "https://example.com/one", "content": "first"},
+                            {"title": "Two", "url": "https://example.com/two", "content": "second"}
+                        ]}""",
+                    )
+                },
+            )
+            server.enqueue(
+                fakeResponse {
+                    header("content-type", "text/html")
+                    body(
+                        """<div class="results">
+                            <div class="result">
+                                <a rel="nofollow" class="result__a"
+                                   href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fone&amp;rut=a">
+                                   Result <b>One</b></a>
+                                <a class="result__snippet" href="#">Snippet <b>one</b> text</a>
+                            </div>
+                            <div class="result">
+                                <a rel="nofollow" class="result__a"
+                                   href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Ftwo&amp;rut=b">
+                                   Result Two</a>
+                                <a class="result__snippet" href="#">Snippet two text</a>
+                            </div>
+                        </div>""",
+                    )
+                },
+            )
+            val http = SearchHttp(WebConfig())
+            val searxng = searxngResults(http.send(searxngCall("a & b", 5, server.baseUrl)), 5)
+            val duckDuckGo = duckDuckGoResults(http.sendText(duckDuckGoCall("a & b", server.baseUrl)), 1)
+            assertEquals(listOf("first", "second"), searxng.map { it.snippet })
+            assertEquals(listOf("https://example.com/one"), duckDuckGo.map { it.url })
+            assertEquals("Result One", duckDuckGo.single().title)
+            assertEquals("Snippet one text", duckDuckGo.single().snippet)
+            val requests = server.awaitRequests(2)
+            assertTrue(requests[0].path.contains("format=json"))
+            assertTrue(requests[1].path.contains("/html/"))
             http.onDestroy()
             server.assertFinished()
         }

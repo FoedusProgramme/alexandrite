@@ -1,5 +1,6 @@
 package org.unitedsoftware.alexandrite.app
 
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncPolicy
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
 import org.unitedsoftware.alexandrite.app.control.ControlRequest
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
@@ -8,6 +9,11 @@ private const val JSON = "--json"
 private const val RESTART = "--restart"
 private const val AGENT = "--agent"
 private const val EXAMPLE_CHAT = "telegram:work:123456789"
+private const val SERVICE_URL = "--service-url"
+private const val SERVICE_TOKEN = "--service-token"
+private const val DEVICE_NAME = "--device-name"
+private const val DRY_RUN = "--dry-run"
+private const val ALL = "--all"
 
 private const val RUN = "area.run"
 private const val SETUP = "area.setup"
@@ -15,9 +21,18 @@ private const val CONFIGURATION = "area.config"
 private const val SECRETS = "area.secrets"
 private const val SHORTCUTS = "area.shortcuts"
 private const val CHATS = "area.chats"
+private const val PLEOCHROIC = "area.pleochroic"
 private const val HELP = "area.help"
 
 private fun noArguments(given: Given, name: String) = given.atMost(0, Text("usage.no_argument", "command" to name))
+
+/** `null` for `--all` (every pending change), the named keys otherwise; a usage error for neither or both. */
+private fun pendingKeys(given: Given): Set<String>? {
+    val all = given.flag(ALL)
+    if (all && given.operands.isNotEmpty()) throw UsageException("usage.sync_pending_both")
+    if (!all && given.operands.isEmpty()) throw UsageException("usage.sync_pending_none")
+    return if (all) null else given.operands.toSet()
+}
 
 private fun admins(given: Given): List<Long> = given.all("--admin").map {
     it.toLongOrNull()?.takeIf { id -> id > 0 } ?: throw UsageException("usage.admin_id")
@@ -60,22 +75,28 @@ internal val COMMANDS: List<CliCommand> = listOf(
     CliCommand(
         listOf("init"),
         "[--non-interactive] [--only <step>]... [--skip <step>]... [--provider <provider>] [--endpoint <name>] " +
-            "[--base-url <url>] [--model <model>]... [$AGENT <id>] [--admin <user id>]... [--language <tag>] " +
-            "[--zone <zone>] [--api-base-url <url>] [--force]",
+            "[--base-url <url>] [$SERVICE_URL <url> $SERVICE_TOKEN <token>] [--pleochroic] [--model <model>]... " +
+            "[$AGENT <id>] [--admin <user id>]... [--language <tag>] [--zone <zone>] [--api-base-url <url>] " +
+            "[--search-backend <id>] [--fetch-backend <id>] [--searxng-url <url>] [--force]",
         SETUP,
-        flags = setOf("--non-interactive", "--force"),
+        flags = setOf("--non-interactive", "--force", "--pleochroic"),
         options = setOf(
             "--only",
             "--skip",
             "--provider",
             "--endpoint",
             "--base-url",
+            SERVICE_URL,
+            SERVICE_TOKEN,
             "--model",
             AGENT,
             "--admin",
             "--language",
             "--zone",
             "--api-base-url",
+            "--search-backend",
+            "--fetch-backend",
+            "--searxng-url",
         ),
     ) { given ->
         noArguments(given, "init")
@@ -83,18 +104,27 @@ internal val COMMANDS: List<CliCommand> = listOf(
         val skipped = given.all("--skip").map(::requireStep).toSet()
         if (only.isNotEmpty() && skipped.isNotEmpty()) throw UsageException("usage.init_only_skip")
         val steps = (only.ifEmpty { InitStep.entries.toSet() }) - skipped
+        val serviceUrl = given.option(SERVICE_URL)
+        val serviceToken = given.option(SERVICE_TOKEN)
+        if ((serviceUrl == null) != (serviceToken == null)) throw UsageException("usage.init_self_hosted")
         val options = InitOptions(
             interactive = !given.flag("--non-interactive"),
             steps = steps,
             provider = given.option("--provider")?.let(::requireProvider),
             endpoint = given.option("--endpoint")?.let { requireId(it, "what.endpoint") },
             baseUrl = given.option("--base-url"),
+            serviceUrl = serviceUrl,
+            serviceToken = serviceToken,
+            pleochroicAccount = given.flag("--pleochroic"),
             models = given.all("--model"),
             agent = given.option(AGENT)?.let { requireId(it, "what.agent_id") },
             admins = admins(given),
             language = given.option("--language"),
             zone = given.option("--zone"),
             apiBaseUrl = given.option("--api-base-url"),
+            searchBackend = given.option("--search-backend"),
+            fetchBackend = given.option("--fetch-backend"),
+            searxngUrl = given.option("--searxng-url"),
             force = given.flag("--force"),
         )
         CliAction.Act { init(it, options) }
@@ -281,6 +311,77 @@ internal val COMMANDS: List<CliCommand> = listOf(
     CliCommand(listOf("chats"), "[$JSON]", CHATS, flags = setOf(JSON)) { given ->
         noArguments(given, "chats")
         CliAction.Act { chats(it, given.flag(JSON)) }
+    },
+    CliCommand(
+        listOf("login"),
+        "pleochroic [$SERVICE_URL <url> $SERVICE_TOKEN <token>] [$DEVICE_NAME <name>]",
+        PLEOCHROIC,
+        options = setOf(SERVICE_URL, SERVICE_TOKEN, DEVICE_NAME),
+    ) { given ->
+        val service = given.single(Text("usage.login"))
+        if (service != "pleochroic") throw UsageException("usage.login_unknown", "service" to service)
+        val url = given.option(SERVICE_URL)
+        val token = given.option(SERVICE_TOKEN)
+        if ((url == null) != (token == null)) throw UsageException("usage.login_self_hosted")
+        CliAction.Act { pleochroicLogin(it, url, token, given.option(DEVICE_NAME)) }
+    },
+    CliCommand(listOf("logout"), "pleochroic", PLEOCHROIC) { given ->
+        val service = given.single(Text("usage.logout"))
+        if (service != "pleochroic") throw UsageException("usage.logout_unknown", "service" to service)
+        CliAction.Act(::pleochroicLogout)
+    },
+    CliCommand(listOf("account"), "[$JSON]", PLEOCHROIC, flags = setOf(JSON)) { given ->
+        noArguments(given, "account")
+        CliAction.Act { pleochroicAccountStatus(it, given.flag(JSON)) }
+    },
+    CliCommand(
+        listOf("sync", "enable"),
+        "[--prefer local|remote|merge]",
+        PLEOCHROIC,
+        options = setOf("--prefer"),
+    ) { given ->
+        noArguments(given, "sync enable")
+        val policy = given.option("--prefer")?.let(::requireSyncPolicy) ?: SyncPolicy.MERGE
+        CliAction.Act { syncEnable(it, policy) }
+    },
+    CliCommand(listOf("sync", "disable"), "", PLEOCHROIC) { given ->
+        noArguments(given, "sync disable")
+        CliAction.Act(::syncDisable)
+    },
+    CliCommand(
+        listOf("sync", "now"),
+        "[$JSON] [--dry-run]",
+        PLEOCHROIC,
+        flags = setOf(JSON, DRY_RUN),
+    ) { given ->
+        noArguments(given, "sync now")
+        CliAction.Act { syncNow(it, given.flag(JSON), given.flag(DRY_RUN)) }
+    },
+    CliCommand(listOf("sync", "status"), "[$JSON]", PLEOCHROIC, flags = setOf(JSON)) { given ->
+        noArguments(given, "sync status")
+        CliAction.Act { syncStatus(it, given.flag(JSON)) }
+    },
+    CliCommand(listOf("sync", "review"), "[$JSON]", PLEOCHROIC, flags = setOf(JSON)) { given ->
+        noArguments(given, "sync review")
+        CliAction.Act { syncReview(it, given.flag(JSON)) }
+    },
+    CliCommand(
+        listOf("sync", "apply"),
+        "[--all] [<key>...]",
+        PLEOCHROIC,
+        flags = setOf(ALL),
+    ) { given ->
+        val keys = pendingKeys(given)
+        CliAction.Act { syncApply(it, keys) }
+    },
+    CliCommand(
+        listOf("sync", "discard"),
+        "[--all] [<key>...]",
+        PLEOCHROIC,
+        flags = setOf(ALL),
+    ) { given ->
+        val keys = pendingKeys(given)
+        CliAction.Act { syncDiscard(it, keys) }
     },
     CliCommand(listOf("manual"), "[<topic>] [--search <words>]", HELP, options = setOf("--search")) { given ->
         val search = given.option("--search")

@@ -3,6 +3,7 @@ package org.unitedsoftware.alexandrite.app
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import org.unitedsoftware.alexandrite.account.pleochroic.PLEOCHROIC_API_BASE
 import java.io.IOException
 
 /**
@@ -25,26 +26,9 @@ internal class ProviderKind(
     val listsWindows: Boolean = true,
 )
 
-/** The providers in the order `init` offers them. */
+/** The providers in the order `init` offers them: alphabetically by [title], Pleochroic a peer of the rest (its
+ * own device login, in place of the others' key prompt, is `Setup.pleochroicModel`'s business, not this list's). */
 internal val PROVIDER_KINDS: List<ProviderKind> = listOf(
-    ProviderKind("deepseek", "deepseek", "https://api.deepseek.com", "/models", "DEEPSEEK_API_KEY", true),
-    ProviderKind(
-        "openrouter",
-        "openrouter",
-        "https://openrouter.ai/api/v1",
-        "/models",
-        "OPENROUTER_API_KEY",
-        true,
-        keyPath = "/key",
-    ),
-    ProviderKind(
-        "openai-compatible",
-        "compatible",
-        null,
-        "/models",
-        "OPENAI_COMPATIBLE_API_KEY",
-        false,
-    ),
     ProviderKind(
         "anthropic-compatible",
         "anthropic",
@@ -54,6 +38,7 @@ internal val PROVIDER_KINDS: List<ProviderKind> = listOf(
         false,
         anthropic = true,
     ),
+    ProviderKind("deepseek", "deepseek", "https://api.deepseek.com", "/models", "DEEPSEEK_API_KEY", true),
     ProviderKind(
         "lmstudio",
         "lmstudio",
@@ -70,6 +55,31 @@ internal val PROVIDER_KINDS: List<ProviderKind> = listOf(
         "/models",
         "OPENAI_API_KEY",
         false,
+    ),
+    ProviderKind(
+        "openai-compatible",
+        "compatible",
+        null,
+        "/models",
+        "OPENAI_COMPATIBLE_API_KEY",
+        false,
+    ),
+    ProviderKind(
+        "openrouter",
+        "openrouter",
+        "https://openrouter.ai/api/v1",
+        "/models",
+        "OPENROUTER_API_KEY",
+        true,
+        keyPath = "/key",
+    ),
+    ProviderKind(
+        "pleochroic",
+        PLEOCHROIC_ENDPOINT,
+        PLEOCHROIC_API_BASE,
+        "/models",
+        "PLEOCHROIC_API_KEY",
+        true,
     ),
 )
 
@@ -91,7 +101,10 @@ internal fun keyHeaders(kind: ProviderKind, key: String?): Map<String, String> =
 
 /** What a models request found. */
 internal sealed interface Listing {
-    class Models(val ids: List<String>) : Listing
+    /** [inputModalities] is the `architecture.input_modalities` an OpenRouter- or Pleochroic-shaped listing gives
+     * some models (`"text"`, `"image"`, `"audio"`, …), by model id; empty for a model the listing says nothing
+     * about, and for every model of a listing that gives none of them at all (most providers don't). */
+    class Models(val ids: List<String>, val inputModalities: Map<String, Set<String>> = emptyMap()) : Listing
 
     /** The endpoint refuses the key, or wants one. */
     class Refused(val reason: Text) : Listing
@@ -115,7 +128,16 @@ internal fun listModels(cli: Cli, kind: ProviderKind, base: String, key: String?
     } catch (e: IllegalArgumentException) {
         null
     } ?: return Listing.Unchecked(Text("models.no_list", "base" to base))
-    return Listing.Models(data.mapNotNull { (it as? JsonObject)?.get("id").text }.distinct())
+    val models = data.mapNotNull { it as? JsonObject }
+    val ids = models.mapNotNull { it["id"].text }.distinct()
+    val modalities = models.mapNotNull { model ->
+        val id = model["id"].text ?: return@mapNotNull null
+        val listed = ((model["architecture"] as? JsonObject)?.get("input_modalities") as? JsonArray)
+            ?.mapNotNull { it.text }?.toSet()
+            ?: return@mapNotNull null
+        id to listed
+    }.toMap()
+    return Listing.Models(ids, modalities)
 }
 
 private sealed interface Fetch {

@@ -12,6 +12,47 @@
   agent delegates a new run that goes on from the run's conversation, and ends with its report, which the agent reads
   in its next turn.
 - Breaking SDK change: `Submission` gains the subtype `ToRun`.
+- A Pleochroic account: `alexandrite login pleochroic` signs in by device login, or with `--service-url` and
+  `--service-token` for a self-hosted standalone-service; `alexandrite logout pleochroic` revokes the key at the
+  service and forgets it; `alexandrite account` shows the signed-in account's plan, scopes, credits and
+  entitlements (`GET /v1/service`). The key is kept in `secrets.env` like any other secret, never in the config
+  file, and signing in turns on `tools.web.searchBackend` / `fetchBackend` where the account is entitled for them.
+- A new `libraries/providers/pleochroic` model provider: the signed-in (or self-hosted) account's Chat Completions
+  API, with model listing and capabilities (context window, max output, image input, reasoning effort) read the way
+  OpenRouter's are, and thinking read from `reasoning_content`.
+- `web.search` and `web.fetch` gain a Pleochroic backend (`tools.web.searchBackend` / `fetchBackend` = `pleochroic`,
+  `tools.web.pleochroicApiBase` / `pleochroicApiKey`), which `alexandrite login pleochroic` turns on by itself where
+  the account is entitled; a `not_entitled`, `quota_exceeded` or `insufficient_credits` answer is told to the model
+  as a clear refusal rather than a generic failure.
+- Two-way sync of config documents (providers' endpoints, agents, mcp servers, the app's settings, instructions
+  files), secrets and skills with a Pleochroic account's or a self-hosted standalone-service's sync API: `alexandrite
+  sync enable [--prefer local|remote|merge]` (off until run), `sync disable`, `sync now [--dry-run]` and
+  `sync status`. A later change on both sides is a conflict, resolved by the chosen policy; an object document under
+  `merge` keeps the remote's keys the local side never touched. Skills sync to `skills/<name>` (shared) and
+  `agents/<id>/skills/<name>` (per agent) beside the config file. Sub-agent profiles are not synced yet.
+- Sync's threat model: the account's server may be compromised or impersonated, so a pull must never be able to
+  harm the local machine on its own. A pulled change to a skill (its files are executable content, so any create,
+  change or delete of one is held, never just a risky-looking one; pushing a local-only skill stays automatic), an
+  mcp server, a provider endpoint, an instructions file, an agent's permission, sandbox, tools, channels, workspace
+  or inline instructions, or a secret that would overwrite an existing local value, is held for the owner to
+  review rather than applied; so is overwriting or deleting a local item that was never synced before (including
+  on the first sync). A pulled `app.*` settings change is held too unless every changed field is on an explicit
+  allowlist of harmless preferences (`language`, `zone`); `plugins` (which extra plugins load) and
+  `updates.install` (installing a new release with nobody confirming it) are never on it, and neither is a
+  third-party plugin's own settings field, of which none is assumed harmless. `alexandrite sync review [--json]`
+  lists what is held, with why, a diff against current local content, and, for a skill, every file added, changed
+  or removed
+  (with its size and, for a small text file such as `SKILL.md`, a line diff); `sync apply [--all] [<key>...]`
+  applies it (re-deciding against current local content, so a local edit made since it was staged is not lost);
+  `sync discard [--all] [<key>...]` dismisses it without applying it. A pulled config document's secret reference
+  (`${secret:NAME}`) is only accepted for one of the account's own synced secrets; any other reference, including
+  the local `${env:NAME}` form, is never applied silently. Skill names, scopes, agent ids and file paths a pull
+  names are validated and resolved strictly under their own directory, never following a symlink or a traversal
+  segment, with caps on a skill's file count and total size.
+- The Pleochroic account's sign-in, status and two-way sync moved into a published library,
+  `libraries/accounts/pleochroic` (Maven coordinates `org.unitedsoftware.alexandrite:alexandrite-account-pleochroic`),
+  so a host other than `app` (the alx terminal front end, for one) can embed the same device login, self-hosted
+  sign-in and sync engine without reimplementing them.
 
 ## 1.0.0-alpha.2
 

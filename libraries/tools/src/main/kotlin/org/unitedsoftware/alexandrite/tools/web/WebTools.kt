@@ -18,7 +18,9 @@ import org.unitedsoftware.alexandrite.sdk.tool.ToolContext
 import org.unitedsoftware.alexandrite.sdk.tool.ToolDefinition
 import org.unitedsoftware.alexandrite.sdk.tool.ToolResult
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
+import org.unitedsoftware.alexandrite.sdk.web.FetchedPage
 import org.unitedsoftware.alexandrite.sdk.web.PageQuestion
+import org.unitedsoftware.alexandrite.sdk.web.WebFetchBackend
 import org.unitedsoftware.alexandrite.sdk.web.WebModels
 import org.unitedsoftware.alexandrite.sdk.web.WebQuery
 import org.unitedsoftware.alexandrite.sdk.web.WebSearchBackend
@@ -29,8 +31,21 @@ import kotlin.time.Duration.Companion.seconds
 
 @Singleton
 @Contribute(Tool::class)
-internal class FetchTool(private val config: WebConfig, private val fetch: WebPages, private val models: WebModels?) :
-    ReviewedTool {
+internal class FetchTool(
+    private val config: WebConfig,
+    private val fetch: WebPages,
+    private val models: WebModels?,
+    backends: List<WebFetchBackend>,
+) : ReviewedTool {
+    private val backends = backends.associateBy { it.id }
+
+    init {
+        require(this.backends.size == backends.size) { "Duplicate web fetch backend ids." }
+        backends.firstOrNull { !WebSearchBackend.ID.matches(it.id) }?.let {
+            throw IllegalArgumentException("${it.javaClass.name} has the malformed web fetch backend id '${it.id}'.")
+        }
+    }
+
     override val definition: ToolDefinition = ToolDefinition(
         name = "web.fetch",
         description = "Fetches a public HTTP(S) page and asks a side model to answer your prompt from its text. " +
@@ -60,11 +75,13 @@ internal class FetchTool(private val config: WebConfig, private val fetch: WebPa
         val models = requireNotNull(models) { "Web side model service is unavailable." }
         val url = arguments.text("url", 8192)
         val prompt = arguments.text("prompt", 16_000)
-        checkedHost(URI(url), config.normalizedPrivateHosts)
+        val id = config.fetchBackend
+        val backend = id?.let { requireNotNull(backends[it]) { "No web fetch backend configured for id '$it'." } }
+        if (backend == null) checkedHost(URI(url), config.normalizedPrivateHosts)
         context.untrusted("web.fetch reads untrusted web content")
         withTimeout(definition.timeout!!) {
-            val page = fetch.fetch(url)
-            val question = PageQuestion(context.turn, page.url.toString(), page.text, prompt)
+            val page = backend?.fetch(url) ?: fetch.fetch(url).let { FetchedPage(it.url.toString(), it.text) }
+            val question = PageQuestion(context.turn, page.url, page.text, prompt)
             ToolResult(sideModel { models.answer(question) })
         }
     }

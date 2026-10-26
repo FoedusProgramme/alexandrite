@@ -15,6 +15,9 @@ the local network anyway, an operator lists the host's exact name or IP literal,
 `tools.web.allowedPrivateHosts`, for example with
 `alexandrite config set tools.web.allowedPrivateHosts '["nas.local"]'` or config.set, and restarts Alexandrite.
 
+A plugin may contribute another fetch backend (such as Pleochroic's `/fetch`); `tools.web.fetchBackend` names which
+one to use instead of the direct fetch above (its own request and safety limits apply, not `allowedPrivateHosts`).
+
 ## web.search
 
 web.search returns titles, links and snippets for a `query` (`limit` 1 to 20, 5 by default). It uses the model

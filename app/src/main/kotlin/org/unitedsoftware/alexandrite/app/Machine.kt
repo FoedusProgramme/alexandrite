@@ -49,6 +49,9 @@ internal interface Machine {
     /** Answers a POST of the JSON [body] to [url], or throws [IOException] when it is unreachable. */
     fun post(url: String, body: String): Fetched
 
+    /** Answers a DELETE of [url] with [headers], or throws [IOException] when it is unreachable. */
+    fun delete(url: String, headers: Map<String, String> = emptyMap()): Fetched
+
     /** Where a GET of [url] redirects to, null when it does not, or throws [IOException] when it fails. */
     fun redirect(url: String): String?
 
@@ -129,6 +132,17 @@ internal object LocalMachine : Machine {
             throw IOException(e.message, e)
         }
         return send(request.build())
+    }
+
+    override fun delete(url: String, headers: Map<String, String>): Fetched {
+        val request = try {
+            val builder = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(20)).DELETE()
+            headers.forEach { (name, value) -> builder.header(name, value) }
+            builder.build()
+        } catch (e: IllegalArgumentException) {
+            throw IOException(e.message, e)
+        }
+        return send(request)
     }
 
     override fun redirect(url: String): String? {

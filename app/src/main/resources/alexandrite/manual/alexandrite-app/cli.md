@@ -81,6 +81,52 @@ A change goes through the running Alexandrite, which checks it as a start would 
 - `alexandrite unpair <chat>` — unpair a chat, such as `telegram:main:123456789`.
 - `alexandrite chats` — the paired chats and the agent that serves each.
 
+## Pleochroic account
+
+- `alexandrite login pleochroic [--device-name <name>]` — sign in by device login: it shows a code and a link,
+  waits until it is approved at the portal, then writes `providers.pleochroic.endpoints.default` (the key through
+  `secrets.env`, never the config file) and, where the account is entitled for them, `tools.web.searchBackend` and
+  `tools.web.fetchBackend`, unless an operator already chose another backend there.
+- `alexandrite login pleochroic --service-url <url> --service-token <token>` — use a self-hosted standalone-service
+  instead of the hosted portal: no device login, the URL and token are taken as given.
+- `alexandrite logout pleochroic` — revoke the key at the service and forget it locally.
+- `alexandrite account [--json]` — the signed-in account: its plan, scopes, credits and which services (sync,
+  search, fetch, browser, graph, embeddings, memoryModel) it is entitled for, from `GET /v1/service`.
+
+## Sync
+
+Two-way sync of providers' endpoints, agents, mcp servers, the `app` settings, instructions files, secrets and
+skills (shared and per agent) against the signed-in Pleochroic account or self-hosted standalone-service. Off until
+turned on; nothing is synced before `sync enable` runs.
+
+- `alexandrite sync enable [--prefer local|remote|merge]` — turn sync on. `--prefer` sets the policy a later
+  conflict (both sides changed the same item since the last sync) is resolved by: `local` or `remote` always keeps
+  that side's content; `merge` (the default) takes the union of an object document's keys, the locally-changed
+  value winning on a key both sides hold.
+- `alexandrite sync disable` — turn sync off; what was already synced is left as it is.
+- `alexandrite sync now [--json] [--dry-run]` — sync once: pulls the change feed since the last sync, pushes what
+  changed locally, and resolves anything that changed on both sides by the enabled policy. `--dry-run` reports what
+  would happen without writing or holding anything back.
+- `alexandrite sync status [--json]` — whether sync is on, its policy, how many items it tracks, and how many
+  pulled changes are held back for review.
+- `alexandrite sync review [--json]` — list the pulled changes held back for review (see below), each with why and
+  a diff against the current local content.
+- `alexandrite sync apply [--all] [<key>...]` — apply held-back changes, named (the keys `sync review` prints) or
+  all of them. Each is re-decided against current local content first, so a local edit made after it was held back
+  is not lost.
+- `alexandrite sync discard [--all] [<key>...]` — dismiss held-back changes without applying them; the same
+  version is not held back again, but a further change at the service still will be.
+
+A pull is held back for review rather than applied when it is one of: any create, change or delete of a skill
+(its files are executable content, so every one is held, not only a risky-looking one; pushing a local-only skill
+still syncs automatically) or an mcp server; a change to a provider endpoint; a change to an instructions file
+(`AGENTS.md`, `PERSONA.md`); a change to an agent's `permission`, `sandbox`, `tools`, `channels`, `workspace` or
+inline `instructions`; a settings value that is a URL or a secret reference; a secret that would overwrite a value
+already held locally; or overwriting or deleting a local item that was never synced before (including every local
+item on the very first sync). This is because the account's server could be compromised or impersonated, and a
+pull must never be able to run something new on this machine, change what an agent is allowed to do, where it
+reads or writes, or which secret a provider or tool uses, without the owner seeing it first.
+
 ## The manual
 
 - `alexandrite manual` — the pages of this manual; `alexandrite manual <topic>` prints one;

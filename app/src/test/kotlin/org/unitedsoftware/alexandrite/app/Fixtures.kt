@@ -170,7 +170,11 @@ internal class FakeMachine(
     val attached = mutableListOf<List<String>>()
     val fetched = mutableListOf<Pair<String, Map<String, String>>>()
     val posted = mutableListOf<Pair<String, String>>()
+    val deleted = mutableListOf<Pair<String, Map<String, String>>>()
     val web = mutableMapOf<String, Fetched>()
+
+    /** Answers of a POST to a URL in [web] order, one per call, the last one repeating once the queue runs out. */
+    val postQueue = mutableMapOf<String, ArrayDeque<Fetched>>()
 
     /** Where a GET of an address redirects to, by address. */
     val redirects = mutableMapOf<String, String?>()
@@ -213,7 +217,13 @@ internal class FakeMachine(
 
     override fun post(url: String, body: String): Fetched {
         posted += url to body
+        postQueue[url]?.let { queue -> if (queue.size > 1) return queue.removeFirst() else return queue.first() }
         return web[url] ?: if (live) LocalMachine.post(url, body) else throw IOException("Connection refused")
+    }
+
+    override fun delete(url: String, headers: Map<String, String>): Fetched {
+        deleted += url to headers
+        return web[url] ?: if (live) LocalMachine.delete(url, headers) else throw IOException("Connection refused")
     }
 
     override fun redirect(url: String): String? {
