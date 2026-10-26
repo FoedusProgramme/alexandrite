@@ -6,8 +6,11 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
+import org.unitedsoftware.alexandrite.channel.onebot.config.OneBotTransport
 import org.unitedsoftware.alexandrite.runtime.config.EnvReferences
 import java.io.IOException
+import java.net.URI
+import java.net.URISyntaxException
 
 /**
  * What a [ChannelSetup] needs from `init`'s shared run, so a channel plugin's setup stays decoupled from
@@ -29,8 +32,7 @@ internal interface ChannelSetupContext {
 
 /**
  * A channel plugin's own setup questions for `init`'s "channels" step: one object per channel built into this
- * binary. Today only [TelegramChannelSetup]; a second channel (OneBot/QQ, once its branch is merged) adds its own
- * object to [CHANNEL_SETUPS] below, with no other change to the step itself.
+ * binary, added to [CHANNEL_SETUPS] below, with no other change to the step itself.
  */
 internal interface ChannelSetup {
     /** Lowercase, as a provider's [ProviderKind.id] is. */
@@ -46,11 +48,271 @@ internal interface ChannelSetup {
     fun setUp(context: ChannelSetupContext): Int
 }
 
-/** Every channel plugin built into this binary, in the order `init`'s "channels" step offers them. */
-internal val CHANNEL_SETUPS: List<ChannelSetup> = listOf(TelegramChannelSetup)
+/** Every channel plugin built into this binary, in the order `init`'s "channels" step offers them, by [id]. */
+internal val CHANNEL_SETUPS: List<ChannelSetup> = listOf(OneBotChannelSetup, QqBotChannelSetup, TelegramChannelSetup)
 
-/** The Telegram instance `init` sets up. */
+/** The instance `init` sets up, of whichever channel. */
 internal const val CHANNEL_INSTANCE = "main"
+
+/** Where the OneBot plugin's instances sit in the config file. */
+internal const val ONEBOT_INSTANCES = "channels.onebot.instances"
+
+/** Where the QQ bot plugin's instances sit in the config file. */
+internal const val QQBOT_INSTANCES = "channels.qqbot.instances"
+
+/** The variable `init` takes a OneBot endpoint from. */
+internal const val ONEBOT_ENDPOINT_VARIABLE = "ALEXANDRITE_ONEBOT_ENDPOINT"
+
+/** The variable `init` takes a OneBot access token from, non-interactively. */
+internal const val ONEBOT_ACCESS_TOKEN_VARIABLE = "ALEXANDRITE_ONEBOT_ACCESS_TOKEN"
+
+/** The variable `init` takes a OneBot instance's admins from, non-interactively. */
+internal const val ONEBOT_ADMIN_VARIABLE = "ALEXANDRITE_ONEBOT_ADMIN"
+
+/** The variable `init` takes a QQ bot's AppID from. */
+internal const val QQBOT_APP_ID_VARIABLE = "ALEXANDRITE_QQBOT_APPID"
+
+/** The variable `init` takes a QQ bot's AppSecret from. */
+internal const val QQBOT_APP_SECRET_VARIABLE = "ALEXANDRITE_QQBOT_APPSECRET"
+
+/** The variable `init` takes a QQ bot instance's admins from, non-interactively. */
+internal const val QQBOT_ADMIN_VARIABLE = "ALEXANDRITE_QQBOT_ADMIN"
+
+/**
+ * OneBot's own setup questions: the endpoint of the implementation to connect to, an optional access token, then
+ * the admins that operate it. Unlike [TelegramChannelSetup], nothing here is checked against a live implementation
+ * or claimed by a message sent back: an admin is simply named, by the id their messages carry.
+ */
+internal object OneBotChannelSetup : ChannelSetup {
+    override val id: String = "onebot"
+
+    override fun title(cli: Cli): String = cli.t("channel.onebot.title")
+
+    override fun hasNonInteractiveInput(cli: Cli): Boolean =
+        cli.environment[ONEBOT_ENDPOINT_VARIABLE]?.isNotEmpty() == true
+
+    override fun setUp(context: ChannelSetupContext): Int {
+        val cli = context.cli
+        val ui = cli.ui
+        val instance = CHANNEL_INSTANCE
+        val path = "$ONEBOT_INSTANCES.$instance"
+        val existing = context.config.at(path) as? JsonObject
+        val endpoint: String
+        val transport: OneBotTransport
+        if (existing != null) {
+            val found = existing["endpoint"].text?.let { it to oneBotTransport(it) }
+            endpoint = found?.first ?: return cli.fail(cli.t("init.onebot.receiver_only"))
+            transport = found.second ?: return cli.fail(cli.t("init.onebot.receiver_only"))
+            ui.good(cli.t("init.onebot.found", "endpoint" to endpoint))
+        } else {
+            val given = cli.environment[ONEBOT_ENDPOINT_VARIABLE]
+                ?.takeIf { it.isNotEmpty() }
+                ?.takeIf { oneBotTransport(it) != null }
+            if (!context.interactive && given == null) {
+                ui.warn(cli.t("init.onebot.no_endpoint", "variable" to ONEBOT_ENDPOINT_VARIABLE))
+                return ExitCode.OK
+            }
+            if (context.interactive && given == null) ui.say(cli.t("init.onebot.about"))
+            val typed = given ?: ui.ask(
+                cli.t("init.onebot.endpoint_prompt"),
+                problem = { text -> cli.t("init.onebot.bad_endpoint").takeIf { oneBotTransport(text) == null } },
+            ) ?: return cli.fail(cli.t("init.onebot.no_endpoint_given"))
+            transport = oneBotTransport(typed) ?: return cli.fail(cli.t("init.onebot.bad_endpoint"))
+            endpoint = typed
+        }
+        val accessToken = when {
+            existing?.get("accessToken") != null -> null
+            context.interactive -> ui.secret(cli.t("init.onebot.token_prompt"))?.trim()?.ifEmpty { null }
+            else -> cli.environment[ONEBOT_ACCESS_TOKEN_VARIABLE]?.takeIf { it.isNotEmpty() }
+        }
+        context.change(ConfigChangeView("$path.transport", JsonPrimitive(transport.name.lowercase())))
+        context.change(ConfigChangeView("$path.endpoint", JsonPrimitive(endpoint)))
+        accessToken?.let {
+            val variable = oneBotTokenVariable(instance)
+            context.secret(variable, it)
+            context.change(ConfigChangeView("$path.accessToken", JsonPrimitive(EnvReferences.of(variable))))
+        }
+        context.summarize("init.summary.bot", endpoint)
+        val agentServes = context.agentConfig?.objectAt("channels")?.get("onebot:$instance") != null
+        val servesChannel = when {
+            agentServes -> true
+
+            context.hasModel -> {
+                context.change(
+                    ConfigChangeView("$AGENTS.${context.agent}.channels.onebot:$instance", JsonObject(emptyMap())),
+                )
+                true
+            }
+
+            else -> false
+        }
+        if (servesChannel) {
+            ui.good(cli.t("init.onebot.chosen", "endpoint" to endpoint, "agent" to context.agent))
+        } else {
+            ui.warn(cli.t("init.onebot.no_model", "agent" to context.agent))
+        }
+        val admins = existing?.get("admins")?.let { (it as? JsonArray)?.mapNotNull { admin -> admin.text } }
+            ?: oneBotAdmins(context)
+        if (admins.isEmpty()) {
+            ui.warn(cli.t("init.onebot.no_admin"))
+            return ExitCode.OK
+        }
+        context.change(ConfigChangeView("$path.admins", JsonArray(admins.map(::JsonPrimitive))))
+        if (existing?.get("allowedChats") == null) {
+            context.change(
+                ConfigChangeView("$path.allowedChats", JsonArray(admins.map { JsonPrimitive("private:$it") })),
+            )
+        }
+        context.summarize("init.summary.admin", admins.joinToString())
+        if (servesChannel) {
+            context.change(
+                ConfigChangeView(
+                    "$AGENTS.${context.agent}.channels.onebot:$instance.home",
+                    JsonPrimitive("private:${admins.first()}"),
+                ),
+            )
+        }
+        ui.good(cli.t("init.admin.chosen", "admins" to admins.joinToString(), "agent" to context.agent))
+        return ExitCode.OK
+    }
+
+    /** The admins typed at the prompt, or taken from [ONEBOT_ADMIN_VARIABLE] non-interactively; empty for none. */
+    private fun oneBotAdmins(context: ChannelSetupContext): List<String> {
+        val cli = context.cli
+        val typed = if (context.interactive) {
+            cli.ui.ask(
+                cli.t("init.onebot.admin_prompt"),
+                default = "",
+                problem = { text ->
+                    cli.t("init.onebot.bad_admin").takeIf { text.isNotEmpty() && !isOneBotAdmin(text) }
+                },
+            )
+        } else {
+            cli.environment[ONEBOT_ADMIN_VARIABLE]
+        }
+        return typed.orEmpty().split(',').map(String::trim).filter(String::isNotEmpty).distinct()
+    }
+
+    private fun isOneBotAdmin(text: String): Boolean =
+        text.split(',').map(String::trim).filter(String::isNotEmpty).all { it.all(Char::isDigit) }
+}
+
+/** The transport an OneBot [endpoint] names, by its scheme; null when it names none this wizard supports. */
+private fun oneBotTransport(endpoint: String): OneBotTransport? {
+    val scheme = try {
+        URI(endpoint).scheme
+    } catch (e: URISyntaxException) {
+        null
+    } ?: return null
+    return when (scheme.lowercase()) {
+        "ws", "wss" -> OneBotTransport.WS
+        "http", "https" -> OneBotTransport.HTTP
+        else -> null
+    }
+}
+
+private fun oneBotTokenVariable(instance: String): String =
+    "ALEXANDRITE_ONEBOT_${instance.uppercase().replace('-', '_')}_TOKEN"
+
+/**
+ * The QQ open platform's own setup questions: a bot's AppID and AppSecret, then the admins that operate it. Like
+ * [OneBotChannelSetup] and unlike [TelegramChannelSetup], nothing here is checked against the platform or claimed
+ * by a message sent back.
+ */
+internal object QqBotChannelSetup : ChannelSetup {
+    override val id: String = "qqbot"
+
+    override fun title(cli: Cli): String = cli.t("channel.qqbot.title")
+
+    override fun hasNonInteractiveInput(cli: Cli): Boolean =
+        cli.environment[QQBOT_APP_ID_VARIABLE]?.isNotEmpty() == true &&
+            cli.environment[QQBOT_APP_SECRET_VARIABLE]?.isNotEmpty() == true
+
+    override fun setUp(context: ChannelSetupContext): Int {
+        val cli = context.cli
+        val ui = cli.ui
+        val instance = CHANNEL_INSTANCE
+        val path = "$QQBOT_INSTANCES.$instance"
+        val existing = context.config.at(path) as? JsonObject
+        val appId: String
+        val appSecret: String?
+        if (existing != null) {
+            appId = existing["appId"].text ?: return cli.fail(cli.t("init.qqbot.corrupt"))
+            appSecret = null
+            ui.good(cli.t("init.qqbot.found", "appId" to appId))
+        } else {
+            val givenId = cli.environment[QQBOT_APP_ID_VARIABLE]?.takeIf { it.isNotEmpty() }
+            val givenSecret = cli.environment[QQBOT_APP_SECRET_VARIABLE]?.takeIf { it.isNotEmpty() }
+            if (!context.interactive && (givenId == null || givenSecret == null)) {
+                ui.warn(cli.t("init.qqbot.no_app_id", "variable" to QQBOT_APP_ID_VARIABLE))
+                return ExitCode.OK
+            }
+            if (context.interactive && givenId == null) ui.say(cli.t("init.qqbot.about"))
+            appId = givenId ?: ui.ask(cli.t("init.qqbot.app_id_prompt")) ?: return cli.fail(
+                cli.t("init.qqbot.no_app_id_given"),
+            )
+            appSecret = givenSecret ?: ui.secret(cli.t("init.qqbot.app_secret_prompt"))?.trim()?.ifEmpty { null }
+                ?: return cli.fail(cli.t("init.qqbot.no_app_secret_given"))
+        }
+        context.change(ConfigChangeView("$path.appId", JsonPrimitive(appId)))
+        appSecret?.let {
+            val variable = qqBotSecretVariable(instance)
+            context.secret(variable, it)
+            context.change(ConfigChangeView("$path.appSecret", JsonPrimitive(EnvReferences.of(variable))))
+        }
+        context.summarize("init.summary.bot", appId)
+        val agentServes = context.agentConfig?.objectAt("channels")?.get("qqbot:$instance") != null
+        val servesChannel = when {
+            agentServes -> true
+
+            context.hasModel -> {
+                context.change(
+                    ConfigChangeView("$AGENTS.${context.agent}.channels.qqbot:$instance", JsonObject(emptyMap())),
+                )
+                true
+            }
+
+            else -> false
+        }
+        if (servesChannel) {
+            ui.good(cli.t("init.qqbot.chosen", "appId" to appId, "agent" to context.agent))
+        } else {
+            ui.warn(cli.t("init.qqbot.no_model", "agent" to context.agent))
+        }
+        val admins = existing?.get("admins")?.let { (it as? JsonArray)?.mapNotNull { admin -> admin.text } }
+            ?: qqBotAdmins(context)
+        if (admins.isEmpty()) {
+            ui.warn(cli.t("init.qqbot.no_admin"))
+            return ExitCode.OK
+        }
+        context.change(ConfigChangeView("$path.admins", JsonArray(admins.map(::JsonPrimitive))))
+        context.summarize("init.summary.admin", admins.joinToString())
+        if (servesChannel) {
+            context.change(
+                ConfigChangeView(
+                    "$AGENTS.${context.agent}.channels.qqbot:$instance.home",
+                    JsonPrimitive("private:${admins.first()}"),
+                ),
+            )
+        }
+        ui.good(cli.t("init.admin.chosen", "admins" to admins.joinToString(), "agent" to context.agent))
+        return ExitCode.OK
+    }
+
+    /** The admins typed at the prompt, or taken from [QQBOT_ADMIN_VARIABLE] non-interactively; empty for none. */
+    private fun qqBotAdmins(context: ChannelSetupContext): List<String> {
+        val cli = context.cli
+        val typed = if (context.interactive) {
+            cli.ui.ask(cli.t("init.qqbot.admin_prompt"), default = "")
+        } else {
+            cli.environment[QQBOT_ADMIN_VARIABLE]
+        }
+        return typed.orEmpty().split(',').map(String::trim).filter(String::isNotEmpty).distinct()
+    }
+}
+
+private fun qqBotSecretVariable(instance: String): String =
+    "ALEXANDRITE_QQBOT_${instance.uppercase().replace('-', '_')}_APPSECRET"
 
 /** Telegram's own setup questions: a bot token (from the environment or typed, masked), then its admin, claimed
  * by a one-time code sent from the admin's own Telegram account. */

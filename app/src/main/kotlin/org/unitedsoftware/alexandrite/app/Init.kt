@@ -446,11 +446,12 @@ private class Setup(override val cli: Cli, override val options: InitOptions) : 
 
     // Channels.
 
-    /** Every channel plugin built into this binary whose questions this run asks: every one of [CHANNEL_SETUPS]
-     * when there is more than one (picked from, so more than one may be set up in the same run), the only one
-     * outright when there is exactly one — today always Telegram, so this never yet asks "which channel". */
+    /** Every channel plugin built into this binary whose questions this run asks: every one with usable
+     * non-interactive input when the run is not interactive (nothing to pick from at a terminal), every one of
+     * [CHANNEL_SETUPS] outright when there is exactly one, else the ones picked from all of them. */
     private fun chooseChannels(): List<ChannelSetup> {
         if (CHANNEL_SETUPS.size <= 1) return CHANNEL_SETUPS
+        if (!interactive) return CHANNEL_SETUPS.filter { it.hasNonInteractiveInput(cli) }
         val picked = ui.pick(
             prompt("init.channels.pick", "init.channels.pick_title"),
             CHANNEL_SETUPS.map { it.title(cli) },
