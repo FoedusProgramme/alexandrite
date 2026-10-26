@@ -2,6 +2,8 @@ package org.unitedsoftware.alexandrite.channel.telegram
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.unitedsoftware.alexandrite.channel.common.approval.MAX_APPROVAL_MINUTES
+import org.unitedsoftware.alexandrite.channel.common.approval.isApprovalMinutes
 import org.unitedsoftware.alexandrite.channel.telegram.reply.StreamingMode
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.config.ConfigSection
@@ -58,7 +60,9 @@ internal class TelegramInstanceConfig(
         require(isHttpUrl(apiBaseUrl)) {
             "apiBaseUrl must be an http or https URL without user info, query or fragment"
         }
-        require(approvalMinutes in 1..MAX_APPROVAL_MINUTES) { "approvalMinutes must lie between 1 and 1440" }
+        require(isApprovalMinutes(approvalMinutes.toLong())) {
+            "approvalMinutes must lie between 1 and $MAX_APPROVAL_MINUTES"
+        }
         require(replayWindowMinutes in 0..MAX_REPLAY_MINUTES) { "replayWindowMinutes must lie between 0 and 10080" }
         for (name in commands.keys) {
             require(COMMAND.matches(name)) {
@@ -129,8 +133,6 @@ private val TOKEN = Regex("[0-9]+:[A-Za-z0-9_-]{30,}")
 private val COMMAND = Regex("[a-z0-9_]{1,32}")
 
 private const val MAX_INTERVAL = 60_000L
-
-private const val MAX_APPROVAL_MINUTES = 1440
 
 private const val MAX_REPLAY_MINUTES = 10_080
 

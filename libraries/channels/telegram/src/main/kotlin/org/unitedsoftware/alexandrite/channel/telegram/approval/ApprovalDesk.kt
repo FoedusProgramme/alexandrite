@@ -8,6 +8,8 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
+import org.unitedsoftware.alexandrite.channel.common.approval.alwaysRulesText
+import org.unitedsoftware.alexandrite.channel.common.approval.decideApproval
 import org.unitedsoftware.alexandrite.channel.telegram.TelegramInstanceConfig
 import org.unitedsoftware.alexandrite.channel.telegram.api.AnswerCallbackQuery
 import org.unitedsoftware.alexandrite.channel.telegram.api.BotApi
@@ -483,11 +485,14 @@ internal class ApprovalDesk(
         is Question.Approval -> {
             val request = question.request
             when (action) {
-                DENY -> ApprovalAnswer.Denied(presser)
+                // The presser is already known an operator by the time answerOf() runs, so decideApproval() never
+                // refuses these; it only spares this file the "always grants nothing with no rule to grant" rule
+                // channel-common, onebot and qqbot now share.
+                DENY -> decideApproval(request, presser, allow = false, always = false)
 
-                ALLOW -> ApprovalAnswer.Allowed(presser)
+                ALLOW -> decideApproval(request, presser, allow = true, always = false)
 
-                ALWAYS -> ApprovalAnswer.Allowed(presser, always = request.alwaysRules.isNotEmpty())
+                ALWAYS -> decideApproval(request, presser, allow = true, always = true)
 
                 TRUST -> ApprovalAnswer.Allowed(presser, trust = ApprovalTrust.ROOTS).takeIf { trustable(request) }
 
@@ -807,7 +812,7 @@ private fun kindWord(kind: TrustRootKind): String = when (kind) {
 private fun listed(roots: List<TrustRoot>): String = roots.joinToString(", ") { ending(it.name) }
 
 /** The rules that allowing [request] for good grants, as one text. */
-private fun rules(request: ApprovalRequest): String = request.alwaysRules.joinToString(", ") { it.display }
+private fun rules(request: ApprovalRequest): String = alwaysRulesText(request.alwaysRules)
 
 /** [segments] one per line under a blank one, each after how it follows the one before it, none for no segments. */
 private fun steps(segments: List<CommandSegment>): String = segments.withIndex().joinToString("") { (index, segment) ->
