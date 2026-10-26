@@ -1,58 +1,41 @@
 # Changelog
 
-## Unreleased
+## 1.0.0-alpha.3
 
-- A channel can give each sub-agent run a reply of its own (`ChannelCapabilities.runReplies`), which shows the run's
-  words, thoughts, tool calls and report apart from the turn that delegated it.
-- A channel is told what each sub-agent run was asked to do (`DelegatedRun.task`).
-- A person can write to a running sub-agent run with `Submission.ToRun`; the run takes the message in after its
-  current calls.
-- When a person stops a run, the turn above is told who stopped it and what the run wrote last.
-- An operator can resume or fork a sub-agent run that ended (`RunWay.RESUME`, `RunWay.FORK`): a turn of the chat's
-  agent delegates a new run that goes on from the run's conversation, and ends with its report, which the agent reads
-  in its next turn.
-- Breaking SDK change: `Submission` gains the subtype `ToRun`.
-- A Pleochroic account: `alexandrite login pleochroic` signs in by device login, or with `--service-url` and
-  `--service-token` for a self-hosted standalone-service; `alexandrite logout pleochroic` revokes the key at the
-  service and forgets it; `alexandrite account` shows the signed-in account's plan, scopes, credits and
-  entitlements (`GET /v1/service`). The key is kept in `secrets.env` like any other secret, never in the config
-  file, and signing in turns on `tools.web.searchBackend` / `fetchBackend` where the account is entitled for them.
-- A new `libraries/providers/pleochroic` model provider: the signed-in (or self-hosted) account's Chat Completions
-  API, with model listing and capabilities (context window, max output, image input, reasoning effort) read the way
-  OpenRouter's are, and thinking read from `reasoning_content`.
-- `web.search` and `web.fetch` gain a Pleochroic backend (`tools.web.searchBackend` / `fetchBackend` = `pleochroic`,
-  `tools.web.pleochroicApiBase` / `pleochroicApiKey`), which `alexandrite login pleochroic` turns on by itself where
-  the account is entitled; a `not_entitled`, `quota_exceeded` or `insufficient_credits` answer is told to the model
-  as a clear refusal rather than a generic failure.
-- Two-way sync of config documents (providers' endpoints, agents, mcp servers, the app's settings, instructions
-  files), secrets and skills with a Pleochroic account's or a self-hosted standalone-service's sync API: `alexandrite
-  sync enable [--prefer local|remote|merge]` (off until run), `sync disable`, `sync now [--dry-run]` and
-  `sync status`. A later change on both sides is a conflict, resolved by the chosen policy; an object document under
-  `merge` keeps the remote's keys the local side never touched. Skills sync to `skills/<name>` (shared) and
-  `agents/<id>/skills/<name>` (per agent) beside the config file. Sub-agent profiles are not synced yet.
-- Sync's threat model: the account's server may be compromised or impersonated, so a pull must never be able to
-  harm the local machine on its own. A pulled change to a skill (its files are executable content, so any create,
-  change or delete of one is held, never just a risky-looking one; pushing a local-only skill stays automatic), an
-  mcp server, a provider endpoint, an instructions file, an agent's permission, sandbox, tools, channels, workspace
-  or inline instructions, or a secret that would overwrite an existing local value, is held for the owner to
-  review rather than applied; so is overwriting or deleting a local item that was never synced before (including
-  on the first sync). A pulled `app.*` settings change is held too unless every changed field is on an explicit
-  allowlist of harmless preferences (`language`, `zone`); `plugins` (which extra plugins load) and
-  `updates.install` (installing a new release with nobody confirming it) are never on it, and neither is a
-  third-party plugin's own settings field, of which none is assumed harmless. `alexandrite sync review [--json]`
-  lists what is held, with why, a diff against current local content, and, for a skill, every file added, changed
-  or removed
-  (with its size and, for a small text file such as `SKILL.md`, a line diff); `sync apply [--all] [<key>...]`
-  applies it (re-deciding against current local content, so a local edit made since it was staged is not lost);
-  `sync discard [--all] [<key>...]` dismisses it without applying it. A pulled config document's secret reference
-  (`${secret:NAME}`) is only accepted for one of the account's own synced secrets; any other reference, including
-  the local `${env:NAME}` form, is never applied silently. Skill names, scopes, agent ids and file paths a pull
-  names are validated and resolved strictly under their own directory, never following a symlink or a traversal
-  segment, with caps on a skill's file count and total size.
-- The Pleochroic account's sign-in, status and two-way sync moved into a published library,
-  `libraries/accounts/pleochroic` (Maven coordinates `org.unitedsoftware.alexandrite:alexandrite-account-pleochroic`),
-  so a host other than `app` (the alx terminal front end, for one) can embed the same device login, self-hosted
-  sign-in and sync engine without reimplementing them.
+- `alexandrite init` walks through ten steps: language and time zone, model (offering side models for images, audio
+  and video when the chosen model takes none), channels, Pleochroic account, importing skills and MCP servers,
+  web search and fetch, browser automation, writing the config, the background service, and a summary.
+- Init imports skills and MCP servers from Hermes, Claude Code, Codex and OpenClaw, and from a Pleochroic account.
+  Secrets they carry move to `secrets.env`.
+- New channels: OneBot v11 and the official QQ bot platform.
+- In a QQ group, an operator is recognized only after linking their group id with `/link` in a paired private chat;
+  the group's own owner and admin roles grant nothing.
+- An approval lists every rule that allowing it for good grants.
+- A guest's approval is sent only to the operators' private chats.
+- `/approve` and `/deny` work in any case, and an approval waits between 1 and 1440 minutes.
+- A Pleochroic account: `alexandrite login pleochroic` signs in with a device code, or with `--service-url` and
+  `--service-token` to a self-hosted [standalone-service](https://github.com/Pleochroic-Ltd/standalone-service);
+  `alexandrite logout pleochroic` and `alexandrite account`.
+- A Pleochroic model provider, and Pleochroic as a backend of `web.search` and `web.fetch`.
+- SearXNG and DuckDuckGo backends for `web.search`.
+- Two-way sync of config, secrets and skills with a Pleochroic account: `alexandrite sync enable`, `disable`, `now`
+  and `status`. A pulled change that could harm this machine, such as any skill change, an MCP server, a provider
+  endpoint or an agent's permissions, is held until `alexandrite sync review` and `sync apply`.
+- Sub-agent runs: a channel can show each run apart from the turn that delegated it, a person can write to a running
+  run, and an operator can resume or fork a run that ended.
+- Side models are picked by role, and a turn's images, audio and video go to the model that takes them.
+- `fs.read` returns images.
+- A heartbeat's gated calls are asked about in its agent's channel.
+- The judge reads the operators' last messages before the turn.
+- `allowedit` runs file writes unasked only where the turn's writes may land.
+- `secrets.env` is written owner-only from its first byte.
+- `alexandrite uninstall` also removes the config backup.
+- Every command loads plugins as a start does, and reports those that cannot load.
+- Breaking SDK changes: `Submission` gains `ToRun`; values the host makes are internal; closed kinds Alexandrite may
+  extend are open.
+- New libraries: `alexandrite-account-pleochroic` (sign-in and sync), `alexandrite-discovery` (finding other tools'
+  skills and MCP servers), `alexandrite-channel-onebot` and `alexandrite-channel-qqbot`; `WebBrowserBackend` in the
+  plugin SDK.
 
 ## 1.0.0-alpha.2
 
