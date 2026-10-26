@@ -2,6 +2,7 @@ package org.unitedsoftware.alexandrite.app
 
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.app.TelegramApp.Companion.ADA
+import org.unitedsoftware.alexandrite.app.TelegramApp.Companion.BOB
 import org.unitedsoftware.alexandrite.app.TelegramApp.Companion.BOT_MENTION
 import org.unitedsoftware.alexandrite.app.TelegramApp.Companion.FAST_MODEL
 import org.unitedsoftware.alexandrite.app.TelegramApp.Companion.GROUP
@@ -48,23 +49,24 @@ class TelegramToolsTest {
         ),
     )
 
-    private fun builder(mode: String? = null) = app.builder(directory).config(
-        """
-        {
-          "previewIntervalMillis": 0,
-          "agents": {
-            "coder": {
-              "name": "Coder",
-              "model": "scripted/test-model",
-              "channels": {"telegram:work": {}},
-              "permission": {${mode?.let { "\"mode\": \"$it\"" }.orEmpty()}},
-              "roles": {"judge": "scripted/$FAST_MODEL"},
-              "tools": {"forGuests": ["telegram.react", "telegram.sticker", "telegram.pin"]}
+    private fun builder(mode: String? = null, trusted: List<Long> = emptyList()) =
+        app.builder(directory, trusted = trusted).config(
+            """
+            {
+              "previewIntervalMillis": 0,
+              "agents": {
+                "coder": {
+                  "name": "Coder",
+                  "model": "scripted/test-model",
+                  "channels": {"telegram:work": {}},
+                  "permission": {${mode?.let { "\"mode\": \"$it\"" }.orEmpty()}},
+                  "roles": {"judge": "scripted/$FAST_MODEL"},
+                  "tools": {"forGuests": ["telegram.react", "telegram.sticker", "telegram.pin"]}
+                }
+              }
             }
-          }
-        }
-        """.trimIndent(),
-    )
+            """.trimIndent(),
+        )
 
     /** Queues, for each case, its call and then the turn's answer `Done <tool>.`. */
     private fun scripted() {
@@ -165,7 +167,13 @@ class TelegramToolsTest {
                 .reply(turn) { text("Done $user.") }
         }
 
-        app.run(builder()) {
+        // Bob is a channel-trusted member here: this test is only about react/sticker needing no approval, which
+        // TaintOffers' own trust offer (fired by a message of someone the channel does not trust, regardless of
+        // what it then calls) is not part of. Untrusted, Bob's message would still race it in: the offer is sent
+        // by a coroutine the turn launches and does not join (so the turn, and idle(), can finish without it),
+        // leaving whether it has been sent by the time this test reads botMessages() a matter of scheduling luck
+        // (TelegramTaintQuestionTest exercises that offer deterministically, by waiting for it, elsewhere).
+        app.run(builder(trusted = listOf(BOB))) {
             app.send(app.ada, app.group, "$BOT_MENTION react")
             app.message(app.group, "Done 1.")
             idle()
