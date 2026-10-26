@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
 import org.unitedsoftware.alexandrite.channel.common.approval.alwaysRulesText
+import org.unitedsoftware.alexandrite.channel.common.approval.approvalRecipients
 import org.unitedsoftware.alexandrite.channel.common.approval.decideApproval
 import org.unitedsoftware.alexandrite.channel.telegram.TelegramInstanceConfig
 import org.unitedsoftware.alexandrite.channel.telegram.api.AnswerCallbackQuery
@@ -141,14 +142,8 @@ internal class ApprovalDesk(
     }
 
     /** The chats a question of [turn] is shown in: the chat of an admin's own turn, else the admins' direct chats. */
-    private fun recipients(turn: TurnInfo): List<ChatAddress> {
-        val chats = if (turn.actorIsOperator) {
-            listOf(turn.chat)
-        } else {
-            config.adminUserIds.distinct().map { ChatAddress(instance.id, "$it") }
-        }
-        return chats.filter(gate::isPaired)
-    }
+    private fun recipients(turn: TurnInfo): List<ChatAddress> =
+        approvalRecipients(turn, config.adminUserIds, gate::isPaired) { ChatAddress(instance.id, "$it") }
 
     /** [question] as the messages that show it in [language], null when its head alone takes more than one. */
     private fun render(question: Question, language: LanguageTag?): Rendered? = when (question) {

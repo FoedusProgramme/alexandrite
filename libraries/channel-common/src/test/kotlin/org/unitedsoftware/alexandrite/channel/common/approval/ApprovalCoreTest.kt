@@ -269,4 +269,48 @@ class ApprovalCoreTest {
         assertFalse(isApprovalMinutes(MIN_APPROVAL_MINUTES - 1))
         assertFalse(isApprovalMinutes(MAX_APPROVAL_MINUTES + 1))
     }
+
+    // approvalRecipients.
+
+    @Test
+    fun `an operator's own turn is shown only in that turn's own chat`() {
+        val chat = testChat("op-chat")
+        val turn = testTurn(chat = chat) { actor(testUser(isOperator = true)) }
+
+        val recipients = approvalRecipients(turn, listOf("a", "b"), isPaired = { true }) { testChat("private-$it") }
+
+        assertEquals(listOf(chat), recipients)
+    }
+
+    @Test
+    fun `a member's turn is shown in every paired admin's own chat, never the turn's own chat`() {
+        val turn = testTurn(chat = testChat("group-chat"))
+
+        val recipients = approvalRecipients(turn, listOf("a", "b"), isPaired = { true }) { testChat("private-$it") }
+
+        assertEquals(listOf(testChat("private-a"), testChat("private-b")), recipients)
+    }
+
+    @Test
+    fun `a member's turn never reaches an admin whose own chat is not paired`() {
+        val turn = testTurn(chat = testChat("group-chat"))
+        val pairedOnly = testChat("private-a")
+
+        val recipients = approvalRecipients(turn, listOf("a", "b"), isPaired = { it == pairedOnly }) {
+            testChat("private-$it")
+        }
+
+        assertEquals(listOf(pairedOnly), recipients)
+    }
+
+    @Test
+    fun `a member's turn names a duplicate admin id only once`() {
+        val turn = testTurn(chat = testChat("group-chat"))
+
+        val recipients = approvalRecipients(turn, listOf("a", "a", "b"), isPaired = { true }) {
+            testChat("private-$it")
+        }
+
+        assertEquals(listOf(testChat("private-a"), testChat("private-b")), recipients)
+    }
 }

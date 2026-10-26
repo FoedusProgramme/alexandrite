@@ -13,6 +13,7 @@ import org.unitedsoftware.alexandrite.channel.common.approval.ApprovalResolution
 import org.unitedsoftware.alexandrite.channel.common.approval.PendingApproval
 import org.unitedsoftware.alexandrite.channel.common.approval.alwaysRulesText
 import org.unitedsoftware.alexandrite.channel.common.approval.answerWords
+import org.unitedsoftware.alexandrite.channel.common.approval.approvalRecipients
 import org.unitedsoftware.alexandrite.channel.common.approval.carrying
 import org.unitedsoftware.alexandrite.channel.common.approval.decideApproval
 import org.unitedsoftware.alexandrite.channel.common.approval.resolveApproval
@@ -164,16 +165,11 @@ internal class OneBotApprovals(
      * The pairing gate is not bypassed for an approval: a chat that never paired is offered its code when somebody
      * addresses the bot in it, and a request is not sent where it could not be answered.
      */
-    private fun recipients(request: ApprovalRequest): List<ChatAddress> {
-        val turn = request.turn
-        return if (turn.actorIsOperator) {
-            listOf(turn.chat)
-        } else {
-            config.admins.distinct()
-                .map { OneBotChats.privateChat(instance.id, UserId(it)) }
-                .filter { gate.isPaired(it) }
-        }
-    }
+    private fun recipients(request: ApprovalRequest): List<ChatAddress> = approvalRecipients(
+        request.turn,
+        config.admins,
+        gate::isPaired,
+    ) { OneBotChats.privateChat(instance.id, UserId(it)) }
 
     /** Sends the message with [waiting]'s request to [chat], and says what went wrong when it was not shown. */
     private suspend fun post(waiting: Pending, chat: ChatAddress, language: LanguageTag?): String? {

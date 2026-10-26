@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory
 import org.unitedsoftware.alexandrite.channel.common.approval.ApprovalEnding
 import org.unitedsoftware.alexandrite.channel.common.approval.ApprovalRegistry
 import org.unitedsoftware.alexandrite.channel.common.approval.PendingApproval
+import org.unitedsoftware.alexandrite.channel.common.approval.approvalRecipients
 import org.unitedsoftware.alexandrite.channel.common.approval.carrying
 import org.unitedsoftware.alexandrite.channel.common.approval.decideApproval
 import org.unitedsoftware.alexandrite.channel.qqbot.config.QqBotInstanceConfig
@@ -128,16 +129,13 @@ internal class QqBotApprovals(
     }
 
     /**
-     * The chats [request] is shown in: the chat of the turn, and the administrators' own paired chats for a
-     * member's turn.
+     * The chats [request] is shown in: the chat of an operator's own turn, else the administrators' own paired
+     * private chats, never the chat a member's turn came from — an approval carries the call's arguments and the
+     * reason it is asked about, which is no more a member's business than any other member of that chat's, same as
+     * OneBot and Telegram.
      */
-    private fun recipients(request: ApprovalRequest): List<ChatAddress> {
-        val chats = mutableListOf(request.turn.chat)
-        if (!request.turn.actorIsOperator) {
-            config.admins.mapTo(chats) { ChatAddress(instance.id, "private:$it") }
-        }
-        return chats.distinct().filter { gate.isPaired(it) }
-    }
+    private fun recipients(request: ApprovalRequest): List<ChatAddress> =
+        approvalRecipients(request.turn, config.admins, gate::isPaired) { ChatAddress(instance.id, "private:$it") }
 
     /** Says how [waiting] ended in every chat that carries it. */
     private suspend fun conclude(waiting: PendingApproval, ending: ApprovalEnding) {

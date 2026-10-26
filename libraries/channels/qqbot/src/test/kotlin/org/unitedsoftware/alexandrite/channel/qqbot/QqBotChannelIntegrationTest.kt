@@ -40,6 +40,7 @@ import org.unitedsoftware.alexandrite.sdk.turn.Submission
 import org.unitedsoftware.alexandrite.testkit.PluginHarness
 import org.unitedsoftware.alexandrite.testkit.RecordingTurnSubmitter
 import org.unitedsoftware.alexandrite.testkit.testTurn
+import org.unitedsoftware.alexandrite.testkit.testUser
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -484,6 +485,87 @@ class QqBotChannelIntegrationTest {
                         assertNotNull(api.awaitRequest(SEND_DIRECT))
                         platform.push(APPROVAL_DENY)
                         assertIs<ApprovalAnswer.Denied>(withTimeout(10.seconds) { waiting.await() })
+                    }
+            }
+        } finally {
+            platform.stop()
+            api.close()
+        }
+    }
+
+    @Test
+    fun `a member's approval is shown to the admin's own chat, never back in the chat it came from`() {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        api.on(SEND_DIRECT, """{"id":"sent1","timestamp":"2026-07-21T10:00:00+08:00"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        val submitter = RecordingTurnSubmitter()
+        try {
+            runBlocking {
+                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                    .config(config(api.base, platform.url, admins = setOf("u1")))
+                    .turnSubmitter(submitter)
+                    .build()
+                    .run {
+                        assertTrue(platform.awaitConnection(), "the gateway was not connected")
+                        val channel = get(directory).channel(instance) ?: error("the instance has no channel")
+                        val group = ChatAddress(instance, "group:g1")
+                        // The default testTurn() actor is no operator, same as a group member whose own call needs
+                        // an admin's approval.
+                        val request = ApprovalRequest.builder(
+                            "req1",
+                            testTurn(chat = group),
+                            "command.exec",
+                            ToolRisk.EXEC,
+                            "{}",
+                            "it runs a command",
+                        ).build()
+                        val waiting = async(start = CoroutineStart.UNDISPATCHED) { channel.askApproval(request) }
+                        assertNotNull(api.awaitRequest(SEND_DIRECT), "the admin was not shown the approval")
+                        assertEquals(
+                            emptyList(),
+                            api.calls(SEND_GROUP),
+                            "a member's own call was shown back in the chat it came from",
+                        )
+                        waiting.cancel()
+                    }
+            }
+        } finally {
+            platform.stop()
+            api.close()
+        }
+    }
+
+    @Test
+    fun `an operator's own approval is shown only in their own chat, not fanned out to the admin too`() {
+        val api = FakeApiServer()
+        api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
+        api.on(SEND_GROUP, """{"id":"sent1","timestamp":"2026-07-21T10:00:00+08:00"}""")
+        val platform = FakeGatewayServer().startAndAwait()
+        val submitter = RecordingTurnSubmitter()
+        try {
+            runBlocking {
+                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                    .config(config(api.base, platform.url, admins = setOf("u1")))
+                    .turnSubmitter(submitter)
+                    .build()
+                    .run {
+                        assertTrue(platform.awaitConnection(), "the gateway was not connected")
+                        val channel = get(directory).channel(instance) ?: error("the instance has no channel")
+                        val group = ChatAddress(instance, "group:g1")
+                        val turn = testTurn(chat = group) { actor(testUser(instance = instance, isOperator = true)) }
+                        val request = ApprovalRequest.builder(
+                            "req1",
+                            turn,
+                            "command.exec",
+                            ToolRisk.EXEC,
+                            "{}",
+                            "it runs a command",
+                        ).build()
+                        val waiting = async(start = CoroutineStart.UNDISPATCHED) { channel.askApproval(request) }
+                        assertNotNull(api.awaitRequest(SEND_GROUP), "the operator's own chat was not shown it")
+                        assertEquals(emptyList(), api.calls(SEND_DIRECT), "fanned out to the admin's own chat too")
+                        waiting.cancel()
                     }
             }
         } finally {
