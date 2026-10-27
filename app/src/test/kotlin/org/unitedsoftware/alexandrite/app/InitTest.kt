@@ -10,6 +10,12 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import org.junit.jupiter.api.io.TempDir
+import org.unitedsoftware.alexandrite.account.pleochroic.AREA_CONFIG
+import org.unitedsoftware.alexandrite.account.pleochroic.KIND_MCP
+import org.unitedsoftware.alexandrite.account.pleochroic.PendingChange
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncState
+import org.unitedsoftware.alexandrite.account.pleochroic.decodeSyncState
+import org.unitedsoftware.alexandrite.account.pleochroic.encodeSyncState
 import org.unitedsoftware.alexandrite.app.control.ControlAnswers
 import org.unitedsoftware.alexandrite.app.control.controlSocket
 import org.unitedsoftware.alexandrite.app.control.serveControl
@@ -654,7 +660,7 @@ class InitTest {
     }
 
     @Test
-    fun `the account step is skipped when the model step already signed in to Pleochroic`() {
+    fun `the account step asks for no second sign-in when the model step already signed in to Pleochroic`() {
         models.enqueue(
             FakeResponse.builder().body(
                 """{"account": {"name": "Acme"}, "scopes": ["models"],
@@ -672,7 +678,7 @@ class InitTest {
         )
 
         assertEquals(0, printed.code, printed.out + printed.err)
-        assertContains(printed.out, "Already signed in to a Pleochroic account as the model provider")
+        assertContains(printed.out, "Already signed in to a Pleochroic account.")
         assertEquals(1, Files.readString(cli.secrets).lines().count { it.isNotBlank() })
     }
 
@@ -758,16 +764,19 @@ class InitTest {
         assertContains(Files.readString(cli.secrets), "$variable=fixture-secret")
     }
 
-    // Import from the signed-in Pleochroic account's own sync (its SyncRunner/PendingSync-backed entry).
+    // Import from the signed-in Pleochroic account: read-only, whether sync is on or off.
 
     private fun pleochroicSignedInConfig(server: FakeModelServer) =
         """{"providers": {"pleochroic": {"endpoints": {"default": {
             "baseUrl": "${server.baseUrl}", "apiKey": "${'$'}{env:PLEOCHROIC_KEY}"}}}}}"""
 
-    /** Queues the fixed response every one of these tests needs once the change feed itself answers: the
-     * signed-in account's own provider endpoint is itself a tracked config item, pushed in the same run. */
-    private fun FakeModelServer.enqueueOwnEndpointPush() {
-        enqueue(FakeResponse.builder().body("""{"rev": "rev-1"}""").build(), "/config/provider/pleochroic%2Fdefault")
+    /** The sync state file as the run left it, off when there is none. */
+    private fun syncState(): SyncState = cli.dataDir.resolve("pleochroic-sync.json").takeIf(Files::exists)
+        ?.let { decodeSyncState(Files.readString(it)) } ?: SyncState.OFF
+
+    /** Fails unless every request [this] received only read: the import step never pushes or deletes. */
+    private fun FakeModelServer.assertOnlyRead() {
+        assertEquals(emptyList(), requests.filter { it.method != "GET" }.map { "${it.method} ${it.path}" })
     }
 
     @Test
@@ -779,27 +788,27 @@ class InitTest {
             server.enqueue(
                 FakeResponse.builder().body(
                     """{"changes": [
-                        {"seq": 1, "area": "skill", "kind": "global", "id": "my-skill", "rev": "rev-1",
-                            "deleted": false},
-                        {"seq": 2, "area": "config", "kind": "mcp", "id": "notes", "rev": "rev-9", "deleted": false}
+                        {"seq": 1, "area": "skill", "kind": "global", "id": "my-skill", "rev": 1,
+                            "deleted": false, "at": "2026-10-27T00:00:00.000Z"},
+                        {"seq": 2, "area": "config", "kind": "mcp", "id": "notes", "rev": 9, "deleted": false,
+                            "at": "2026-10-27T00:00:00.000Z"}
                     ], "cursor": 2, "more": false}""",
                 ).build(),
                 "/sync/changes",
             )
             server.enqueue(
-                FakeResponse.builder().body(
-                    """{"rev": "rev-1", "files": [{"path": "SKILL.md", "encoding": "utf8", "content": "# Hi"}]}""",
+                FakeResponse.builder().header("etag", "\"1\"").body(
+                    """{"files": [{"path": "SKILL.md", "encoding": "utf8", "content": "# Hi"}]}""",
                 ).build(),
                 "/skills/global/my-skill",
             )
             server.enqueue(
                 FakeResponse.builder().body(
-                    """{"rev": "rev-9", "data": {"command": "mcp-server",
+                    """{"rev": 9, "data": {"command": "mcp-server",
                         "env": {"API_TOKEN": "hunter2-secret"}}}""",
                 ).build(),
                 "/config/mcp/notes",
             )
-            server.enqueueOwnEndpointPush()
             cli.machine.answers += listOf("", "1,2")
 
             // --force: the config file this test wrote to seed the signed-in account already exists, which else
@@ -807,6 +816,8 @@ class InitTest {
             val printed = cli("init", "--force", "--only", "import")
 
             assertEquals(0, printed.code, printed.out + printed.err)
+            assertContains(printed.out, "Pleochroic · my-skill")
+            assertContains(printed.out, "Pleochroic MCP · notes")
             assertContains(printed.out, "Imported 2.")
             assertEquals(
                 "# Hi",
@@ -819,6 +830,117 @@ class InitTest {
             assertContains(Files.readString(cli.secrets), "$variable=hunter2-secret")
             val rawConfig = Files.readString(cli.configFile)
             assertFalse("hunter2-secret" in rawConfig, rawConfig)
+            server.assertOnlyRead()
+            assertFalse(syncState().enabled)
+            assertEquals("1", syncState().records["skill:global:my-skill"]?.remoteRev)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `import brings the account secret an MCP server names along, and records both for a later sync`() {
+        val server = FakeModelServer()
+        try {
+            cli.config(pleochroicSignedInConfig(server))
+            cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+            server.enqueue(
+                FakeResponse.builder().body(
+                    """{"changes": [
+                        {"seq": 1, "area": "secret", "kind": null, "id": "NOTES_TOKEN", "rev": 3, "deleted": false},
+                        {"seq": 2, "area": "config", "kind": "mcp", "id": "notes", "rev": 4, "deleted": false}
+                    ], "cursor": 2, "more": false}""",
+                ).build(),
+                "/sync/changes",
+            )
+            server.enqueue(
+                FakeResponse.builder().body(
+                    """{"rev": 4, "data": {"command": "notes-mcp",
+                        "env": {"TOKEN": "${'$'}{secret:NOTES_TOKEN}"}}}""",
+                ).build(),
+                "/config/mcp/notes",
+            )
+            server.enqueue(
+                FakeResponse.builder().body("""{"rev": 3, "value": "tok-3"}""").build(),
+                "/secrets/NOTES_TOKEN",
+            )
+            cli.machine.answers += listOf("", "1")
+
+            val printed = cli("init", "--force", "--only", "import")
+
+            assertEquals(0, printed.code, printed.out + printed.err)
+            assertEquals("\"${'$'}{env:NOTES_TOKEN}\"", "${file().at("mcp.servers.notes.env.TOKEN")}")
+            assertContains(Files.readString(cli.secrets), "NOTES_TOKEN=tok-3\n")
+            server.assertOnlyRead()
+            val state = syncState()
+            assertFalse(state.enabled)
+            assertEquals("4", state.records["config:mcp:notes"]?.remoteRev)
+            assertEquals("3", state.records["secret::NOTES_TOKEN"]?.remoteRev)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `import refuses an account MCP server that points at an unrelated local secret`() {
+        val server = FakeModelServer()
+        try {
+            cli.config(pleochroicSignedInConfig(server))
+            cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+            server.enqueue(
+                FakeResponse.builder().body(
+                    """{"changes": [{"seq": 1, "area": "config", "kind": "mcp", "id": "notes", "rev": 4,
+                        "deleted": false}], "cursor": 1, "more": false}""",
+                ).build(),
+                "/sync/changes",
+            )
+            server.enqueue(
+                FakeResponse.builder().body(
+                    """{"rev": 4, "data": {"command": "notes-mcp", "env": {"TOKEN": "${'$'}{env:PLEOCHROIC_KEY}"}}}""",
+                ).build(),
+                "/config/mcp/notes",
+            )
+            cli.machine.answers += listOf("", "1")
+
+            val printed = cli("init", "--force", "--only", "import")
+
+            assertEquals(0, printed.code, printed.out + printed.err)
+            assertContains(printed.out, "Did not import notes: it names a secret the Pleochroic account does")
+            assertNull(file().at("mcp.servers.notes"))
+            server.assertOnlyRead()
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `import leaves a change a sync held back for review to sync review`() {
+        val server = FakeModelServer()
+        try {
+            cli.config(pleochroicSignedInConfig(server))
+            cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+            val held = PendingChange(AREA_CONFIG, KIND_MCP, "notes", null, "4", false, null, listOf("mcp_change"))
+            Files.createDirectories(cli.dataDir)
+            Files.writeString(
+                cli.dataDir.resolve("pleochroic-sync.json"),
+                encodeSyncState(SyncState.OFF.with(enabled = true, pending = mapOf("config:mcp:notes" to held))),
+            )
+            server.enqueue(
+                FakeResponse.builder().body(
+                    """{"changes": [{"seq": 1, "area": "config", "kind": "mcp", "id": "notes", "rev": 4,
+                        "deleted": false}], "cursor": 1, "more": false}""",
+                ).build(),
+                "/sync/changes",
+            )
+            cli.machine.answers += ""
+
+            val printed = cli("init", "--force", "--only", "import")
+
+            assertEquals(0, printed.code, printed.out + printed.err)
+            assertContains(printed.out, "1 change(s) awaiting review: run alexandrite sync review.")
+            assertContains(printed.out, "No skills or MCP servers were found to import.")
+            assertTrue("config:mcp:notes" in syncState().pending)
+            server.assertOnlyRead()
         } finally {
             server.close()
         }
@@ -834,7 +956,6 @@ class InitTest {
                 FakeResponse.builder().body("""{"changes": [], "cursor": 0, "more": false}""").build(),
                 "/sync/changes",
             )
-            server.enqueueOwnEndpointPush()
             cli.machine.answers += ""
 
             // --force: see the note above the success test about the config file this test pre-wrote.
@@ -842,13 +963,14 @@ class InitTest {
 
             assertEquals(0, printed.code, printed.out + printed.err)
             assertContains(printed.out, "No skills or MCP servers were found to import.")
+            server.assertOnlyRead()
         } finally {
             server.close()
         }
     }
 
     @Test
-    fun `import degrades quietly when the Pleochroic account's sync cannot be reached`() {
+    fun `import says so when the Pleochroic account cannot be read, and goes on with the local sources`() {
         val server = FakeModelServer()
         try {
             cli.config(pleochroicSignedInConfig(server))
@@ -859,8 +981,50 @@ class InitTest {
             val printed = cli("init", "--force", "--only", "import")
 
             assertEquals(0, printed.code, printed.out + printed.err)
+            assertContains(printed.out + printed.err, "Could not read the Pleochroic account's skills and MCP servers")
             assertContains(printed.out, "No skills or MCP servers were found to import.")
             assertFalse(Files.exists(cli.secrets))
+        } finally {
+            server.close()
+        }
+    }
+
+    // Turning sync on from the account step.
+
+    @Test
+    fun `the account step leaves sync off unless asked`() {
+        val server = FakeModelServer()
+        try {
+            cli.config(pleochroicSignedInConfig(server))
+            cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+            cli.machine.answers += ""
+
+            val printed = cli("init", "--force", "--only", "account")
+
+            assertEquals(0, printed.code, printed.out + printed.err)
+            assertContains(printed.out, "Sync stays off; alexandrite sync enable turns it on later.")
+            assertFalse(syncState().enabled)
+            assertEquals(emptyList(), server.requests)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `the account step turns sync on when told to, without syncing yet`() {
+        val server = FakeModelServer()
+        try {
+            cli.config(pleochroicSignedInConfig(server))
+            cli.environment = mapOf("PLEOCHROIC_KEY" to "plc-fixture-key")
+            cli.machine.answers += "y"
+
+            val printed = cli("init", "--force", "--only", "account")
+
+            assertEquals(0, printed.code, printed.out + printed.err)
+            assertContains(printed.out, "Sync is on, conflicts resolved by merge.")
+            assertContains(printed.out, "Run alexandrite sync now to sync for the first time.")
+            assertTrue(syncState().enabled)
+            assertEquals(emptyList(), server.requests)
         } finally {
             server.close()
         }

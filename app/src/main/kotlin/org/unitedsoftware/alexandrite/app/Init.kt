@@ -5,16 +5,19 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import org.unitedsoftware.alexandrite.account.pleochroic.AREA_CONFIG
 import org.unitedsoftware.alexandrite.account.pleochroic.AREA_SKILL
+import org.unitedsoftware.alexandrite.account.pleochroic.AccountFetch
+import org.unitedsoftware.alexandrite.account.pleochroic.AccountImport
+import org.unitedsoftware.alexandrite.account.pleochroic.AccountItem
 import org.unitedsoftware.alexandrite.account.pleochroic.HostConfigSyncLocal
 import org.unitedsoftware.alexandrite.account.pleochroic.HttpSyncTransport
-import org.unitedsoftware.alexandrite.account.pleochroic.KIND_MCP
+import org.unitedsoftware.alexandrite.account.pleochroic.LocalChange
 import org.unitedsoftware.alexandrite.account.pleochroic.PLEOCHROIC_PORTAL_URL
-import org.unitedsoftware.alexandrite.account.pleochroic.PendingSync
-import org.unitedsoftware.alexandrite.account.pleochroic.SyncConflictException
-import org.unitedsoftware.alexandrite.account.pleochroic.SyncRunner
+import org.unitedsoftware.alexandrite.account.pleochroic.SKILL_SCOPE_GLOBAL
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncPolicy
 import org.unitedsoftware.alexandrite.account.pleochroic.SyncServiceException
+import org.unitedsoftware.alexandrite.account.pleochroic.configPath
+import org.unitedsoftware.alexandrite.account.pleochroic.importedRecords
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
 import org.unitedsoftware.alexandrite.app.tui.Choice
 import org.unitedsoftware.alexandrite.discovery.DiscoveredMcpServer
@@ -155,6 +158,7 @@ private class Setup(override val cli: Cli, override val options: InitOptions) : 
             val code = write(exists)
             if (code != ExitCode.OK) return code
         }
+        finishPleochroic()
         if (InitStep.SERVICE in steps) {
             val code = service()
             if (code != ExitCode.OK) return code
@@ -511,13 +515,13 @@ private class Setup(override val cli: Cli, override val options: InitOptions) : 
 
     /**
      * The three choices for a Pleochroic account: sign in by device login, sign in to a self-hosted
-     * `standalone-service` (`--service-url`/`--service-token`), or not at all. Skipped entirely when the model
-     * step already signed in with Pleochroic as the provider — there is then nothing left to ask.
+     * `standalone-service` (`--service-url`/`--service-token`), or not at all. When already signed in (the model
+     * step's Pleochroic provider, or an earlier run) there is no sign-in to ask for, only whether to turn sync on.
      */
     private fun account(): Int {
         if (pleochroicCredentials() != null) {
             ui.say(cli.t("init.account.already"))
-            skip(InitStep.ACCOUNT)
+            askSync()
             return ExitCode.OK
         }
         val wantsSelfHosted = options.serviceUrl != null && options.serviceToken != null
@@ -556,7 +560,16 @@ private class Setup(override val cli: Cli, override val options: InitOptions) : 
         changes += webBackendChanges(config, signedIn.status, signedIn.apiBase, signedIn.key)
         ui.good(cli.t("pleochroic.logged_in", "account" to (signedIn.account.label ?: cli.t("pleochroic.unnamed"))))
         summary["init.summary.account"] = signedIn.account.label ?: cli.t("pleochroic.unnamed")
+        askSync()
         return ExitCode.OK
+    }
+
+    /** Asks whether to turn on two-way sync with the account, off unless the person says so: it uploads this
+     * machine's config and secrets, so it is never on by default. Not asked when it is already on. */
+    private fun askSync() {
+        if (!interactive || readSyncState(cli).enabled) return
+        enableSync = cli.confirm(cli.t("init.account.sync"), default = false)
+        if (!enableSync) ui.say(cli.t("init.account.sync_off"))
     }
 
     // Import skills and MCP servers.
@@ -609,7 +622,7 @@ private class Setup(override val cli: Cli, override val options: InitOptions) : 
         if (chosen.isEmpty()) return ExitCode.OK
         var skillsRoot: java.nio.file.Path? = null
         val importedNames = mutableSetOf<String>()
-        val pleochroicKeys = mutableSetOf<String>()
+        val accountItems = mutableListOf<AccountItem>()
         for (item in chosen) {
             when (item) {
                 is ImportItem.LocalSkill -> {
@@ -619,12 +632,14 @@ private class Setup(override val cli: Cli, override val options: InitOptions) : 
 
                 is ImportItem.LocalMcp -> importMcp(item.server)
 
-                is ImportItem.Pleochroic -> pleochroicKeys += item.key
+                is ImportItem.Pleochroic -> accountItems += item.item
             }
         }
-        if (pleochroicKeys.isNotEmpty()) applyPleochroicImport(pleochroicKeys)
-        ui.good(cli.t("init.import.done", "count" to chosen.size))
-        summary["init.summary.import"] = cli.t("init.summary.import_value", "count" to chosen.size)
+        val refused = if (accountItems.isEmpty()) 0 else applyPleochroicImport(accountItems)
+        val imported = chosen.size - refused
+        if (imported == 0) return ExitCode.OK
+        ui.good(cli.t("init.import.done", "count" to imported))
+        summary["init.summary.import"] = cli.t("init.summary.import_value", "count" to imported)
         return ExitCode.OK
     }
 
@@ -635,7 +650,7 @@ private class Setup(override val cli: Cli, override val options: InitOptions) : 
 
         class LocalMcp(override val label: String, val server: DiscoveredMcpServer) : ImportItem
 
-        class Pleochroic(override val label: String, val key: String) : ImportItem
+        class Pleochroic(override val label: String, val item: AccountItem) : ImportItem
     }
 
     private fun globalSkillsRoot(): java.nio.file.Path =
@@ -686,65 +701,130 @@ private class Setup(override val cli: Cli, override val options: InitOptions) : 
         return "ALEXANDRITE_MCP_${clean(serverName)}_${clean(key)}"
     }
 
-    /** The Pleochroic account's own skills and MCP servers that are not yet set up here ([ImportItem.Pleochroic],
-     * one per pending sync item of area `skill` or kind `mcp`), and how many of its own were already present.
-     * Empty, never a failure, when the account is not signed in or the sync run could not reach it at all —
-     * this is a bonus to the local sources, not something the step depends on. */
+    /** The account's own secret names, as the import step's listing of it found them. */
+    private var accountSecrets: Set<String> = emptySet()
+
+    /** What the import step brought in from the Pleochroic account, recorded in the sync state once written. */
+    private val accountImported = mutableListOf<AccountFetch.Ready>()
+
+    /** Whether the account step's answer turns sync on, once the config file is written. */
+    private var enableSync = false
+
+    /** The Pleochroic account's own skills and MCP servers that are not yet set up here ([ImportItem.Pleochroic]),
+     * and how many of its own were already present. Only reads the account ([AccountImport]), so it is as safe with
+     * sync off as on; empty when not signed in, and empty with a warning when the account cannot be read. */
     private fun pleochroicImportItems(takenSkills: Set<String>, takenMcp: Set<String>): Pair<List<ImportItem>, Int> {
         val (apiBase, key) = pleochroicCredentials() ?: return emptyList<ImportItem>() to 0
-        return try {
-            val local = HostConfigSyncLocal(CliHostConfig(cli), cli.locations.configFile, cli.secrets)
-            val http = pleochroicHttp()
-            http.use { transport ->
-                val state = readSyncState(cli)
-                val runner = SyncRunner(local, HttpSyncTransport(transport, apiBase, key))
-                val (_, next) = runBlocking { runner.run(state) }
-                writeSyncState(cli, next)
-                pleochroicNextState = next
-                val pending = PendingSync(local, HttpSyncTransport(transport, apiBase, key))
-                val reviews = runBlocking { pending.review(next) }
-                val items = mutableListOf<ImportItem>()
-                var duplicates = 0
-                for (review in reviews) {
-                    val relevant = review.change.area == AREA_SKILL ||
-                        (review.change.area == AREA_CONFIG && review.change.kind == KIND_MCP)
-                    if (!relevant || review.change.deleted) continue
-                    val taken = if (review.change.area == AREA_SKILL) takenSkills else takenMcp
-                    if (review.change.id in taken) {
-                        duplicates++
+        val listing = try {
+            pleochroicHttp().use { runBlocking { AccountImport(HttpSyncTransport(it, apiBase, key)).list() } }
+        } catch (e: SyncServiceException) {
+            ui.warn(cli.t("init.import.pleochroic_unreachable", "reason" to (e.message ?: e.code)))
+            return emptyList<ImportItem>() to 0
+        }
+        accountSecrets = listing.secrets
+        val present = runBlocking { syncLocal().collect() }.mapTo(mutableSetOf()) { it.key }
+        val pending = readSyncState(cli).pending.keys
+        val items = mutableListOf<ImportItem>()
+        var duplicates = 0
+        var held = 0
+        for (item in listing.items) {
+            // A change a sync already held back for review is decided there, with its diff and reasons.
+            if (item.key in pending) {
+                held++
+                continue
+            }
+            val taken = item.key in present || when (item.area) {
+                AREA_SKILL -> item.kind == SKILL_SCOPE_GLOBAL && item.id in takenSkills
+                else -> item.id in takenMcp
+            }
+            if (taken) {
+                duplicates++
+                continue
+            }
+            val label = when {
+                item.area != AREA_SKILL -> "${cli.t("provider.pleochroic")} MCP · ${item.id}"
+                item.kind == SKILL_SCOPE_GLOBAL -> "${cli.t("provider.pleochroic")} · ${item.id}"
+                else -> "${cli.t("provider.pleochroic")} · ${item.id} (${item.kind})"
+            }
+            items += ImportItem.Pleochroic(label, item)
+        }
+        if (held > 0) ui.say(cli.t("sync.pending_hint", "count" to held))
+        return items to duplicates
+    }
+
+    /** Fetches [items] from the account and sets each up: an MCP server and the secrets it names as this run's
+     * changes, a skill's files once those are written ([finishPleochroic]). Returns how many were not imported. */
+    private fun applyPleochroicImport(items: List<AccountItem>): Int {
+        val (apiBase, key) = pleochroicCredentials() ?: return items.size
+        val localSecrets = try {
+            readSecrets(cli.secrets).toMutableMap()
+        } catch (e: IOException) {
+            mutableMapOf()
+        }
+        localSecrets += secrets
+        var imported = 0
+        try {
+            pleochroicHttp().use { http ->
+                val import = AccountImport(HttpSyncTransport(http, apiBase, key))
+                for (item in items) {
+                    val fetched = runBlocking { import.fetch(item, accountSecrets, localSecrets) }
+                    if (fetched is AccountFetch.Refused) {
+                        val args = arrayOf("name" to item.id, "detail" to fetched.detail)
+                        ui.warn(cli.t("init.import.refused.${fetched.reason.id}", *args))
                         continue
                     }
-                    items += ImportItem.Pleochroic("${cli.t("provider.pleochroic")} · ${review.summary}", review.key)
+                    val ready = fetched as AccountFetch.Ready
+                    if (item.area != AREA_SKILL) {
+                        changes += ConfigChangeView(configPath(item.kind, item.id) ?: continue, ready.data)
+                        for (secret in ready.secrets.filter { it.missing }) {
+                            secrets[secret.name] = secret.value
+                            localSecrets[secret.name] = secret.value
+                        }
+                    }
+                    accountImported += ready
+                    imported++
                 }
-                items to duplicates
             }
         } catch (e: SyncServiceException) {
-            emptyList<ImportItem>() to 0
-        } catch (e: SyncConflictException) {
-            emptyList<ImportItem>() to 0
+            ui.warn(cli.t("init.import.pleochroic_unreachable", "reason" to (e.message ?: e.code)))
+        }
+        return items.size - imported
+    }
+
+    /**
+     * Once the config file holds this run's changes: writes the skills the import step brought in from the account,
+     * records in the sync state what landed (so a later first sync finds both sides agreeing), and turns sync on
+     * when the account step was told to. Nothing is pushed here; the first sync is still `alexandrite sync now`.
+     */
+    private fun finishPleochroic() {
+        if (accountImported.isEmpty() && !enableSync) return
+        var state = readSyncState(cli)
+        if (accountImported.isNotEmpty()) {
+            val local = syncLocal()
+            val skills = accountImported.filter { it.item.area == AREA_SKILL }
+            try {
+                runBlocking { local.apply(skills.map { LocalChange(it.item.area, it.item.kind, it.item.id, it.data) }) }
+            } catch (e: IOException) {
+                ui.warn(cli.t("init.import.skills_unwritable", "reason" to (e.message ?: e)))
+            }
+            val landed = runBlocking { local.collect() }.mapTo(mutableSetOf()) { it.key }
+            // HostConfigSyncLocal refuses an unsafe skill quietly: one that is not there now did not land.
+            for (skill in skills) {
+                if (skill.item.key !in landed) ui.warn(cli.t("init.import.refused.invalid", "name" to skill.item.id))
+            }
+            val records = runBlocking { importedRecords(local, accountImported) }
+            state = state.with(records = state.records + records)
+        }
+        if (enableSync && !state.enabled) state = state.with(enabled = true, policy = SyncPolicy.MERGE)
+        writeSyncState(cli, state)
+        if (enableSync) {
+            ui.good(cli.t("sync.enabled", "policy" to SyncPolicy.MERGE.id))
+            ui.say(cli.t("sync.run_now_hint"))
+            summary["init.summary.sync"] = cli.t("init.summary.sync_on", "policy" to SyncPolicy.MERGE.id)
         }
     }
 
-    /** The sync state [pleochroicImportItems] last read, so [applyPleochroicImport] resolves the same pending
-     * changes against it rather than reading the sync state file twice over. */
-    private var pleochroicNextState: org.unitedsoftware.alexandrite.account.pleochroic.SyncState? = null
-
-    private fun applyPleochroicImport(keys: Set<String>) {
-        val (apiBase, key) = pleochroicCredentials() ?: return
-        val state = pleochroicNextState ?: readSyncState(cli)
-        try {
-            pleochroicHttp().use { transport ->
-                val local = HostConfigSyncLocal(CliHostConfig(cli), cli.locations.configFile, cli.secrets)
-                val pending = PendingSync(local, HttpSyncTransport(transport, apiBase, key))
-                val (_, next) = runBlocking { pending.apply(state, keys) }
-                writeSyncState(cli, next)
-            }
-        } catch (e: SyncServiceException) {
-            ui.warn(cli.t("init.import.pleochroic_failed"))
-        } catch (e: SyncConflictException) {
-            ui.warn(cli.t("init.import.pleochroic_failed"))
-        }
-    }
+    private fun syncLocal() = HostConfigSyncLocal(CliHostConfig(cli), cli.locations.configFile, cli.secrets)
 
     private fun pleochroicHttp() = org.unitedsoftware.alexandrite.internal.http.HttpTransport(
         HttpTimeouts(10.seconds, 30.seconds, 30.seconds),
