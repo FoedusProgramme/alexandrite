@@ -3,6 +3,7 @@ package org.unitedsoftware.alexandrite.account.pleochroic
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -61,7 +62,9 @@ public class HttpSyncTransport(
             } catch (e: SerializationException) {
                 throw SyncServiceException("protocol", "The change feed answered with no readable page.")
             }
-            all += page.changes.map { ChangeEntry(it.seq, it.area, it.kind.orEmpty(), it.id, it.rev, it.deleted) }
+            all += page.changes.map {
+                ChangeEntry(it.seq, it.area, it.kind.orEmpty(), it.id, it.rev?.let(::revText), it.deleted)
+            }
             cursor = page.cursor
             more = page.more && page.changes.isNotEmpty()
         }
@@ -121,7 +124,7 @@ public class HttpSyncTransport(
     }
 
     private fun rev(headers: Map<String, String>, json: JsonObject?): String? =
-        json?.string(REV) ?: headers[ETAG]?.removeSurrounding("\"")
+        json?.revOf() ?: headers[ETAG]?.removeSurrounding("\"")
 
     private companion object {
         const val DATA = "data"
@@ -141,13 +144,16 @@ public class HttpSyncTransport(
 
         fun JsonObject.string(name: String): String? = (this[name] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
+        /** The `rev` field, which the service sends as a number (`docs/API.md` "约定"), as text. */
+        fun JsonObject.revOf(): String? = (this[REV] as? JsonPrimitive)?.let(::revText)
+
         fun toSyncException(e: HttpException): Exception {
             val detail = e.body?.let(::parseObject)
             val error = detail?.get("error") as? JsonObject
             val code = error?.string("code") ?: "http_${e.status ?: 0}"
             if (code == "conflict") {
                 val current = error?.get("current") as? JsonObject
-                return SyncConflictException(RemoteMeta(current?.string(REV) ?: "?", deleted = false))
+                return SyncConflictException(RemoteMeta(current?.revOf() ?: "?", deleted = false))
             }
             return SyncServiceException(code, error?.string("message") ?: e.message ?: code)
         }
@@ -163,6 +169,9 @@ private class ChangeWire(
     val area: String,
     val kind: String? = null,
     val id: String,
-    val rev: String? = null,
+    val rev: JsonPrimitive? = null,
     val deleted: Boolean = false,
 )
+
+/** A `rev` as text, whether it came as a JSON number (what the service sends) or a string; null for `null`. */
+private fun revText(rev: JsonPrimitive): String? = if (rev is JsonNull) null else rev.content

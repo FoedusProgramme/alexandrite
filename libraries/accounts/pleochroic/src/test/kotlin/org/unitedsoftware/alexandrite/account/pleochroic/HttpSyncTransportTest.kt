@@ -276,4 +276,64 @@ class HttpSyncTransportTest {
             }
         }
     }
+
+    @Test
+    fun `changes reads the numeric revs the service sends`() = runBlocking {
+        FakeModelServer().use { server ->
+            server.enqueue(
+                fakeResponse {
+                    body(
+                        """{"changes": [{"seq": 4, "area": "config", "kind": "mcp", "id": "notes", "rev": 3,
+                            "deleted": false, "at": "2026-10-27T00:00:00.000Z"}], "cursor": 4, "more": false}""",
+                    )
+                },
+                "/sync/changes",
+            )
+            transport().use { http ->
+                val page = HttpSyncTransport(http, server.baseUrl, "plc-key").changes(0)
+
+                assertEquals("3", page.changes.single().rev)
+                assertEquals(4L, page.cursor)
+            }
+        }
+    }
+
+    @Test
+    fun `get reads a numeric rev from the body`() = runBlocking {
+        FakeModelServer().use { server ->
+            server.enqueue(
+                fakeResponse {
+                    header("etag", "\"7\"")
+                    body("""{"kind": "mcp", "id": "notes", "rev": 7, "data": {"command": "notes"}}""")
+                },
+                "/config/mcp/notes",
+            )
+            transport().use { http ->
+                val doc = HttpSyncTransport(http, server.baseUrl, "plc-key").get(AREA_CONFIG, KIND_MCP, "notes")
+
+                assertEquals("7", doc?.rev)
+            }
+        }
+    }
+
+    @Test
+    fun `put maps a 409 conflict's numeric current rev`() = runBlocking {
+        FakeModelServer().use { server ->
+            server.enqueue(
+                fakeResponse(409) {
+                    body("""{"error": {"code": "conflict", "message": "stale", "current": {"rev": 5}}}""")
+                },
+                "/config/mcp/notes",
+            )
+            transport().use { http ->
+                val sync = HttpSyncTransport(http, server.baseUrl, "plc-key")
+                try {
+                    sync.put(AREA_CONFIG, KIND_MCP, "notes", buildJsonObject { put("x", 1) }, "4")
+                    throw AssertionError("Expected a SyncConflictException.")
+                } catch (e: SyncConflictException) {
+                    assertEquals("5", e.current.rev)
+                }
+            }
+        }
+    }
 }
