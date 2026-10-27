@@ -43,6 +43,11 @@ public fun suspiciousSecretReference(element: JsonElement, syncedSecrets: Set<St
     return null
 }
 
+/** The names of [syncedSecrets] that [element] references as `${secret:NAME}`, in order, each once. */
+public fun referencedSecrets(element: JsonElement, syncedSecrets: Set<String>): List<String> =
+    stringLeaves(element).mapNotNull { SECRET_REF.matchEntire(it)?.groupValues?.get(1) }
+        .filter { it in syncedSecrets }.distinct().toList()
+
 /** [element] with every `${secret:NAME}` of [syncedSecrets] rewritten to the local `${env:NAME}` form, for a pull.
  * Call this only once [suspiciousSecretReference] has named no problem; it otherwise leaves a string as is. */
 public fun toLocalSecretRefs(element: JsonElement, syncedSecrets: Set<String>): JsonElement =
