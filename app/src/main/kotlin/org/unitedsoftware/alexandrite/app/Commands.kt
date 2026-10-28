@@ -77,7 +77,7 @@ internal val COMMANDS: List<CliCommand> = listOf(
         "[--non-interactive] [--only <step>]... [--skip <step>]... [--provider <provider>] [--endpoint <name>] " +
             "[--base-url <url>] [$SERVICE_URL <url> $SERVICE_TOKEN <token>] [--pleochroic] [--model <model>]... " +
             "[$AGENT <id>] [--admin <user id>]... [--language <tag>] [--zone <zone>] [--api-base-url <url>] " +
-            "[--search-backend <id>] [--fetch-backend <id>] [--searxng-url <url>] [--force]",
+            "[--search-backend <id>] [--fetch-backend <id>] [--searxng-url <url>] [--browser-backend <id>] [--force]",
         SETUP,
         flags = setOf("--non-interactive", "--force", "--pleochroic"),
         options = setOf(
@@ -97,6 +97,7 @@ internal val COMMANDS: List<CliCommand> = listOf(
             "--search-backend",
             "--fetch-backend",
             "--searxng-url",
+            "--browser-backend",
         ),
     ) { given ->
         noArguments(given, "init")
@@ -125,6 +126,7 @@ internal val COMMANDS: List<CliCommand> = listOf(
             searchBackend = given.option("--search-backend"),
             fetchBackend = given.option("--fetch-backend"),
             searxngUrl = given.option("--searxng-url"),
+            browserBackend = given.option("--browser-backend"),
             force = given.flag("--force"),
         )
         CliAction.Act { init(it, options) }

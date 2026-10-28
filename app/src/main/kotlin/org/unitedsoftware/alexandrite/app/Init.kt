@@ -74,6 +74,8 @@ internal class InitOptions(
     val apiBaseUrl: String? = null,
     val searchBackend: String? = null,
     val fetchBackend: String? = null,
+    /** The browser backend for `browser.use`: `pleochroic` once signed in, or `none`. */
+    val browserBackend: String? = null,
     /** The address of a self-hosted SearXNG instance, for the search step's `searxng` choice. */
     val searxngUrl: String? = null,
     /** Whether an existing config file may be changed without asking. */
@@ -963,23 +965,43 @@ private class Setup(override val cli: Cli, override val options: InitOptions) : 
 
     // Browser automation.
 
-    /** Browser backends a plugin has contributed to this build (an [org.unitedsoftware.alexandrite.sdk.web.WebBrowserBackend],
-     * by id), which `init` would otherwise list and let the person choose among; none ship built in, so this is
-     * always empty today, and the step always takes its one-line "none available" branch. A future build that
-     * bundles one lists its id here, with no other change to the step. */
-    private val browserBackends: List<String> = emptyList()
-
+    /**
+     * The browser backend `browser.use` drives: `pleochroic` where a Pleochroic account (or self-hosted
+     * standalone-service) is signed in, the only one this build has, or none, which leaves the tool unoffered.
+     */
     private fun browser(): Int {
+        val requested = options.browserBackend
+        if (!interactive && requested == null) {
+            skip(InitStep.BROWSER)
+            return ExitCode.OK
+        }
         if (!begins(InitStep.BROWSER)) return ExitCode.OK
-        if (browserBackends.isEmpty()) {
+        val pleochroic = pleochroicCredentials()
+        val choices = listOfNotNull("pleochroic".takeIf { pleochroic != null })
+        if (choices.isEmpty() && requested == null) {
             ui.say(cli.t("init.browser.none"))
             return ExitCode.OK
         }
-        val chosen = ui.choose(
-            prompt("init.browser.pick", "init.browser.pick_title"),
-            browserBackends.map { Choice(it, it, key = it) },
-        ) { cli.t("init.search.no_such_backend", "answer" to it, "backends" to browserBackends.joinToString()) }
-        chosen?.let { changes += ConfigChangeView("tools.web.browserBackend", JsonPrimitive(it)) }
+        val browser = when (
+            val picked = chooseBackend(
+                "init.browser.pick",
+                choices,
+                requested?.takeIf {
+                    it != "none"
+                },
+            )
+        ) {
+            is BackendPick.Failed -> return ExitCode.FAILURE
+            is BackendPick.None -> null
+            is BackendPick.Id -> picked.id
+        }
+        if (browser != null) {
+            changes += ConfigChangeView("tools.web.browserBackend", JsonPrimitive(browser))
+            configureBackend(browser, pleochroic)
+            summary["init.summary.browser"] = cli.t("init.search.id.$browser")
+        } else if (config.at("tools.web.browserBackend") != null) {
+            changes += ConfigChangeView("tools.web.browserBackend", remove = true)
+        }
         return ExitCode.OK
     }
 

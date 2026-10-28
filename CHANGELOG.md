@@ -17,6 +17,9 @@
   `--service-token` to a self-hosted [standalone-service](https://github.com/Pleochroic-Ltd/standalone-service);
   `alexandrite logout pleochroic` and `alexandrite account`.
 - A Pleochroic model provider, and Pleochroic as a backend of `web.search` and `web.fetch`.
+- `browser.use`: a headless browser, one session per conversation, offered where `tools.web.browserBackend` names a
+  backend; Pleochroic's is the first, turned on by `alexandrite login pleochroic` when the plan includes it, and init's
+  browser step (`--browser-backend`) picks it once signed in. Screenshots come back as images.
 - SearXNG and DuckDuckGo backends for `web.search`.
 - Two-way sync of config, secrets and skills with a Pleochroic account: `alexandrite sync enable`, `disable`, `now`
   and `status`. A pulled change that could harm this machine, such as any skill change, an MCP server, a provider
@@ -35,7 +38,7 @@
   extend are open.
 - New libraries: `alexandrite-account-pleochroic` (sign-in and sync), `alexandrite-discovery` (finding other tools'
   skills and MCP servers), `alexandrite-channel-onebot` and `alexandrite-channel-qqbot`; `WebBrowserBackend` in the
-  plugin SDK.
+  plugin SDK, a session (`open`, `act`, `close`) of the steps Pleochroic's browser takes.
 
 ## 1.0.0-alpha.2
 

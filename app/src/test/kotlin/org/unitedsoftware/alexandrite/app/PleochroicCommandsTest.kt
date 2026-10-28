@@ -79,10 +79,11 @@ class PleochroicCommandsTest {
     private fun granted(key: String = "plc-abc123") = """{"key": "$key", "apiBase": "${server.baseUrl}",
         "account": {"username": "john", "name": "John", "plan": {"id": "intermodal", "name": "Intermodal"}}}"""
 
-    private fun service(search: Boolean = true, fetch: Boolean = true) =
+    private fun service(search: Boolean = true, fetch: Boolean = true, browser: Boolean = true) =
         """{"account": {"id": "42", "name": "John", "plan": {"id": "intermodal", "name": "Intermodal"}},
             "scopes": ["models", "sync", "tools"], "credits": {"balanceMicros": 12500000},
-            "services": {"search": {"enabled": $search}, "fetch": {"enabled": $fetch}, "sync": {"enabled": true}}}"""
+            "services": {"search": {"enabled": $search}, "fetch": {"enabled": $fetch}, "browser": {"enabled": $browser},
+            "sync": {"enabled": true}}}"""
 
     private fun login(): Int = pleochroicLogin(cli, null, null, "test-device", portalBaseUrl = server.baseUrl)
 
@@ -101,6 +102,7 @@ class PleochroicCommandsTest {
         assertEquals("$SECRET_NAME=plc-abc123\n", secrets())
         assertEquals("\"pleochroic\"", "${file().at("tools.web.searchBackend")}")
         assertEquals("\"pleochroic\"", "${file().at("tools.web.fetchBackend")}")
+        assertEquals("\"pleochroic\"", "${file().at("tools.web.browserBackend")}")
         assertEquals("\"${server.baseUrl}\"", "${file().at("tools.web.pleochroicApiBase")}")
         assertEquals("\"\${env:$SECRET_NAME}\"", "${file().at("tools.web.pleochroicApiKey")}")
         val codeRequest = server.requests.first { it.path == "/api/device/code" }
@@ -115,13 +117,14 @@ class PleochroicCommandsTest {
         )
         server.enqueue(fakeResponse { body(deviceCode()) }, "/api/device/code")
         server.enqueue(fakeResponse { body(granted()) }, "/api/device/token")
-        server.enqueue(fakeResponse { body(service(search = true, fetch = false)) }, "/service")
+        server.enqueue(fakeResponse { body(service(search = true, fetch = false, browser = false)) }, "/service")
 
         val code = login()
 
         assertEquals(0, code, err.toString())
         assertEquals("\"pleochroic\"", "${file().at("tools.web.searchBackend")}")
         assertEquals("\"brave\"", "${file().at("tools.web.fetchBackend")}")
+        assertNull(file().at("tools.web.browserBackend"))
     }
 
     @Test
@@ -226,6 +229,7 @@ class PleochroicCommandsTest {
         assertNull(file().at("providers.pleochroic.endpoints.default"))
         assertNull(file().at("tools.web.searchBackend"))
         assertNull(file().at("tools.web.fetchBackend"))
+        assertNull(file().at("tools.web.browserBackend"))
         assertNull(file().at("tools.web.pleochroicApiBase"))
         assertNull(file().at("tools.web.pleochroicApiKey"))
         assertFalse(SECRET_NAME in secrets())

@@ -65,7 +65,7 @@ internal class PleochroicFetch(private val config: WebConfig, private val http: 
 }
 
 /** The configured `apiBase` and key of a Pleochroic account or self-hosted `standalone-service`. */
-private fun pleochroicCredentials(config: WebConfig): Pair<String, String> {
+internal fun pleochroicCredentials(config: WebConfig): Pair<String, String> {
     val base = requireNotNull(config.pleochroicApiBase) {
         "Configure web.pleochroicApiBase with the signed-in account's apiBase or a standalone-service URL."
     }
@@ -97,7 +97,7 @@ private suspend fun pleochroicCall(
 }
 
 /** What Pleochroic's `{error: {code, message}}` body at [e] means, told without the account's key. */
-private fun pleochroicFailure(e: HttpException): Exception {
+internal fun pleochroicFailure(e: HttpException): Exception {
     val error = e.body?.let {
         try {
             (Json.parseToJsonElement(it) as? JsonObject)?.get("error")?.jsonObject
@@ -110,11 +110,19 @@ private fun pleochroicFailure(e: HttpException): Exception {
     return IllegalStateException(
         when (code) {
             "not_entitled" -> "The Pleochroic account's plan does not include this service."
+
             "missing_scope" -> "The Pleochroic key is missing the scope this service needs."
+
             "insufficient_credits" -> "The Pleochroic account's plan and credits are both exhausted."
+
             "quota_exceeded" -> "The Pleochroic account's quota for this service is used up."
-            "rate_limited" -> "Pleochroic is rate-limiting this account; try again shortly."
-            "upstream_error" -> "Pleochroic's search or fetch engine failed upstream."
+
+            "rate_limited" -> message?.let { "Pleochroic is rate-limiting this account: $it" }
+                ?: "Pleochroic is rate-limiting this account; try again shortly."
+
+            "upstream_error" -> message?.let { "Pleochroic's engine failed upstream: $it" }
+                ?: "Pleochroic's engine failed upstream."
+
             else -> message ?: "Pleochroic request failed (${e.kind})."
         },
     )

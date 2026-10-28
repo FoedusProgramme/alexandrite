@@ -654,6 +654,41 @@ class InitTest {
     }
 
     @Test
+    fun `init's browser step names Pleochroic's browser once signed in`() {
+        models.enqueue(
+            FakeResponse.builder().body(
+                """{"account": {"name": "Acme"}, "scopes": ["models", "tools"], "services": {}}""",
+            ).build(),
+            "/service",
+        )
+
+        val printed = cli(
+            "init", "--non-interactive", "--only", "model", "--only", "browser",
+            "--provider", "pleochroic",
+            "--service-url", models.baseUrl,
+            "--service-token", "plc-self-token",
+            "--model", "deepseek-chat",
+            "--browser-backend", "pleochroic",
+        )
+
+        assertEquals(0, printed.code, printed.out + printed.err)
+        val config = file()
+        assertEquals("\"pleochroic\"", "${config.at("tools.web.browserBackend")}")
+        assertEquals("\"${models.baseUrl}\"", "${config.at("tools.web.pleochroicApiBase")}")
+    }
+
+    @Test
+    fun `init's browser step refuses Pleochroic's browser before signing in, and is skipped unasked`() {
+        val refused = cli("init", "--non-interactive", "--only", "browser", "--browser-backend", "pleochroic")
+        val skipped = cli("init", "--non-interactive", "--only", "browser")
+
+        assertEquals(1, refused.code, refused.out + refused.err)
+        assertContains(refused.err, "pleochroic")
+        assertEquals(0, skipped.code, skipped.out + skipped.err)
+        assertFalse(Files.exists(cli.configFile) && "browserBackend" in Files.readString(cli.configFile))
+    }
+
+    @Test
     fun `init's --service-url without --service-token, or the other way around, is a usage error`() {
         assertEquals(ExitCode.USAGE, cli("init", "--service-url", "http://x/v1").code)
         assertEquals(ExitCode.USAGE, cli("init", "--service-token", "tok").code)

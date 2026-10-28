@@ -33,6 +33,10 @@ internal class WebConfig(
     val pleochroicApiKey: Secret? = null,
     /** The address of a self-hosted SearXNG instance, the built-in SearXNG backend's base URL (no trailing `/`). */
     val searxngUrl: String? = null,
+    /** The id of the browser backend that `web.browser` drives; without one the tool is not offered. */
+    val browserBackend: String? = null,
+    /** How long a conversation's browser session stays open without a step before the backend closes it. */
+    val browserIdleSeconds: Int = 180,
 ) {
     val normalizedPrivateHosts: Set<String> get() = allowedPrivateHosts.map(::normalizeAllowedHost).toSet()
 
@@ -54,6 +58,10 @@ internal class WebConfig(
             "pleochroicApiKey may not be blank"
         }
         require(searxngUrl == null || searxngUrl.isNotBlank()) { "searxngUrl may not be blank" }
+        require(browserBackend == null || WebSearchBackend.ID.matches(browserBackend)) {
+            "browserBackend '$browserBackend' is no backend id: lowercase letters, digits and '-', such as \"pleochroic\""
+        }
+        require(browserIdleSeconds in 30..1800) { "browserIdleSeconds must be from 30 to 1800" }
     }
 }
 

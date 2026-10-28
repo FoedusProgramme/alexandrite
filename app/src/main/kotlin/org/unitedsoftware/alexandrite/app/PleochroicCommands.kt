@@ -35,6 +35,7 @@ internal const val PLEOCHROIC_ENDPOINT = "default"
 internal const val PLEOCHROIC_PROVIDER = "providers.pleochroic.endpoints.$PLEOCHROIC_ENDPOINT"
 private const val SEARCH_BACKEND = "tools.web.searchBackend"
 private const val FETCH_BACKEND = "tools.web.fetchBackend"
+private const val BROWSER_BACKEND = "tools.web.browserBackend"
 private const val WEB_API_BASE = "tools.web.pleochroicApiBase"
 private const val WEB_API_KEY = "tools.web.pleochroicApiKey"
 private const val PLEOCHROIC_ID = "pleochroic"
@@ -106,7 +107,7 @@ internal fun pleochroicSignIn(
 /**
  * Logs in to a Pleochroic account ([pleochroicSignIn]), then writes `providers.pleochroic.endpoints.default` (the
  * key through the secrets file, never as a plain value) and, where the account is entitled for them,
- * `tools.web.searchBackend` / `fetchBackend` ([webBackendChanges]).
+ * `tools.web.searchBackend` / `fetchBackend` / `browserBackend` ([webBackendChanges]).
  */
 internal fun pleochroicLogin(
     cli: Cli,
@@ -130,7 +131,7 @@ internal fun pleochroicLogin(
 
 /**
  * The config changes that turn on `tools.web`'s Pleochroic backend where [status] (`GET /v1/service`'s answer,
- * null when it could not be read) says the account is entitled for search or fetch and [current] (the config as it
+ * null when it could not be read) says the account is entitled for search, fetch or the browser and [current] (the config as it
  * was) does not already name another backend there. The web backend reads its own copy of [apiBase] and [key],
  * not the provider's endpoint.
  */
@@ -143,10 +144,12 @@ internal fun webBackendChanges(
     if (status == null) return emptyList()
     val search = status.entitled("search") && current?.at(SEARCH_BACKEND) == null
     val fetch = status.entitled("fetch") && current?.at(FETCH_BACKEND) == null
+    val browser = status.entitled("browser") && current?.at(BROWSER_BACKEND) == null
     val changes = mutableListOf<ConfigChangeView>()
     if (search) changes += ConfigChangeView(SEARCH_BACKEND, JsonPrimitive(PLEOCHROIC_ID))
     if (fetch) changes += ConfigChangeView(FETCH_BACKEND, JsonPrimitive(PLEOCHROIC_ID))
-    if (search || fetch) {
+    if (browser) changes += ConfigChangeView(BROWSER_BACKEND, JsonPrimitive(PLEOCHROIC_ID))
+    if (search || fetch || browser) {
         changes += ConfigChangeView(WEB_API_BASE, JsonPrimitive(apiBase))
         changes += ConfigChangeView(WEB_API_KEY, JsonPrimitive(key))
     }
@@ -171,6 +174,7 @@ internal fun pleochroicLogout(cli: Cli): Int {
     val changes = mutableListOf(ConfigChangeView(PLEOCHROIC_PROVIDER, remove = true))
     if (current?.at(SEARCH_BACKEND).text == PLEOCHROIC_ID) changes += ConfigChangeView(SEARCH_BACKEND, remove = true)
     if (current?.at(FETCH_BACKEND).text == PLEOCHROIC_ID) changes += ConfigChangeView(FETCH_BACKEND, remove = true)
+    if (current?.at(BROWSER_BACKEND).text == PLEOCHROIC_ID) changes += ConfigChangeView(BROWSER_BACKEND, remove = true)
     if (current?.at(WEB_API_BASE) != null) changes += ConfigChangeView(WEB_API_BASE, remove = true)
     if (current?.at(WEB_API_KEY) != null) changes += ConfigChangeView(WEB_API_KEY, remove = true)
     val written = writeChanges(cli, changes) ?: return ExitCode.FAILURE
