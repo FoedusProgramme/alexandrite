@@ -33,7 +33,7 @@ internal class WebConfig(
     val pleochroicApiKey: Secret? = null,
     /** The address of a self-hosted SearXNG instance, the built-in SearXNG backend's base URL (no trailing `/`). */
     val searxngUrl: String? = null,
-    /** The id of the browser backend that `web.browser` drives; without one the tool is not offered. */
+    /** The id of the browse backend that `browser.use` drives; without one the tool is not offered. */
     val browserBackend: String? = null,
     /** How long a conversation's browser session stays open without a step before the backend closes it. */
     val browserIdleSeconds: Int = 180,

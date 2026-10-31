@@ -38,8 +38,9 @@ The steps are `navigate` (a `url`), `back`, `forward`, `reload`, `snapshot` (the
 elements carry refs such as `e12`), `screenshot` (an image, `fullPage` for the whole page), `click`, `type` (`text`,
 `submit`) and `select` (`values`) by `ref` or CSS `selector`, `press` (a `key`), `scroll` (`direction`, `amount`),
 `wait` (`seconds`, `text`), `evaluate` (an `expression` run in the page) and `close`. A ref lasts until the page
-changes. When the backend has closed a session, a `navigate` opens a new one, and any other step says to navigate
-again first. The backend reaches only public addresses; `allowedPrivateHosts` does not apply to it.
+changes. browser.use offers only the steps a backend has; one that clicks by position also takes `x` and `y`, pixels
+in the latest screenshot as the model saw it, and Pleochroic's does not. When the backend has closed a session, a
+`navigate` opens a new one, and any other step says to navigate again first. The backend reaches only public addresses; `allowedPrivateHosts` does not apply to it.
 
 ## Risk and taint
 

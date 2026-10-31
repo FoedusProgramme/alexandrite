@@ -4,21 +4,36 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.unitedsoftware.alexandrite.sdk.browse.BrowseAbilities
+import org.unitedsoftware.alexandrite.sdk.browse.BrowseBackend
+import org.unitedsoftware.alexandrite.sdk.browse.BrowseImage
+import org.unitedsoftware.alexandrite.sdk.browse.BrowseOpen
+import org.unitedsoftware.alexandrite.sdk.browse.BrowseReport
+import org.unitedsoftware.alexandrite.sdk.browse.BrowseSessionGone
+import org.unitedsoftware.alexandrite.sdk.browse.BrowseStep
+import org.unitedsoftware.alexandrite.sdk.browse.BrowseSurface
+import org.unitedsoftware.alexandrite.sdk.browse.BrowseTarget
+import org.unitedsoftware.alexandrite.sdk.browse.BrowseView
+import org.unitedsoftware.alexandrite.sdk.browse.MouseButton
+import org.unitedsoftware.alexandrite.sdk.browse.ScrollDirection
+import org.unitedsoftware.alexandrite.sdk.browse.WebStep
 import org.unitedsoftware.alexandrite.sdk.config.Secret
 import org.unitedsoftware.alexandrite.sdk.tool.ReviewedTool
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaPart
 import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
-import org.unitedsoftware.alexandrite.sdk.web.BrowserOpen
-import org.unitedsoftware.alexandrite.sdk.web.BrowserSessionGone
-import org.unitedsoftware.alexandrite.sdk.web.BrowserStep
-import org.unitedsoftware.alexandrite.sdk.web.BrowserView
-import org.unitedsoftware.alexandrite.sdk.web.WebBrowserBackend
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
 import org.unitedsoftware.alexandrite.testkit.testToolContext
+import org.unitedsoftware.alexandrite.tools.browse.FakeBackend
+import org.unitedsoftware.alexandrite.tools.browse.PIXEL
+import org.unitedsoftware.alexandrite.tools.browse.args
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -27,13 +42,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/** A 1×1 PNG, as a screenshot comes back base64-encoded. */
-private const val PIXEL =
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-
 class BrowserToolTest {
-    private fun args(vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
-        pairs.forEach { (k, v) -> put(k, v) }
+    private fun tool(backend: FakeBackend = FakeBackend()): Pair<ReviewedTool, FakeBackend> {
+        val config = WebConfig(browserBackend = "fake")
+        val source = BrowserTools(config, listOf(backend))
+        return source.tools.value.single() as ReviewedTool to backend
     }
 
     // --- PleochroicBrowser, against a fake service ---
@@ -59,13 +72,13 @@ class BrowserToolTest {
             val config = WebConfig(pleochroicApiBase = server.baseUrl, pleochroicApiKey = Secret("plc-fixture-key"))
             val browser = PleochroicBrowser(config)
 
-            val id = browser.open(BrowserOpen(120, "en-GB"))
-            val view = browser.act(id, BrowserStep("screenshot", JsonObject(emptyMap())))
+            val id = browser.open(BrowseOpen(120, "en-GB"))
+            val view = browser.act(id, BrowseStep.Look(setOf(BrowseView.IMAGE)))
             browser.close(id)
 
             assertEquals("bs_1", id)
             assertEquals("https://example.com/" to "Example", view.url to view.title)
-            assertEquals(0x89.toByte(), view.screenshot!![0])
+            assertEquals(0x89.toByte(), view.image!!.toByteArray()[0])
             val (open, act, close) = server.requests
             assertEquals("POST" to "Bearer plc-fixture-key", open.method to open.header("authorization"))
             assertEquals(
@@ -97,12 +110,12 @@ class BrowserToolTest {
             val browser = PleochroicBrowser(config)
 
             val gone =
-                assertFailsWith<BrowserSessionGone> {
-                    browser.act("bs_old", BrowserStep("snapshot", JsonObject(emptyMap())))
+                assertFailsWith<BrowseSessionGone> {
+                    browser.act("bs_old", BrowseStep.Look(setOf(BrowseView.LAYOUT)))
                 }
             val refused =
                 assertFailsWith<IllegalStateException> {
-                    browser.act("bs_1", BrowserStep("navigate", args("url" to "http://10.0.0.1/")))
+                    browser.act("bs_1", WebStep.Navigate("http://10.0.0.1/"))
                 }
             browser.close("bs_old") // (already gone: no failure)
 
@@ -112,85 +125,79 @@ class BrowserToolTest {
         }
     }
 
+    @Test
+    fun `the Pleochroic backend reads a layout and an image in one look, and maps typed steps`() = runBlocking {
+        FakeModelServer().use { server ->
+            server.enqueue(
+                fakeResponse {
+                    body("""{"url": "https://example.com/", "title": "A", "snapshot": "- a"}""")
+                },
+            )
+            server.enqueue(
+                fakeResponse {
+                    body(
+                        """{"url": "https://example.com/", "title": "A", "screenshot": {"mediaType": "image/png", "data": "$PIXEL"}}""",
+                    )
+                },
+            )
+            server.enqueue(fakeResponse { body("""{"url": "https://example.com/", "title": "A"}""") })
+            val config = WebConfig(pleochroicApiBase = server.baseUrl, pleochroicApiKey = Secret("plc-fixture-key"))
+            val browser = PleochroicBrowser(config)
+
+            val both = browser.act("bs_1", BrowseStep.Look(setOf(BrowseView.LAYOUT, BrowseView.IMAGE), fullPage = true))
+            browser.act("bs_1", BrowseStep.Click(BrowseTarget.Ref("e4")))
+
+            assertEquals("- a", both.layout)
+            assertTrue(both.image!!.size > 0)
+            val (snapshot, screenshot, click) = server.requests.map { it.json() }
+            assertEquals("snapshot", snapshot["action"]!!.jsonPrimitive.content)
+            assertEquals("true", screenshot["fullPage"].toString())
+            assertEquals("""{"action":"click","ref":"e4"}""", click.toString())
+        }
+    }
+
+    @Test
+    fun `the Pleochroic backend refuses a point, a hover and a right click without asking the service`() = runBlocking {
+        FakeModelServer().use { server ->
+            val config = WebConfig(pleochroicApiBase = server.baseUrl, pleochroicApiKey = Secret("plc-fixture-key"))
+            val browser = PleochroicBrowser(config)
+
+            assertFailsWith<IllegalArgumentException> {
+                browser.act("bs_1", BrowseStep.Click(BrowseTarget.Point(10, 20)))
+            }
+            assertFailsWith<IllegalArgumentException> {
+                browser.act("bs_1", BrowseStep.Hover(BrowseTarget.Ref("e1")))
+            }
+            assertFailsWith<IllegalArgumentException> {
+                browser.act("bs_1", BrowseStep.Click(BrowseTarget.Ref("e1"), count = 2))
+            }
+
+            assertFailsWith<IllegalArgumentException> {
+                browser.check(BrowseStep.Scroll(ScrollDirection.RIGHT))
+            }
+            assertFailsWith<IllegalArgumentException> { browser.check(BrowseStep.Wait()) }
+            assertFailsWith<IllegalArgumentException> { browser.check(BrowseStep.Click(BrowseTarget.Ref("submit"))) }
+            assertFailsWith<IllegalArgumentException> { browser.check(WebStep.Navigate("file:///etc/hosts")) }
+            browser.check(BrowseStep.Click(BrowseTarget.Ref("e1")))
+
+            assertTrue(server.requests.isEmpty())
+            assertFalse(BrowseTarget.Kind.POINT in browser.abilities.targets)
+        }
+    }
+
     // --- browser.use, over a fake backend ---
-
-    private class FakeBackend : WebBrowserBackend {
-        override val id = "fake"
-        val opened = mutableListOf<String>()
-        val closed = mutableListOf<String>()
-        val steps = mutableListOf<Pair<String, BrowserStep>>()
-        var goneOnce = false
-
-        override suspend fun open(options: BrowserOpen): String = "s${opened.size + 1}".also { opened += it }
-
-        override suspend fun act(session: String, step: BrowserStep): BrowserView {
-            if (goneOnce) {
-                goneOnce = false
-                throw BrowserSessionGone("closed for idling")
-            }
-            steps += session to step
-            return when (step.action) {
-                "screenshot" -> BrowserView(
-                    "https://example.com/",
-                    "Example",
-                    screenshot = java.util.Base64.getDecoder().decode(PIXEL),
-                )
-
-                "snapshot" -> BrowserView("https://example.com/", "Example", snapshot = "- link \"More\" [ref=e1]")
-
-                else -> BrowserView(
-                    (step.arguments["url"] as? JsonPrimitive)?.content ?: "https://example.com/",
-                    "Example",
-                )
-            }
-        }
-
-        override suspend fun close(session: String) {
-            closed += session
-        }
-    }
-
-    private fun tool(backend: FakeBackend = FakeBackend()): Pair<ReviewedTool, FakeBackend> {
-        val config = WebConfig(browserBackend = "fake")
-        val source = BrowserTools(config, listOf(backend), BrowserSessions(config))
-        return source.tools.value.single() as ReviewedTool to backend
-    }
 
     @Test
     fun `no browser backend configured, no tool offered`() {
         val config = WebConfig()
-        assertTrue(BrowserTools(config, listOf(FakeBackend()), BrowserSessions(config)).tools.value.isEmpty())
+        assertTrue(BrowserTools(config, listOf(FakeBackend())).tools.value.isEmpty())
         assertFailsWith<IllegalArgumentException> {
-            BrowserTools(WebConfig(browserBackend = "other"), listOf(FakeBackend()), BrowserSessions(config))
+            BrowserTools(WebConfig(browserBackend = "other"), listOf(FakeBackend()))
         }
-    }
-
-    @Test
-    fun `one session per conversation, kept across calls and closed on close`() = runBlocking {
-        val (tool, backend) = tool()
-        val context = testToolContext()
-
-        val first = tool.execute(args("action" to "navigate", "url" to "https://example.com/a"), context)
-        val second = tool.execute(args("action" to "snapshot"), context)
-        val closed = tool.execute(args("action" to "close"), context)
-        val again = tool.execute(args("action" to "close"), context)
-
-        assertFalse(first.isError, "$first")
-        assertEquals(listOf("s1"), backend.opened)
-        assertEquals(listOf("s1", "s1"), backend.steps.map { it.first })
-        assertContains((second.content.first() as TextPart).text, "[ref=e1]")
-        assertEquals(listOf("s1"), backend.closed)
-        assertContains((closed.content.single() as TextPart).text, "closed")
-        assertContains((again.content.single() as TextPart).text, "No browser session")
-        assertTrue(context.untrustedReasons.isNotEmpty())
-    }
-
-    @Test
-    fun `a screenshot comes back as an image`() = runBlocking {
-        val (tool, _) = tool()
-        val result = tool.execute(args("action" to "screenshot"), testToolContext())
-        val image = assertIs<MediaPart>(result.content.last())
-        assertEquals("image/png" to 1, image.mediaType to image.width)
+        assertFailsWith<IllegalArgumentException> {
+            val desktop = FakeBackend(surface = BrowseSurface.DESKTOP)
+            BrowserTools(WebConfig(browserBackend = "fake"), listOf(desktop))
+        }
     }
 
     @Test
@@ -225,11 +232,19 @@ class BrowserToolTest {
     }
 
     @Test
-    fun `an unknown action or argument is refused before the backend is asked`() = runBlocking {
-        val (tool, backend) = tool()
-        val unknown = tool.execute(args("action" to "fly"), testToolContext())
-        val extra = tool.execute(args("action" to "snapshot", "cookie" to "x"), testToolContext())
-        assertTrue(unknown.isError && extra.isError)
-        assertTrue(backend.opened.isEmpty())
+    fun `Pleochroic's limits shape the schema, and a step it does not know is refused`() = runBlocking {
+        val config = WebConfig(browserBackend = PLEOCHROIC_WEB_ID)
+        val browser = PleochroicBrowser(config)
+        val tool = BrowserTools(config, listOf(browser)).tools.value.single() as ReviewedTool
+        val properties = tool.definition.parameters["properties"]!!.jsonObject
+
+        assertFalse("button" in properties || "count" in properties || "x" in properties)
+        assertEquals("""["up","down"]""", properties["direction"]!!.jsonObject["enum"].toString())
+        assertContains(tool.definition.description, "billed while open")
+        val unknown = object : BrowseStep {
+            override val kind = BrowseStep.Kind.CLICK
+        }
+        assertFailsWith<IllegalArgumentException> { browser.check(unknown) }
+        assertEquals(MouseButton.LEFT, browser.abilities.buttons.single())
     }
 }

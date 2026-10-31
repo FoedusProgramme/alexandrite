@@ -39,8 +39,9 @@
 - Breaking SDK changes: `Submission` gains `ToRun`; values the host makes are internal; closed kinds Alexandrite may
   extend are open.
 - New libraries: `alexandrite-account-pleochroic` (sign-in and sync), `alexandrite-discovery` (finding other tools'
-  skills and MCP servers), `alexandrite-channel-onebot` and `alexandrite-channel-qqbot`; `WebBrowserBackend` in the
-  plugin SDK, a session (`open`, `act`, `close`) of the steps Pleochroic's browser takes.
+  skills and MCP servers), `alexandrite-channel-onebot` and `alexandrite-channel-qqbot`; `BrowseBackend` in the
+  plugin SDK, a session (`open`, `act`, `close`) of typed steps on a web page or a desktop, seen as a layout or an
+  image and acting on an element by its ref, a selector or a point in the latest screenshot.
 
 ## 1.0.0-alpha.2
 
