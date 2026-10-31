@@ -1,7 +1,6 @@
 package org.unitedsoftware.alexandrite.app
 
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -20,12 +19,10 @@ import org.unitedsoftware.alexandrite.account.pleochroic.SyncReport
 import org.unitedsoftware.alexandrite.account.pleochroic.SyncRunner
 import org.unitedsoftware.alexandrite.account.pleochroic.SyncServiceException
 import org.unitedsoftware.alexandrite.account.pleochroic.SyncState
-import org.unitedsoftware.alexandrite.account.pleochroic.decodeSyncState
-import org.unitedsoftware.alexandrite.account.pleochroic.encodeSyncState
+import org.unitedsoftware.alexandrite.account.pleochroic.SyncStateFile
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
 import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
 import org.unitedsoftware.alexandrite.internal.http.HttpTransport
-import org.unitedsoftware.alexandrite.internal.path.writeAtomically
 import org.unitedsoftware.alexandrite.runtime.config.EnvReferences
 import org.unitedsoftware.alexandrite.runtime.config.writtenConfig
 import org.unitedsoftware.alexandrite.sdk.InternalAlexandriteApi
@@ -37,7 +34,6 @@ import org.unitedsoftware.alexandrite.sdk.config.ConfigPath
 import org.unitedsoftware.alexandrite.sdk.config.HostConfig
 import java.io.IOException
 import java.nio.file.Files
-import java.nio.file.NoSuchFileException
 import kotlin.time.Duration.Companion.seconds
 
 /** The id of the one Pleochroic endpoint `pleochroic login`/`logout` manage (`PleochroicCommands.kt`). */
@@ -277,30 +273,16 @@ private fun credentials(cli: Cli): Pair<String, String>? {
     return key?.let { baseUrl to it }
 }
 
-private val SYNC_STATE_FILE = "pleochroic-sync.json"
+private fun syncStateFile(cli: Cli): SyncStateFile = SyncStateFile.inDataDirectory(cli.locations.dataDir)
 
-internal fun readSyncState(cli: Cli): SyncState {
-    val text = try {
-        Files.readString(cli.locations.dataDir.resolve(SYNC_STATE_FILE))
-    } catch (e: NoSuchFileException) {
-        return SyncState.OFF
-    } catch (e: IOException) {
-        return SyncState.OFF
-    }
-    return try {
-        decodeSyncState(text)
-    } catch (e: SerializationException) {
-        SyncState.OFF
-    }
-}
+internal fun readSyncState(cli: Cli): SyncState = syncStateFile(cli).read()
 
 internal fun writeSyncState(cli: Cli, state: SyncState) {
-    val file = cli.locations.dataDir.resolve(SYNC_STATE_FILE)
+    val stateFile = syncStateFile(cli)
     try {
-        Files.createDirectories(file.parent)
-        writeAtomically(file, ownerOnly = true) { it.write(encodeSyncState(state).toByteArray(Charsets.UTF_8)) }
+        stateFile.write(state)
     } catch (e: IOException) {
-        cli.say(cli.t("sync.state_unwritable", "file" to "$file", "reason" to (e.message ?: "$e")))
+        cli.say(cli.t("sync.state_unwritable", "file" to "${stateFile.file}", "reason" to (e.message ?: "$e")))
     }
 }
 

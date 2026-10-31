@@ -303,6 +303,7 @@ object AlexandriteLayout {
         Layer.CHANNEL,
         Layer.PROVIDER,
         Layer.STORE,
+        Layer.ACCOUNT,
         Layer.AUTOMATION,
         Layer.SANDBOX,
         Layer.EXAMPLE,

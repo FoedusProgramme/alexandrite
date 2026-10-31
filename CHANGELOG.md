@@ -24,6 +24,8 @@
 - Two-way sync of config, secrets and skills with a Pleochroic account: `alexandrite sync enable`, `disable`, `now`
   and `status`. A pulled change that could harm this machine, such as any skill change, an MCP server, a provider
   endpoint or an agent's permissions, is held until `alexandrite sync review` and `sync apply`.
+- `pleochroic.sync`: an agent reads the sync's status, runs a sync as the permission mode allows, and applies
+  held-back changes once a person allows it.
 - Sub-agent runs: a channel can show each run apart from the turn that delegated it, a person can write to a running
   run, and an operator can resume or fork a run that ended.
 - Side models are picked by role, and a turn's images, audio and video go to the model that takes them.

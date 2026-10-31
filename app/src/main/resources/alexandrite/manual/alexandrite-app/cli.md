@@ -127,6 +127,14 @@ item on the very first sync). This is because the account's server could be comp
 pull must never be able to run something new on this machine, change what an agent is allowed to do, where it
 reads or writes, or which secret a provider or tool uses, without the owner seeing it first.
 
+An agent syncs through the `pleochroic.sync` tool, which shares the state of these commands. `status` reads only.
+`run` syncs once, a gated call that the chat's permission mode decides like any other, its approver shown what a
+dry run would push, pull and delete; in a conversation that took in untrusted content only a person may allow it.
+`apply` takes in held-back changes, and only a person may allow it, whatever the mode. Turning sync on or off, and
+discarding held-back changes, stay with these commands. The tool refuses to sync while the config file writes a
+secret as its value rather than as an `${env:NAME}` reference, which the running app does not read; `sync now`
+still can.
+
 ## The manual
 
 - `alexandrite manual` — the pages of this manual; `alexandrite manual <topic>` prints one;

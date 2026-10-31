@@ -598,6 +598,7 @@ class AlexandriteLayoutTest {
                 CHANNEL,
                 PROVIDER,
                 STORE,
+                ACCOUNT,
                 AUTOMATION,
                 SANDBOX,
                 APP,
