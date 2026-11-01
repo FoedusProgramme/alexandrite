@@ -29,7 +29,10 @@ import kotlin.time.Duration
 import kotlin.time.toJavaDuration
 import kotlinx.coroutines.channels.Channel as CoroutineChannel
 
-/** The [HttpEngine] on `java.net.http`, with a client for each connect timeout its requests name. */
+/**
+ * The [HttpEngine] on `java.net.http`, with a client for each connect timeout its requests name. Public for hosts that
+ * send requests outside a runtime.
+ */
 @Singleton
 @Binds(HttpEngine::class)
 public class JdkHttpEngine :

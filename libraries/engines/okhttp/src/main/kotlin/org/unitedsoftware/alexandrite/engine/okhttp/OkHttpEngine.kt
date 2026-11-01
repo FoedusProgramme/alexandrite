@@ -36,10 +36,13 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration
 
-/** The [HttpEngine] on OkHttp, with one connection pool and a client for each connect timeout its requests name. */
+/**
+ * The [HttpEngine] on OkHttp, with one connection pool and a client for each connect timeout its requests name. Public
+ * for hosts that send requests outside a runtime.
+ */
 @Singleton
 @Binds(HttpEngine::class)
-internal class OkHttpEngine :
+public class OkHttpEngine :
     HttpEngine,
     AutoCloseable {
     private val executor = ThreadPoolExecutor(0, Int.MAX_VALUE, 60, TimeUnit.SECONDS, SynchronousQueue()) {

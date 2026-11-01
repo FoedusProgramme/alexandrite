@@ -9,13 +9,15 @@ import org.unitedsoftware.alexandrite.sdk.media.ImageDimensions
 /** The [ImageCodec] on AWT and ImageIO. */
 @Singleton
 @Binds(ImageCodec::class)
-public class AwtImageCodec : ImageCodec {
+internal class AwtImageCodec : ImageCodec {
     override fun dimensions(bytes: ByteArray, mediaType: String): ImageDimensions? =
         AwtImages.dimensions(bytes)?.let { (width, height) -> ImageDimensions(width, height) }
 
     override fun fitted(bytes: ByteArray, mediaType: String, maxSide: Int, maxBytes: Int): FittedImage? =
         AwtImages.normalized(bytes, maxSide, maxBytes)?.let { image ->
-            val dimensions = ImageDimensions(image.width, image.height).takeIf { image.width > 0 && image.height > 0 }
+            val width = image.width?.takeIf { it > 0 }
+            val height = image.height?.takeIf { it > 0 }
+            val dimensions = if (width != null && height != null) ImageDimensions(width, height) else null
             FittedImage(image.bytes, image.mediaType, dimensions)
         }
 }

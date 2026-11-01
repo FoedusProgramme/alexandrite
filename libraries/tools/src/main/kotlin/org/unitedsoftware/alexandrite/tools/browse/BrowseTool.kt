@@ -12,6 +12,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import org.unitedsoftware.alexandrite.internal.media.NO_IMAGE_CODEC
 import org.unitedsoftware.alexandrite.internal.media.NormalizedImage
 import org.unitedsoftware.alexandrite.internal.media.imageType
 import org.unitedsoftware.alexandrite.sdk.browse.BrowseBackend
@@ -39,7 +40,6 @@ import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaPart
 import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
 import org.unitedsoftware.alexandrite.sdk.transcript.ToolOutputPart
-import org.unitedsoftware.alexandrite.tools.media.NO_IMAGE_CODEC
 import org.unitedsoftware.alexandrite.tools.media.fittedImage
 import org.unitedsoftware.alexandrite.tools.media.imageDimensions
 import kotlin.math.roundToInt
@@ -156,9 +156,10 @@ internal class BrowseTool(
                 val screenshot = report.image?.toByteArray()
                 val type = screenshot?.let(::imageType)
                 val image = type?.let { fittedImage(screenshot, it, codec) }
-                if (image != null && !(step is BrowseStep.Look && step.fullPage) && image.width > 0) {
+                val shownWidth = image?.width?.takeIf { it > 0 }
+                if (shownWidth != null && !(step is BrowseStep.Look && step.fullPage)) {
                     imageDimensions(screenshot, type, codec)?.let { (width, _) ->
-                        scaled(width.toDouble() / image.width)
+                        scaled(width.toDouble() / shownWidth)
                     }
                 }
                 ToolResult(rendered(report, image, opened && action !in profile.standalone))
@@ -258,8 +259,8 @@ internal class BrowseTool(
                     image.mediaType,
                     InlineMedia(image.bytes),
                     "screenshot.png",
-                    image.width.takeIf { it > 0 },
-                    image.height.takeIf { it > 0 },
+                    image.width?.takeIf { it > 0 },
+                    image.height?.takeIf { it > 0 },
                 )
             }
         }
