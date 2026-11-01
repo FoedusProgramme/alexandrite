@@ -3,6 +3,7 @@ package org.unitedsoftware.alexandrite.tools.fs
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import org.unitedsoftware.alexandrite.internal.hash.sha256Hex
+import org.unitedsoftware.alexandrite.internal.io.readAtMost
 import org.unitedsoftware.alexandrite.internal.path.PathCanonicalizer
 import org.unitedsoftware.alexandrite.internal.path.openRegularFile
 import org.unitedsoftware.alexandrite.internal.path.writeAtomically
@@ -18,9 +19,7 @@ import org.unitedsoftware.alexandrite.sdk.tool.HardFloor
 import org.unitedsoftware.alexandrite.sdk.tool.ReviewPreview
 import org.unitedsoftware.alexandrite.sdk.tool.ToolContext
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
-import java.io.ByteArrayOutputStream
 import java.io.IOException
-import java.io.InputStream
 import java.nio.file.AccessDeniedException
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -101,25 +100,13 @@ private fun load(file: Path, shown: Path, exempt: Boolean, person: String?, oneL
     }
     if (attributes.isDirectory) throw ToolRefusal("$shown is a directory.")
     checkRegular(file, shown, attributes, "written", oneLink)
-    val bytes = openRegularFile(file, oneLink).use { readAtMost(it, MAX_WRITE_BYTES.toInt() + 1) }
+    val bytes = openRegularFile(file, oneLink).use { it.readAtMost(MAX_WRITE_BYTES.toInt() + 1) }
     if (bytes.size > MAX_WRITE_BYTES) {
         throw ToolRefusal("$shown is over ${MAX_WRITE_BYTES / MIB} MiB, more than the write tools change.")
     }
     val text = Utf8Text.decode(bytes)
         ?: throw ToolRefusal("$shown is no UTF-8 text (it looks binary): the write tools change text files only.")
     return Target(file, shown, text, HASH_PREFIX + sha256Hex(bytes), exempt, person)
-}
-
-/** The first [limit] bytes of [input], fewer when it ends before. */
-private fun readAtMost(input: InputStream, limit: Int): ByteArray {
-    val bytes = ByteArrayOutputStream()
-    val buffer = ByteArray(minOf(limit, BUFFER))
-    while (bytes.size() < limit) {
-        val count = input.read(buffer, 0, minOf(buffer.size, limit - bytes.size()))
-        if (count < 0) break
-        bytes.write(buffer, 0, count)
-    }
-    return bytes.toByteArray()
 }
 
 /** Refuses a write of the existing [target] unless [context]'s conversation read it as it is now. */
@@ -199,8 +186,6 @@ internal fun AgentPlaces.personaRisk(target: Target, context: ToolContext): Tool
 }
 
 private val canonicalizer = PathCanonicalizer()
-
-private const val BUFFER = 64 * 1024
 
 /** `+added -removed lines` of [diff]. */
 internal fun changed(diff: UnifiedDiff): String = "+${diff.added} -${diff.removed} lines"
