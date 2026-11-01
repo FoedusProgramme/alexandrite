@@ -1,9 +1,6 @@
 package org.unitedsoftware.alexandrite.sdk.net
 
-/**
- * HTTP header fields, compared and looked up ignoring the case of their names, each with its values in order. Its
- * string form leaves the values out.
- */
+/** HTTP header fields, compared and looked up ignoring the case of their names, each with its values in order. */
 public class HttpHeaders private constructor(private val fields: Map<String, List<String>>) {
     private val byLowerName: Map<String, List<String>> = fields.mapKeys { it.key.lowercase() }
 

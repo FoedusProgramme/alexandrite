@@ -3,8 +3,7 @@ package org.unitedsoftware.alexandrite.sdk.net
 import org.unitedsoftware.alexandrite.sdk.di.BoundSpi
 
 /**
- * Sends the HTTP requests of Alexandrite and its plugins, bound by one engine plugin. The contract, which the testkit's
- * `HTTP_ENGINE_CONTRACT` checks:
+ * Sends the HTTP requests of Alexandrite and its plugins, by this contract:
  * - it speaks HTTP/1.1, over TLS for `https`, with the platform's trusted certificates and proxy settings;
  * - it never follows a redirect;
  * - it sends the request's headers as given, adding only `host`, `content-length`, `connection` and a default
@@ -17,13 +16,13 @@ import org.unitedsoftware.alexandrite.sdk.di.BoundSpi
 @BoundSpi
 public interface HttpEngine {
     /**
-     * Sends [request] and returns its response once the status and headers arrived, for the caller to read and close.
-     * Throws an [IllegalArgumentException] for a request it cannot send, any other exception when the exchange fails.
+     * Sends [request] and returns its response, for the caller to read and close. Throws an [IllegalArgumentException]
+     * for a request it cannot send, any other exception when the exchange fails.
      */
     public suspend fun open(request: HttpEngineRequest): HttpEngineResponse
 }
 
-/** The response to an [HttpEngineRequest]: its [status] and [headers] as received, and its [body] to read. */
+/** The response to an [HttpEngineRequest]. */
 public class HttpEngineResponse(
     public val status: Int,
     public val headers: HttpHeaders,
@@ -40,12 +39,9 @@ public class HttpEngineResponse(
     override fun toString(): String = "HttpEngineResponse($status, $headers)"
 }
 
-/** The body of a response, which its reader takes in the pieces the engine receives. */
+/** The body of an [HttpEngineResponse]. */
 public interface HttpResponseBody : AutoCloseable {
-    /**
-     * The next piece of the body, never empty, null at its end. Throws when the exchange fails, and cancelling it ends
-     * the exchange as [close] does.
-     */
+    /** The next piece of the body, never empty, null at its end. Throws when the exchange fails. */
     public suspend fun read(): ByteArray?
 
     /** Ends the exchange, from any thread and more than once, also while a read suspends, which then ends. */

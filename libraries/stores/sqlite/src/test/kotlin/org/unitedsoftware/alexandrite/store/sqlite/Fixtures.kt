@@ -62,7 +62,7 @@ internal class MutableClock(var instant: Instant = TEST_TIME, private val zone: 
     }
 }
 
-/** The index of the driver engine the suite runs over, which the build names in a system property. */
+/** The index of the driver engine the suite runs over. */
 internal val driverIndex: PluginIndex = when (
     val name = System.getProperty(
         "alexandrite.store.sqlite.driver",
@@ -76,7 +76,6 @@ internal val driverIndex: PluginIndex = when (
 
 internal val driver: SqliteDriver = IndexResolver(driverIndex).get(key<SqliteDriver>())
 
-/** Creates what [index] binds, each time it is asked for, from the bindings of [index] alone. */
 private class IndexResolver(private val index: PluginIndex) : Resolver {
     @Suppress("UNCHECKED_CAST")
     override fun <T : Any> get(key: Key<T>): T = index.bindings().single { it.key == key }.create(this) as T

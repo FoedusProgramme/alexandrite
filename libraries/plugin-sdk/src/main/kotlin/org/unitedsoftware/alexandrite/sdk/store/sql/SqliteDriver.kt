@@ -3,15 +3,15 @@ package org.unitedsoftware.alexandrite.sdk.store.sql
 import org.unitedsoftware.alexandrite.sdk.di.BoundSpi
 
 /**
- * Opens SQLite databases, for a store that keeps its data in SQLite.
+ * Opens SQLite databases.
  *
- * - An engine plugin binds it, and stores call it; the runtime binds none.
  * - The SQLite behind it is version 3.35 or newer and has FTS5 with the trigram tokenizer.
+ * - Opening a database leaves its file unchanged.
  * - Every call blocks, and every failure of SQLite is a [SqliteException].
  */
 @BoundSpi
 public interface SqliteDriver {
-    /** A connection to the database file at [path], created when there is none, which opening leaves unchanged. */
+    /** A connection to the database file at [path], created when there is none. */
     public fun open(path: String): SqliteConnection
 }
 
@@ -57,14 +57,13 @@ public interface SqliteStatement : AutoCloseable {
 
     public fun bindNull(index: Int)
 
-    /** Runs the statement up to its next row, and returns whether there is one; false once it has run to its end. */
+    /** Runs the statement up to its next row, and returns whether there is one. */
     public fun step(): Boolean
 
     public fun columnCount(): Int
 
     public fun columnName(index: Int): String
 
-    /** The type of the value in column [index]. */
     public fun columnType(index: Int): SqliteType
 
     public fun getLong(index: Int): Long

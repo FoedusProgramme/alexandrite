@@ -39,7 +39,6 @@ internal class StdioLaunch(
     val start: (ProcessBuilder) -> Process = ProcessBuilder::start,
     /** Closed when the connection ends. */
     val held: AutoCloseable? = null,
-    /** Waits for the process and ends it. */
     val trees: ProcessTrees = ProcessTrees.system,
 )
 

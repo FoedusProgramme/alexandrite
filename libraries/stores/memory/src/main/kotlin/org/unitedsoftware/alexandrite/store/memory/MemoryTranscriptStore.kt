@@ -24,7 +24,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.UserEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.UserOrigin
 
-/** The entries, kept in the form [TranscriptCodec] persists, which each read decodes anew. */
+/** The entries, kept in the form [TranscriptCodec] persists. */
 @Singleton
 @Binds(TranscriptStore::class)
 internal class MemoryTranscriptStore(private val data: StoreData) : TranscriptStore {

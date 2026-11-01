@@ -1,14 +1,14 @@
 package org.unitedsoftware.alexandrite.internal.portable
 
-/** Which JDK features beyond Android's API the process has, each probed once by whether its class is there. */
+/** Which JDK features beyond Android's API the process has. */
 public object JdkFeatures {
-    /** `java.lang.ProcessHandle`: process ids, descendants and exit futures. */
+    /** `java.lang.ProcessHandle`. */
     public val processHandles: Boolean by lazy { present("java.lang.ProcessHandle") }
 
     /** Virtual threads (`Thread.ofVirtual`). */
     public val virtualThreads: Boolean by lazy { present("java.lang.Thread\$Builder\$OfVirtual") }
 
-    /** `com.sun.net.httpserver`, the JDK's small HTTP server. */
+    /** `com.sun.net.httpserver`. */
     public val httpServer: Boolean by lazy { present("com.sun.net.httpserver.HttpServer") }
 
     private fun present(name: String): Boolean = try {

@@ -12,7 +12,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.StoredMedia
 import java.time.Duration
 import java.time.Instant
 
-/** The bytes of media, of which a put removes the media that no entry has referred to for a day, hourly at most. */
+/** The bytes of media, of which a put removes those that no entry has referred to for a day. */
 @Singleton
 @Binds(MediaStore::class)
 internal class MemoryMediaStore(private val data: StoreData) : MediaStore {

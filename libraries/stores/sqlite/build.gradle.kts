@@ -14,7 +14,7 @@ dependencies {
     testRuntimeOnly(libs.logback.classic)
 }
 
-// The suite runs once over each driver, which its fixtures read from this property
+// The suite runs once over each driver
 tasks.test {
     systemProperty("alexandrite.store.sqlite.driver", "xerial")
 }

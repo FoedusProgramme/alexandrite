@@ -3,12 +3,7 @@ package org.unitedsoftware.alexandrite.sdk.media
 import dev.drewhamilton.poko.Poko
 import org.unitedsoftware.alexandrite.sdk.di.BoundSpi
 
-/**
- * Decodes, scales and re-encodes images so that a model takes them.
- *
- * Optional: where nothing binds one, an image reaches a model only when it is png, jpeg, gif or webp and already within
- * the limits, and every other image is refused.
- */
+/** Decodes, scales and re-encodes images so that a model takes them. Optional. */
 @BoundSpi
 public interface ImageCodec {
     /** The width and height [bytes], an image of [mediaType], declare as decoded, null when this codec cannot tell. */
