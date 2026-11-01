@@ -59,7 +59,7 @@ public class BeatPlan<K : Any>(
         stepAfter(start, every.toJavaDuration(), now) ?: Instant.MAX
 
     /** Whether a beat due at [due] falls within the active hours. */
-    public fun isActive(due: Instant): Boolean = activeHours == null || LocalTime.ofInstant(due, zone) in activeHours
+    public fun isActive(due: Instant): Boolean = activeHours == null || timeOfDay(due, zone) in activeHours
 
     /** The first beat after [now] from [start] that falls within the active hours, null when none comes by [until]. */
     public fun nextActive(start: Instant, now: Instant, until: Instant): Instant? =
@@ -150,6 +150,14 @@ public class Beats<K : Any>(
         }
     }
 }
+
+private fun timeOfDay(instant: Instant, zone: ZoneId): LocalTime {
+    val local = instant.epochSecond + zone.rules.getOffset(instant).totalSeconds
+    return LocalTime.ofNanoOfDay(Math.floorMod(local, SECONDS_PER_DAY) * NANOS_PER_SECOND + instant.nano)
+}
+
+private const val SECONDS_PER_DAY = 86_400L
+private const val NANOS_PER_SECOND = 1_000_000_000L
 
 private fun <K : Any> distinct(plans: List<BeatPlan<K>>): List<BeatPlan<K>> = plans.also {
     require(plans.map { it.id }.toSet().size == plans.size) { "Beat ids must be distinct." }

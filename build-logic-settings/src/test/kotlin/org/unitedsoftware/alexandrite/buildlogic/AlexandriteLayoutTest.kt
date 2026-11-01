@@ -370,8 +370,10 @@ class AlexandriteLayoutTest {
     fun `the modules of the portable layers are checked, except the ones made for the desktop JVM alone`() {
         val bundled = ":libraries:engines:sqlite-bundled"
         val xerial = ":libraries:engines:sqlite-xerial"
+        val automations = listOf(automationCommon, schedule)
 
-        val portable = listOf(sdk, internals, runtime, agent, tools, commands, openAi, providerCommon, bundled)
+        val portable =
+            listOf(sdk, internals, runtime, agent, tools, commands, openAi, providerCommon) + automations + bundled
 
         assertEquals(portable, (portable + listOf(xerial, telegram, app)).filter { module(it).portable })
         assertTrue(AlexandriteLayout.JDK_ONLY_MODULES.all { module(it).layer in AlexandriteLayout.PORTABLE_LAYERS })

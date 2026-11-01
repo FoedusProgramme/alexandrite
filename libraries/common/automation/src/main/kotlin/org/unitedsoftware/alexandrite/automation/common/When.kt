@@ -1,6 +1,7 @@
 package org.unitedsoftware.alexandrite.automation.common
 
 import dev.drewhamilton.poko.Poko
+import java.math.BigDecimal
 import java.time.DateTimeException
 import java.time.Instant
 import java.time.LocalDateTime
@@ -43,9 +44,16 @@ public sealed interface When {
 
 /** The first of the instants every [step] from [from] that comes after [after], null past the end of time. */
 internal fun stepAfter(from: Instant, step: java.time.Duration, after: Instant): Instant? = try {
-    from.plus(step.multipliedBy(java.time.Duration.between(from, after).dividedBy(step) + 1))
+    from.plus(step.multipliedBy(java.time.Duration.between(from, after).wholeTimes(step) + 1))
 } catch (_: ArithmeticException) {
     null
 } catch (_: DateTimeException) {
     null
 }
+
+/** How many whole times [divisor] fits in this duration, truncated toward zero. */
+private fun java.time.Duration.wholeTimes(divisor: java.time.Duration): Long =
+    exactSeconds().divideToIntegralValue(divisor.exactSeconds()).longValueExact()
+
+private fun java.time.Duration.exactSeconds(): BigDecimal =
+    BigDecimal.valueOf(seconds).add(BigDecimal.valueOf(nano.toLong(), 9))
