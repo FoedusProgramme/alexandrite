@@ -14,6 +14,7 @@ dependencies {
 
     testFixturesApi(project(":libraries:testkit"))
     testFixturesImplementation(project(":libraries:engines:jdk-http"))
-    testRuntimeOnly(libs.logback.classic)
+
     testImplementation(project(":libraries:engines:jdk-http"))
+    testRuntimeOnly(libs.logback.classic)
 }

@@ -11,6 +11,6 @@ dependencies {
 
     testImplementation(project(":libraries:testkit"))
     testImplementation(testFixtures(project(":libraries:common:provider")))
-    testRuntimeOnly(libs.logback.classic)
     testImplementation(project(":libraries:engines:jdk-http"))
+    testRuntimeOnly(libs.logback.classic)
 }
