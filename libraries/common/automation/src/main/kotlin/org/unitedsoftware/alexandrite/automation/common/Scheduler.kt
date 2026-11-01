@@ -95,6 +95,7 @@ public class Scheduler<K : Any>(
     private class Plan<K : Any> {
         val fires = mutableListOf<Pair<Task<K>, Occurrence>>()
         val notices = mutableListOf<() -> Unit>()
+        var next: Instant? = null
     }
 
     private suspend fun load(): Plan<K> {
@@ -126,9 +127,15 @@ public class Scheduler<K : Any>(
     }
 
     private suspend fun loop(scope: CoroutineScope): Nothing {
+        var reported: Instant? = null
+        var first = true
         while (true) {
             val (plan, earliest) = mutex.withLock { due() }
             dispatch(scope, plan)
+            val next = plan.next
+            if (first || next != reported) events.nextDue(next)
+            reported = next
+            first = false
             sleep(earliest)
         }
     }
@@ -156,6 +163,7 @@ public class Scheduler<K : Any>(
             }
         }
         val earliest = tasks.values.filter { it.pending?.replay != true }.mapNotNull { it.next }.minOrNull()
+        plan.next = tasks.values.mapNotNull { it.next }.minOrNull()
         return plan to earliest
     }
 

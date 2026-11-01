@@ -1,5 +1,6 @@
 package org.unitedsoftware.alexandrite.testkit
 
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.sdk.channel.Delivery
 import org.unitedsoftware.alexandrite.sdk.channel.DeliveryFailure
@@ -29,6 +30,7 @@ import org.unitedsoftware.alexandrite.sdk.turn.TurnOutcome
 import org.unitedsoftware.alexandrite.sdk.turn.TurnPhase
 import org.unitedsoftware.alexandrite.sdk.turn.TurnStatus
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -299,5 +301,24 @@ class FakesTest {
         assertFailsWith<IllegalStateException> { context.turn }
         assertFailsWith<IllegalStateException> { context.touched(Path.of("/srv/other.md")) }
         assertEquals(listOf(Path.of("/srv/notes.md")), context.touchedPaths)
+    }
+
+    // Wakes.
+
+    @Test
+    fun `a recording wake scheduler keeps each owner's latest wake apart from the others'`() {
+        val wakes = RecordingWakeScheduler()
+        val nine = Instant.parse("2026-10-18T09:00:00Z")
+        val ten = Instant.parse("2026-10-18T10:00:00Z")
+
+        wakes.wakeAt("schedule", ten)
+        wakes.wakeAt("other", nine)
+        wakes.wakeAt("schedule", nine.plusSeconds(60))
+        wakes.wakeAt("other", null)
+
+        assertEquals(mapOf("schedule" to nine.plusSeconds(60)), wakes.pending)
+        assertEquals(nine.plusSeconds(60), wakes.earliest)
+        assertEquals(RecordingWakeScheduler.Wake("other", null), wakes.calls.last())
+        assertEquals(4, runBlocking { wakes.awaitCalls(4) }.size)
     }
 }

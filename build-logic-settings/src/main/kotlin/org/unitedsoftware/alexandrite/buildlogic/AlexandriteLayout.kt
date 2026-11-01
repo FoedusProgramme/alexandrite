@@ -329,6 +329,8 @@ object AlexandriteLayout {
         Layer.HTTP_COMMON,
         Layer.PROVIDER,
         Layer.STORE,
+        Layer.AUTOMATION,
+        Layer.AUTOMATION_COMMON,
         Layer.ENGINE,
     )
 

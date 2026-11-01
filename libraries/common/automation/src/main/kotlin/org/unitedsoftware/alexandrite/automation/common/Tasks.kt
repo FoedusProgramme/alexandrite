@@ -81,4 +81,10 @@ public interface SchedulerEvents<K : Any> {
 
     /** [Trigger.fire] threw [error], which counts as [Fired.DONE]. */
     public fun failed(task: Task<K>, occurrence: Occurrence, error: Exception) {}
+
+    /**
+     * The earliest instant a task is due next, null when none is: reported once the store is loaded and whenever it
+     * changes.
+     */
+    public fun nextDue(at: Instant?) {}
 }

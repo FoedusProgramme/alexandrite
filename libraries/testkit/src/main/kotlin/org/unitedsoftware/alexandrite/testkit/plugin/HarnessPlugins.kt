@@ -25,6 +25,7 @@ import org.unitedsoftware.alexandrite.sdk.plugin.PluginIds
 import org.unitedsoftware.alexandrite.sdk.plugin.PluginIndex
 import org.unitedsoftware.alexandrite.sdk.plugin.PluginInfo
 import org.unitedsoftware.alexandrite.sdk.runtime.HostPaths
+import org.unitedsoftware.alexandrite.sdk.runtime.WakeScheduler
 import org.unitedsoftware.alexandrite.sdk.sandbox.ExecutionEnvironment
 import org.unitedsoftware.alexandrite.sdk.store.ChatStateStore
 import org.unitedsoftware.alexandrite.sdk.store.ConversationStore
@@ -81,6 +82,7 @@ internal class DoublesPlugin(
     /** Whether to bind the test floor over the run's host paths. */
     hostFloor: Boolean,
     environments: List<ExecutionEnvironment>,
+    wakes: WakeScheduler?,
 ) : HarnessPlugin(ID, "Test doubles") {
     private val bindings = buildList {
         if (models.isNotEmpty()) {
@@ -125,6 +127,7 @@ internal class DoublesPlugin(
         chatStates?.let { add(instanceBinding(key<ChatStateStore>(), it, ID, "ChatStateStore")) }
         records?.let { add(instanceBinding(key<RecordStore>(), it, ID, "RecordStore")) }
         floor?.let { add(instanceBinding(key<HardFloor>(), it, ID, "HardFloor")) }
+        wakes?.let { add(instanceBinding(key<WakeScheduler>(), it, ID, "WakeScheduler")) }
         if (hostFloor) {
             val paths = Dependency(key<HostPaths>(), DependencyKind.INSTANCE, "paths")
             add(

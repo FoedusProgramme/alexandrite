@@ -15,6 +15,7 @@ import org.unitedsoftware.alexandrite.sdk.turn.Admission
 import org.unitedsoftware.alexandrite.sdk.turn.RefusalReason
 import org.unitedsoftware.alexandrite.sdk.turn.ReplyRoute
 import org.unitedsoftware.alexandrite.sdk.turn.TurnOutcome
+import org.unitedsoftware.alexandrite.testkit.RecordingWakeScheduler.Wake
 import org.unitedsoftware.alexandrite.testkit.TestRecords
 import org.unitedsoftware.alexandrite.testkit.testChat
 import java.io.IOException
@@ -336,5 +337,34 @@ class SchedulingTest {
         assertContains(answer, "next run 2026-10-18 12:00 +00:00.")
         schedule.advance(2.hours)
         assertContains(schedule.initiator.turns.single().prompt, "due 2026-10-18 12:00 +00:00.")
+    }
+
+    // The host's wakes.
+
+    @Test
+    fun `the host is told under the plugin's id when the next task is due, and the wake outlasts the stop`() = test {
+        val schedule = opened()
+        schedule.make(mapOf("in" to "30m"))
+        schedule.make(mapOf("in" to "10m"))
+
+        schedule.stop()
+
+        assertEquals(
+            listOf(null, ORIGIN.plusSeconds(1800), ORIGIN.plusSeconds(600)).map { Wake(PLUGIN, it) },
+            schedule.wakes.calls,
+        )
+    }
+
+    @Test
+    fun `a start at the wake after the process ended runs the task that came due, and clears the wake`() = test {
+        val first = opened()
+        val id = first.make(mapOf("in" to "10m"))
+        first.stop()
+
+        val second = opened(origin = first.wakes.pending.getValue(PLUGIN).plusSeconds(300))
+
+        assertContains(second.initiator.turns.single().prompt, "Scheduled task $id, set by Ada on 2026-10-18; due ")
+        assertContains(second.initiator.turns.single().prompt, "running 5 min late.")
+        assertEquals(listOf(Wake(PLUGIN, null)), second.wakes.calls)
     }
 }

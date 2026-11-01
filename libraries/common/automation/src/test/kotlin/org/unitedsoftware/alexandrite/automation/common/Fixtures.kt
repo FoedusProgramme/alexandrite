@@ -48,6 +48,7 @@ class MemoryTaskStore<K : Any>(initial: List<Task<K>> = emptyList(), private val
 
 class RecordingEvents : SchedulerEvents<String> {
     val log = mutableListOf<String>()
+    val nextDue = mutableListOf<Instant?>()
 
     override fun cutOff(task: Task<String>, occurrence: Occurrence, crashed: Boolean) {
         log += "cut off ${task.id} ${occurrence.due}" + if (crashed) " crashed" else ""
@@ -63,5 +64,9 @@ class RecordingEvents : SchedulerEvents<String> {
 
     override fun failed(task: Task<String>, occurrence: Occurrence, error: Exception) {
         log += "failed ${task.id} ${error.message}"
+    }
+
+    override fun nextDue(at: Instant?) {
+        nextDue += at
     }
 }

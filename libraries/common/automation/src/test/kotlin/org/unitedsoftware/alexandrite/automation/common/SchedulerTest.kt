@@ -335,4 +335,48 @@ class SchedulerTest {
 
         assertTrue(cancelled.isCompleted)
     }
+
+    // Next due.
+
+    @Test
+    fun `the earliest next due instant is reported once loaded and whenever it changes`() = runTest {
+        val harness = harness()
+        for ((id, offset) in listOf("a" to 20.minutes, "b" to 10.minutes, "c" to 30.minutes)) {
+            harness.scheduler.schedule(id, once(offset), UTC)
+            runCurrent()
+        }
+
+        advance(10.minutes)
+        harness.scheduler.cancel("a")
+        runCurrent()
+        harness.scheduler.cancel("c")
+        runCurrent()
+
+        assertEquals(
+            listOf<Instant?>(null, at(20.minutes), at(10.minutes), at(20.minutes), at(30.minutes), null),
+            harness.events.nextDue,
+        )
+    }
+
+    @Test
+    fun `a firing task reports its next occurrence, and a stop leaves the last report standing`() = runTest {
+        val harness = harness()
+        harness.scheduler.schedule("r", When.Every(10.minutes, at(10.minutes)), UTC)
+        advance(10.minutes)
+
+        harness.job.cancelAndJoin()
+
+        assertEquals(listOf<Instant?>(null, at(10.minutes), at(20.minutes)), harness.events.nextDue)
+    }
+
+    @Test
+    fun `a task missed while the host was down reports the occurrence after the one it runs late`() = runTest {
+        val every = When.Every(1.hours, at((-72).hours + 50.minutes))
+        val store = MemoryTaskStore(listOf(Task("r", every, UTC, at((-48).hours + 50.minutes), null)))
+
+        val harness = harness(store)
+
+        assertEquals(listOf(ORIGIN), harness.fires.map { it.at })
+        assertEquals(listOf<Instant?>(at(50.minutes)), harness.events.nextDue)
+    }
 }

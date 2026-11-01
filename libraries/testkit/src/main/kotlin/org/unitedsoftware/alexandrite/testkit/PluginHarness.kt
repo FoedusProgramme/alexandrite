@@ -29,6 +29,7 @@ import org.unitedsoftware.alexandrite.sdk.plugin.PluginIndex
 import org.unitedsoftware.alexandrite.sdk.runtime.AgentPlaces
 import org.unitedsoftware.alexandrite.sdk.runtime.HostPaths
 import org.unitedsoftware.alexandrite.sdk.runtime.StopRequest
+import org.unitedsoftware.alexandrite.sdk.runtime.WakeScheduler
 import org.unitedsoftware.alexandrite.sdk.sandbox.ExecutionEnvironment
 import org.unitedsoftware.alexandrite.sdk.tool.HardFloor
 import org.unitedsoftware.alexandrite.sdk.tool.Tool
@@ -272,6 +273,7 @@ public class PluginHarness private constructor(
         private var records: TestRecords? = null
         private var store: MemoryStore? = null
         private var floor: HardFloor? = null
+        private var wakes: WakeScheduler? = null
         private var hostFloor = false
 
         internal var temporaryRoot: () -> Path = { Files.createTempDirectory("alexandrite-harness-") }
@@ -364,6 +366,9 @@ public class PluginHarness private constructor(
         public fun executionEnvironment(environment: ExecutionEnvironment): Builder =
             apply { environments += environment }
 
+        /** Binds [wakes] through the plugin `testkit`. */
+        public fun wakeScheduler(wakes: WakeScheduler): Builder = apply { this.wakes = wakes }
+
         /** Contributes [hook] through the plugin `testkit`. */
         public fun hook(hook: Hook): Builder = apply { hooks += hook }
 
@@ -443,6 +448,7 @@ public class PluginHarness private constructor(
                 floor,
                 hostFloor,
                 environments,
+                wakes,
             )
             val recording = channels.map { (type, instances) -> RecordingChannelPlugin(type, instances.toMap()) }
             val owned = tree(recording.associate { it.configRoot to it.config() })
