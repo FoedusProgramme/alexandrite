@@ -60,11 +60,14 @@ public class OkHttpEngine :
         .retryOnConnectionFailure(false)
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .writeTimeout(0, TimeUnit.MILLISECONDS)
+        .addInterceptor(::withRecoveryByMethod)
         .addNetworkInterceptor(::withoutAddedIdentity)
         .addNetworkInterceptor(::withRetryAfterHeld)
         .build()
 
     private val clients = ConcurrentHashMap<Duration, OkHttpClient>()
+
+    private val bodies = ConcurrentHashMap.newKeySet<OkBody>()
 
     override suspend fun open(request: HttpEngineRequest): HttpEngineResponse {
         val call = client(request.connectTimeout).newCall(okRequest(request))
@@ -83,14 +86,20 @@ public class OkHttpEngine :
             )
         }
         val headers = response.headers.toMultimap().let { fields ->
-            if (response.code != UNAVAILABLE) fields else fields.mapKeys { if (it.key == HELD) RETRY_AFTER else it.key }
+            if (response.code !in HELD_STATUSES) {
+                fields
+            } else {
+                (fields - RETRY_AFTER).mapKeys { if (it.key == HELD) RETRY_AFTER else it.key }
+            }
         }
-        return HttpEngineResponse(response.code, HttpHeaders.of(headers), OkBody(call, response, executor))
+        val body = OkBody(call, response, executor, bodies).also(bodies::add)
+        return HttpEngineResponse(response.code, HttpHeaders.of(headers), body)
     }
 
     /** Ends every exchange in flight and frees the threads and connections. */
     override fun close() {
         dispatcher.cancelAll()
+        bodies.forEach { it.close() }
         executor.shutdown()
         base.connectionPool.evictAll()
     }
@@ -119,13 +128,18 @@ public class OkHttpEngine :
         return chain.proceed(request.newBuilder().removeHeader(ACCEPT_ENCODING).build())
     }
 
-    /** [chain]'s response with a 503's `retry-after` held under another name, keeping OkHttp from resending. */
+    /** [chain]'s response, with OkHttp's recovery from a failed connection on for a `GET` or `HEAD` only. */
+    private fun withRecoveryByMethod(chain: Interceptor.Chain): Response =
+        chain.withRetryOnConnectionFailure(chain.request().method in RESENT_METHODS).proceed(chain.request())
+
+    /** [chain]'s response with a 408's or 503's `retry-after` under another name, keeping OkHttp from resending. */
     private fun withRetryAfterHeld(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
-        val values = response.headers(RETRY_AFTER)
-        if (response.code != UNAVAILABLE || values.isEmpty()) return response
+        if (response.code !in HELD_STATUSES) return response
         val headers = response.headers.newBuilder().removeAll(RETRY_AFTER)
-        values.forEach { headers.addUnsafeNonAscii(HELD, it) }
+        response.headers(RETRY_AFTER).forEach { headers.addUnsafeNonAscii(HELD, it) }
+        // A wait, which keeps OkHttp from resending a 408
+        if (response.code == CLIENT_TIMEOUT) headers.add(RETRY_AFTER, "1")
         return response.newBuilder().headers(headers.build()).build()
     }
 
@@ -136,7 +150,12 @@ public class OkHttpEngine :
         const val IDENTITY = "identity"
         const val RETRY_AFTER = "retry-after"
         const val HELD = "x-alexandrite-held-retry-after"
+        const val CLIENT_TIMEOUT = 408
         const val UNAVAILABLE = 503
+
+        val HELD_STATUSES = setOf(CLIENT_TIMEOUT, UNAVAILABLE)
+
+        val RESENT_METHODS = setOf("GET", "HEAD")
 
         val EMPTY_BODY = HttpRequestBody.of(ByteArray(0))
 
@@ -165,8 +184,12 @@ private class SourceBody(private val body: HttpRequestBody) : RequestBody() {
 }
 
 /** The body of [response], each read run on [executor] and the [call] cancelled when the read is. */
-private class OkBody(private val call: Call, private val response: Response, private val executor: Executor) :
-    HttpResponseBody {
+private class OkBody(
+    private val call: Call,
+    private val response: Response,
+    private val executor: Executor,
+    private val openBodies: MutableSet<OkBody>,
+) : HttpResponseBody {
     private val source = response.body.source()
 
     private val state = AtomicInteger(IDLE)
@@ -202,6 +225,7 @@ private class OkBody(private val call: Call, private val response: Response, pri
                     // A body read to its end leaves its connection to the pool
                     if (!ended) call.cancel()
                     response.close()
+                    openBodies -= this
                     return
                 }
 
@@ -220,6 +244,7 @@ private class OkBody(private val call: Call, private val response: Response, pri
         if (state.compareAndSet(READING, IDLE)) return true
         state.set(CLOSED)
         response.close()
+        openBodies -= this
         return false
     }
 

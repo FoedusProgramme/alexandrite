@@ -1,7 +1,11 @@
 package org.unitedsoftware.alexandrite.engine.okhttp
 
 import com.sun.net.httpserver.HttpServer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.unitedsoftware.alexandrite.sdk.net.HttpEngineRequest
 import java.io.IOException
 import java.net.InetAddress
@@ -12,6 +16,9 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class OkHttpEngineClosedTest {
     private val release = CountDownLatch(1)
@@ -41,6 +48,20 @@ class OkHttpEngineClosedTest {
         engine.close()
 
         assertFailsWith<IOException> { response.body.read() }
+        response.close()
+    }
+
+    @Test
+    fun `closing the engine ends a read that waits for the body`() = runBlocking {
+        val engine = OkHttpEngine()
+        val response = engine.open(HttpEngineRequest.builder("GET", "http://127.0.0.1:${server.address.port}/").build())
+        assertNotNull(response.body.read())
+        val reading = async(Dispatchers.Default) { runCatching { response.body.read() } }
+        delay(200.milliseconds)
+
+        engine.close()
+
+        assertTrue(withTimeout(5.seconds) { reading.await() }.isFailure)
         response.close()
     }
 }

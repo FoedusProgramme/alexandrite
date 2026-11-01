@@ -130,19 +130,13 @@ internal val REQUEST_CHECKS: List<HttpEngineCheck> = listOf(
         expectEqual(false, get.chunked || post.chunked, "whether a request without a body came in chunks")
         expectEqual(0, post.body.size, "the bytes of a POST without a body")
     },
-    HttpEngineCheck("a header value of visible ASCII, spaces and tabs arrives as given, and any other is refused") {
+    HttpEngineCheck("a header value of visible ASCII, spaces and tabs arrives as given") {
         val value = "a" + (' '..'~').joinToString("") + "\tz"
         server.handle { it.respond(200) }
 
         open(request { header("x-printable", value) }).readAll()
 
         expectEqual(value, server.nextRequest().header("x-printable"), "the value of x-printable")
-        for (other in listOf("caf\u00e9", "a\u0085b", "\u0100", "a\u0000b")) {
-            val error = thrown("Building a request with a header value of '${other.map { it.code }}'") {
-                request { header("x-other", other) }
-            }
-            expect(error is IllegalArgumentException) { "Expected an IllegalArgumentException, was $error." }
-        }
     },
     HttpEngineCheck("a URL the engine cannot use is refused with an IllegalArgumentException") {
         val error = thrown("Opening a URL with a space in its host") {
@@ -409,6 +403,22 @@ internal val CONNECTION_CHECKS: List<HttpEngineCheck> = listOf(
         expectEqual("POST", server.nextRequest().method, "the method of the dropped request")
         delay(200.milliseconds)
         expectEqual(emptyList(), server.pending().map { it.method }, "the requests sent again after the drop")
+    },
+    HttpEngineCheck("a GET on a kept connection that the server closed gets its response") {
+        val closed = CompletableFuture<Unit>()
+        server.handle {
+            it.respond(200, body = "first".toByteArray())
+            it.close()
+            closed.complete(Unit)
+        }
+        server.handle { it.respond(200, body = "second".toByteArray()) }
+        open().readAll()
+        awaited(closed, what = "Closing the kept connection")
+        delay(100.milliseconds)
+
+        val body = within(10.seconds, "A GET after the server closed its kept connection") { open().readAll() }
+
+        expectEqual("second", body.decodeToString(), "the body")
     },
     HttpEngineCheck("requests one after another each get their response") {
         repeat(5) { index -> server.handle { it.respond(200, body = "r$index".toByteArray()) } }

@@ -43,6 +43,7 @@ class HttpEngineRequestTest {
             { header("x-key", "caf\u00e9") },
             { header("x-key", "a\u0085b") },
             { header("x-key", "\u0100") },
+            { header("x-key", "a\u0000b") },
             { header("bad name", "a") },
             { method("GE T") },
             { url("ftp://example.com/") },

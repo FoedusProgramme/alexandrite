@@ -159,6 +159,10 @@ internal class ServerExchange(private val socket: Socket, private val input: Inp
         socket.shutdownOutput()
     }
 
+    fun close() {
+        socket.close()
+    }
+
     /** Whether the client closed the connection within [timeout], reading and dropping what it still sends. */
     fun awaitClientClose(timeout: Duration = 10.seconds): Boolean {
         socket.soTimeout = timeout.inWholeMilliseconds.toInt()
