@@ -12,7 +12,6 @@ import javax.swing.text.html.HTMLEditorKit
 import javax.swing.text.html.parser.ParserDelegator
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class WebFetchTextTest {
@@ -66,22 +65,6 @@ class WebFetchTextTest {
             val page = fetch.fetch(server.baseUrl.replace("127.0.0.1", "localhost") + "/article")
             assertEquals(earlierPageText(PAGES.getValue("an article")), page.text)
             server.assertFinished()
-        }
-    }
-
-    @Test
-    fun `without an HTML parser only pages of plain text are read`() = runBlocking {
-        FakeModelServer().use { server ->
-            val url = server.baseUrl.replace("127.0.0.1", "localhost")
-            server.enqueue(fakeResponse { header("content-type", "text/plain").body("plain words") })
-            server.enqueue(fakeResponse { header("content-type", "text/html").body("<p>markup</p>") })
-            val fetch = WebFetch(WebConfig(allowedPrivateHosts = setOf("localhost")), null as HtmlParser?)
-            assertEquals("plain words", fetch.fetch("$url/plain").text)
-            val refused = assertFailsWith<IllegalArgumentException> { fetch.fetch("$url/page") }
-            assertEquals(
-                "This host cannot read HTML pages: no plugin provides an HTML parser (such as alexandrite-engine-jsoup).",
-                refused.message,
-            )
         }
     }
 }

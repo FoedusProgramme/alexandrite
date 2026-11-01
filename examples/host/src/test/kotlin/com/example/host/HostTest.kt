@@ -4,6 +4,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.agent.AlexandriteAgentIndex
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
+import org.unitedsoftware.alexandrite.engine.swinghtml.AlexandriteEngineSwingHtmlIndex
 import org.unitedsoftware.alexandrite.sdk.transcript.ToolOutcome
 import org.unitedsoftware.alexandrite.sdk.transcript.ToolResultEntry
 import org.unitedsoftware.alexandrite.sdk.turn.Admission
@@ -32,6 +34,8 @@ class HostTest {
             .reply { text("The file says hello.") }
         val harness = PluginHarness.builder(AlexandriteAgentIndex())
             .plugin(AlexandriteToolsIndex())
+            .plugin(AlexandriteEngineJdkHttpIndex())
+            .plugin(AlexandriteEngineSwingHtmlIndex())
             .config("""{"agents": {"coder": {"model": "scripted/test-model", "channels": {"test:main": {}}}}}""")
             .store(MemoryStore())
             .model(model)

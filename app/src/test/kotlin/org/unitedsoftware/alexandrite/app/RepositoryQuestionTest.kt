@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.agent.AlexandriteAgentIndex
 import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
+import org.unitedsoftware.alexandrite.engine.swinghtml.AlexandriteEngineSwingHtmlIndex
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
 import org.unitedsoftware.alexandrite.sdk.transcript.AssistantEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
@@ -71,6 +72,7 @@ class RepositoryQuestionTest {
         val store = MemoryStore()
         val harness = PluginHarness.builder(AlexandriteAgentIndex()).plugin(AlexandriteEngineJdkHttpIndex())
             .plugin(AlexandriteToolsIndex())
+            .plugin(AlexandriteEngineSwingHtmlIndex())
             .config(config)
             .store(store)
             .model(model)

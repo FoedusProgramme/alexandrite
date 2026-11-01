@@ -9,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.agent.AlexandriteAgentIndex
 import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.engine.sqlitexerial.AlexandriteEngineSqliteXerialIndex
+import org.unitedsoftware.alexandrite.engine.swinghtml.AlexandriteEngineSwingHtmlIndex
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
 import org.unitedsoftware.alexandrite.sdk.store.ConversationStore
 import org.unitedsoftware.alexandrite.sdk.store.TranscriptStore
@@ -53,6 +54,7 @@ class TaintPersistenceTest {
             .plugin(AlexandriteStoreSqliteIndex())
             .plugin(AlexandriteEngineSqliteXerialIndex())
             .plugin(AlexandriteToolsIndex())
+            .plugin(AlexandriteEngineSwingHtmlIndex())
             .config(config)
             .model(model)
             .channel(operators = setOf("operator"))

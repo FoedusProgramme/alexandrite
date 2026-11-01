@@ -30,10 +30,10 @@ internal fun interface WebPages {
     suspend fun fetch(url: String): WebPage
 }
 
-/** Fetches pages over its own connections, reading HTML with [parser] and other text without one. */
+/** Fetches pages over its own connections, reading HTML with [parser]. */
 @Singleton
 @Binds(WebPages::class)
-internal class WebFetch(private val config: WebConfig, private val parser: HtmlParser?) : WebPages {
+internal class WebFetch(private val config: WebConfig, private val parser: HtmlParser) : WebPages {
     override suspend fun fetch(url: String): WebPage = withTimeout(config.timeoutSeconds.seconds) {
         webIo { track ->
             val fetched = fetchPage(
@@ -50,9 +50,6 @@ internal class WebFetch(private val config: WebConfig, private val parser: HtmlP
     /** [fetched] as one line of text: a page's title and text, other text as it came. */
     private fun readable(fetched: FetchedText): String {
         if (!fetched.html) return fetched.text
-        val parser = parser ?: throw IllegalArgumentException(
-            "This host cannot read HTML pages: no plugin provides an HTML parser (such as alexandrite-engine-jsoup).",
-        )
         return oneLine(parser.parse(fetched.text, fetched.url.toString()))
     }
 }

@@ -5,6 +5,10 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
+import org.unitedsoftware.alexandrite.engine.swinghtml.AlexandriteEngineSwingHtmlIndex
+import org.unitedsoftware.alexandrite.runtime.RuntimeProblemKind
+import org.unitedsoftware.alexandrite.runtime.RuntimeStartException
+import org.unitedsoftware.alexandrite.runtime.StartStage
 import org.unitedsoftware.alexandrite.sdk.tool.Tool
 import org.unitedsoftware.alexandrite.sdk.tool.ToolDefinition
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
@@ -18,6 +22,8 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.fail
 import kotlin.time.Duration.Companion.seconds
 
 class ToolsPluginTest {
@@ -36,7 +42,9 @@ class ToolsPluginTest {
         runBlocking {
             PluginHarness.builder(
                 AlexandriteToolsIndex(),
-            ).plugin(AlexandriteEngineJdkHttpIndex()).hardFloor(testHardFloor(listOf(secret.parent))).build().run {
+            ).plugin(
+                AlexandriteEngineJdkHttpIndex(),
+            ).plugin(AlexandriteEngineSwingHtmlIndex()).hardFloor(testHardFloor(listOf(secret.parent))).build().run {
                 val tools = getAll<Tool>()
                 risks = tools.associate { it.definition.name to it.definition.risk }
                 val read = tools.single { it.definition.name == "fs.read" }
@@ -73,7 +81,9 @@ class ToolsPluginTest {
             val config = """{"exec": {"maxTimeoutSeconds": 30, "maxOutputChars": 500, "environment": ["JAVA_HOME"]}}"""
             PluginHarness.builder(
                 AlexandriteToolsIndex(),
-            ).plugin(AlexandriteEngineJdkHttpIndex()).config(config).hardFloor(testHardFloor()).build().run {
+            ).plugin(
+                AlexandriteEngineJdkHttpIndex(),
+            ).plugin(AlexandriteEngineSwingHtmlIndex()).config(config).hardFloor(testHardFloor()).build().run {
                 definition = getAll<Tool>().single { it.definition.name == "command.exec" }.definition
                 description = definition.parameters.toString()
             }
@@ -87,12 +97,30 @@ class ToolsPluginTest {
     fun `web search has the brave, tavily, searxng, duckduckgo and pleochroic backends`() = runBlocking {
         PluginHarness.builder(
             AlexandriteToolsIndex(),
-        ).plugin(AlexandriteEngineJdkHttpIndex()).hardFloor(testHardFloor()).build().run {
+        ).plugin(
+            AlexandriteEngineJdkHttpIndex(),
+        ).plugin(AlexandriteEngineSwingHtmlIndex()).hardFloor(testHardFloor()).build().run {
             assertEquals(
                 setOf("brave", "tavily", "searxng", "duckduckgo", "pleochroic"),
                 getAll<WebSearchBackend>().map { it.id }.toSet(),
             )
         }
         Unit
+    }
+
+    @Test
+    fun `a host without an HTML parser fails the start at CONFIG, naming the engines that bind one`() {
+        val error = assertFailsWith<RuntimeStartException> {
+            runBlocking {
+                PluginHarness.builder(AlexandriteToolsIndex()).plugin(AlexandriteEngineJdkHttpIndex())
+                    .hardFloor(testHardFloor()).build().run { fail("the block ran") }
+            }
+        }
+
+        assertEquals(StartStage.CONFIG, error.stage)
+        val problem = error.problems.single()
+        assertEquals(RuntimeProblemKind.MISSING_ENGINE to "alexandrite-tools", problem.kind to problem.plugin)
+        assertContains(problem.message, "needs HtmlParser")
+        assertContains(problem.message, "alexandrite-engine-swing-html on a desktop JVM, or alexandrite-engine-jsoup")
     }
 }
