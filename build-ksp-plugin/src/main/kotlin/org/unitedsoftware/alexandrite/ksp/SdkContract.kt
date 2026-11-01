@@ -52,7 +52,7 @@ internal val INDEXED_CLASS_ANNOTATIONS = COMPONENT_ANNOTATIONS + CONFIG_SECTION
 internal val FUNCTION_BINDING_ANNOTATIONS = listOf(SINGLETON, CHANNEL_INSTANCE_SCOPED, BINDS, CONTRIBUTE, NAMED)
 
 /** The `AlexandriteSdk.API_VERSION` that the index and the descriptor record. */
-internal const val SDK_API_VERSION = 1
+internal const val SDK_API_VERSION = 2
 
 /** Lowercase words of letters and digits joined by single hyphens. */
 private val ID = Regex("[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*")
