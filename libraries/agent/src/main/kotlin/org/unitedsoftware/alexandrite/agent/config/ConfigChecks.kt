@@ -19,6 +19,7 @@ import org.unitedsoftware.alexandrite.sdk.sandbox.ExecutionEnvironment
 import org.unitedsoftware.alexandrite.sdk.transcript.ModelRef
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import java.nio.file.Paths
 
 /** The ids that an instruction file's `when` may name. */
 internal val CONDITION_IDS: List<String> = ChatKind.entries.map { it.id } + TurnKind.entries.map { it.id }
@@ -65,7 +66,7 @@ internal fun invalidGlob(globs: List<String>): String? = globs.firstOrNull { !To
 
 internal fun isPath(text: String): Boolean = text.isNotBlank() &&
     try {
-        Path.of(text)
+        Paths.get(text)
         true
     } catch (e: InvalidPathException) {
         false

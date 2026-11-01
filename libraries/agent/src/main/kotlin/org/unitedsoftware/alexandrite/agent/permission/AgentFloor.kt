@@ -30,6 +30,7 @@ import org.unitedsoftware.alexandrite.sdk.tool.FloorCheck
 import org.unitedsoftware.alexandrite.sdk.tool.HardFloor
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import java.nio.file.Paths
 
 /** The hard floor of every tool, whose places follow `agent.floor` while the runtime runs. */
 @Singleton
@@ -364,7 +365,7 @@ private fun warnShared(workspaces: Map<AgentId, Path>, canonicalizer: PathCanoni
 }
 
 private fun userHome(): Path? = try {
-    System.getProperty("user.home")?.takeIf { it.isNotBlank() }?.let { Path.of(it) }?.takeIf { it.isAbsolute }
+    System.getProperty("user.home")?.takeIf { it.isNotBlank() }?.let { Paths.get(it) }?.takeIf { it.isAbsolute }
 } catch (e: InvalidPathException) {
     null
 }

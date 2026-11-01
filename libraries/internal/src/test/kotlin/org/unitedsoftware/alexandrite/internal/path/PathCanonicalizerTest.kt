@@ -53,6 +53,14 @@ class PathCanonicalizerTest {
     }
 
     @Test
+    fun `proc self stays as written without a process id`() {
+        val unpinned = PathCanonicalizer(nameCase = { NameCase.SENSITIVE }, firmlinks = false, pid = null)
+
+        assertEquals(Path.of("/proc/self/environ"), unpinned.canonicalize(Path.of("/proc/self/environ")).lexical)
+        assertEquals(Path.of("/proc/thread-self"), unpinned.canonicalize(Path.of("/proc/thread-self")).lexical)
+    }
+
+    @Test
     fun `how names compare is that of the volume of the longest existing prefix`() {
         val sub = Files.createDirectories(root.resolve("sub"))
         val existing = mutableListOf<Path>()

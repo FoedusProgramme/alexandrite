@@ -18,6 +18,7 @@ import org.unitedsoftware.alexandrite.sdk.runtime.AgentPlaces
 import org.unitedsoftware.alexandrite.sdk.runtime.HostPaths
 import org.unitedsoftware.alexandrite.sdk.tool.CallReview
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.Locale
 
 /** The names of a project's instruction files, in the order they load. */
@@ -150,7 +151,7 @@ private fun under(path: Path, place: Path): Boolean = folded(path).startsWith(fo
 
 private fun same(path: Path, other: Path): Boolean = folded(path) == folded(other)
 
-private fun folded(path: Path): Path = Path.of(path.toString().lowercase(Locale.ROOT))
+private fun folded(path: Path): Path = Paths.get(path.toString().lowercase(Locale.ROOT))
 
 private val SKILL_NAMES = SKILL_DIRECTORIES.map { it.split('/') }
 

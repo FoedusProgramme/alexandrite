@@ -1,13 +1,15 @@
 package org.unitedsoftware.alexandrite.internal.path
 
+import org.unitedsoftware.alexandrite.internal.portable.ProcessIds
 import java.io.IOException
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 
 /** An absolute path in the two forms that a check compares. */
 public class CanonicalPath internal constructor(
-    /** With `.` and `..` folded and `/proc/self` pinned to the process. */
+    /** With `.` and `..` folded and `/proc/self` pinned to the process where its id is known. */
     public val lexical: Path,
     /** The real path of the longest existing prefix with the rest appended, dangling links followed. */
     public val real: Path,
@@ -43,7 +45,8 @@ public class PathCanonicalizer(
     private val nameCase: (Path) -> NameCase = NameCaseProbe()::nameCase,
     /** Whether `/System/Volumes/Data/…` names `/…` too, as macOS firmlinks make it. */
     private val firmlinks: Boolean = OsFamily.HOST == OsFamily.MAC,
-    private val pid: Long = ProcessHandle.current().pid(),
+    /** This process's id, which `/proc/self` is pinned to, null to leave it as written. */
+    private val pid: Long? = ProcessIds.current,
 ) {
     public fun canonicalize(path: Path): CanonicalPath {
         require(path.isAbsolute && path.fileSystem == FileSystems.getDefault()) {
@@ -86,6 +89,7 @@ public class PathCanonicalizer(
     private fun appended(path: Path, parts: Iterable<String>): Path = parts.fold(path, Path::resolve)
 
     private fun pinned(path: Path): Path {
+        if (pid == null) return path
         val text = path.toString()
         val rest = when {
             text == "/proc/self" || text == "/proc/thread-self" -> ""
@@ -93,7 +97,7 @@ public class PathCanonicalizer(
             text.startsWith("/proc/thread-self/") -> text.removePrefix("/proc/thread-self")
             else -> return path
         }
-        return Path.of("/proc/$pid$rest")
+        return Paths.get("/proc/$pid$rest")
     }
 
     private companion object {

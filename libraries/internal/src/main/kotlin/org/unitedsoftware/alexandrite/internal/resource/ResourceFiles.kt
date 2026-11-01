@@ -4,7 +4,8 @@ import java.io.IOException
 import java.net.JarURLConnection
 import java.net.URL
 import java.nio.file.Files
-import java.nio.file.Path
+import java.nio.file.Paths
+import java.util.stream.Collectors
 import kotlin.io.path.isRegularFile
 
 /**
@@ -32,7 +33,7 @@ private fun walked(
     read: Boolean,
 ): List<Pair<String, ByteArray?>> = when (url.protocol) {
     "file" -> {
-        val entry = generateSequence(Path.of(url.toURI())) { it.parent }.elementAt(name.trim('/').split('/').size)
+        val entry = generateSequence(Paths.get(url.toURI())) { it.parent }.elementAt(name.trim('/').split('/').size)
         val base = entry.resolve(directory)
         if (!Files.isDirectory(base)) {
             emptyList()
@@ -40,7 +41,7 @@ private fun walked(
             Files.walk(base).use { paths ->
                 paths.filter { it.isRegularFile() && (!direct || it.parent == base) }
                     .map { base.relativize(it).joinToString("/") to if (read) Files.readAllBytes(it) else null }
-                    .toList()
+                    .collect(Collectors.toList())
             }
         }
     }
