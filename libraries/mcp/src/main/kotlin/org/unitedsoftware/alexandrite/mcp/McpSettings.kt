@@ -11,6 +11,7 @@ import java.net.URI
 import java.net.URISyntaxException
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import java.nio.file.Paths
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -152,7 +153,7 @@ internal class McpSettings(
         if (command.isBlank()) throw ConfigException("$path.command", "is empty: name the program to run.")
         val cwd = server.cwd?.let { cwd ->
             val directory = try {
-                Path.of(cwd)
+                Paths.get(cwd)
             } catch (e: InvalidPathException) {
                 null
             }

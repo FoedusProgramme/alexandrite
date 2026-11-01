@@ -1,11 +1,13 @@
 package org.unitedsoftware.alexandrite.internal.process
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.condition.DisabledOnOs
 import org.junit.jupiter.api.condition.OS
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -54,5 +56,55 @@ class ProcessTreesTest {
 
         assertTrue(start.elapsedNow() >= 300.milliseconds)
         assertEquals(true to true, gone(process.toHandle()) to gone(child))
+    }
+
+    @Test
+    fun `descendants found before the process ends are stopped afterwards`() = runBlocking {
+        val (process, child) = spawner("sleep 300 & echo \$!; wait")
+        val descendants = ProcessTrees.system.descendants(process)
+        process.destroyForcibly()
+        ProcessTrees.system.awaitExit(process)
+
+        descendants.stop(2.seconds)
+
+        assertTrue(gone(child))
+    }
+
+    // Without ProcessHandle.
+
+    @Test
+    fun `without ProcessHandle, the process itself ends and the processes it started are left alone`() = runBlocking {
+        val (process, child) = spawner("sleep 300 & echo \$!; wait")
+        val descendants = ProcessTrees.direct.descendants(process)
+
+        ProcessTrees.direct.destroy(process, 2.seconds)
+        descendants.stop(2.seconds)
+
+        assertTrue(gone(process.toHandle()))
+        assertTrue(child.isAlive)
+    }
+
+    @Test
+    fun `without ProcessHandle, a process that ignores the request to stop is killed after the grace`() = runBlocking {
+        val (process, _) = spawner("trap '' TERM; sleep 300 & echo \$!; wait")
+        val start = TimeSource.Monotonic.markNow()
+
+        ProcessTrees.direct.destroy(process, 300.milliseconds)
+
+        assertTrue(start.elapsedNow() >= 300.milliseconds)
+        assertTrue(gone(process.toHandle()))
+    }
+
+    @Test
+    fun `without ProcessHandle, waiting for the exit returns once it exits and can be given up`() = runBlocking {
+        val quick = ProcessBuilder("/bin/sh", "-c", "exit 3").start()
+        ProcessTrees.direct.awaitExit(quick)
+        assertEquals(3, quick.exitValue())
+
+        val slow = ProcessBuilder("/bin/sh", "-c", "sleep 300").start()
+        started += slow.toHandle()
+
+        assertNull(withTimeoutOrNull(200.milliseconds) { ProcessTrees.direct.awaitExit(slow) })
+        assertTrue(slow.isAlive)
     }
 }

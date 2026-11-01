@@ -40,6 +40,7 @@ import org.unitedsoftware.alexandrite.tools.monitor.monitoring
 import java.io.IOException
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import java.nio.file.Paths
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -285,7 +286,7 @@ internal class ExecTool(private val floor: HardFloor, private val config: ExecCo
     /** [text] as an absolute directory: a relative one resolved against the workspace, as the default cwd is. */
     private suspend fun resolveCwd(text: String, context: ToolContext, running: Boolean): Path {
         val path = try {
-            Path.of(expandHome(text))
+            Paths.get(expandHome(text))
         } catch (e: InvalidPathException) {
             throw ToolRefusal("'cwd' is no valid path.")
         }

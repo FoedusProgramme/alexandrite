@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.unitedsoftware.alexandrite.internal.process.ProcessTrees
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -297,6 +298,22 @@ class StdioClientTest {
         client.close()
         assertFalse(ProcessHandle.of(pid).map { it.isAlive }.orElse(false))
         assertFalse(ProcessHandle.of(child).map { it.isAlive }.orElse(false))
+    }
+
+    @Test
+    fun `without ProcessHandle, close ends the server itself and leaves the processes it started`() = realTime {
+        val launch = fakeLaunch("stubborn").run { StdioLaunch(command, args, environment, trees = ProcessTrees.direct) }
+        val connection = McpStdioConnection.start(launch, stderr::add, stopGrace = 500.milliseconds)
+        val client = McpClient.connect(connection, CLIENT, FAST)
+        val pid = stderr.await { it.startsWith("pid ") }.removePrefix("pid ").toLong()
+        val child = ProcessHandle.of(stderr.await { it.startsWith("child ") }.removePrefix("child ").toLong())
+        try {
+            client.close()
+            assertFalse(ProcessHandle.of(pid).map { it.isAlive }.orElse(false))
+            assertTrue(child.map { it.isAlive }.orElse(false))
+        } finally {
+            child.ifPresent { it.destroyForcibly() }
+        }
     }
 
     @Test

@@ -5,6 +5,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import java.nio.file.Paths
 
 internal val POSIX_HOST: Boolean = Platform.HOST == Platform.POSIX
 
@@ -23,9 +24,10 @@ internal val SYSTEM_DIRECTORIES: List<Path> = systemDirectories(System.getenv())
 
 /** The directories searched first for a program in [environment], which only the system may write to. */
 internal fun systemDirectories(environment: Map<String, String>): List<Path> = if (POSIX_HOST) {
-    listOf("/usr/bin", "/bin", "/usr/sbin", "/sbin").map(Path::of)
+    listOf("/usr/bin", "/bin", "/usr/sbin", "/sbin").map { Paths.get(it) }
 } else {
-    val windows = Path.of(environment.variable("SystemRoot") ?: environment.variable("WINDIR") ?: DEFAULT_WINDOWS_ROOT)
+    val root = environment.variable("SystemRoot") ?: environment.variable("WINDIR") ?: DEFAULT_WINDOWS_ROOT
+    val windows = Paths.get(root)
     listOf(
         windows.resolve("System32"),
         windows,
@@ -41,7 +43,7 @@ internal fun searchPath(environment: Map<String, String>): List<Path> {
         // Windows allows an entry to be quoted and padded with spaces.
         val name = if (POSIX_HOST) entry else entry.trim().removeSurrounding("\"")
         try {
-            Path.of(name).takeIf { it.isAbsolute }
+            Paths.get(name).takeIf { it.isAbsolute }
         } catch (e: InvalidPathException) {
             null
         }
@@ -104,7 +106,7 @@ internal fun isMultiCall(name: String): Boolean = name in MULTI_CALL
 
 /** The directories that package managers install into on a POSIX host. */
 private val PACKAGE_DIRECTORIES: List<Path> =
-    if (POSIX_HOST) listOf("/opt/homebrew/bin", "/usr/local/bin").map(Path::of) else emptyList()
+    if (POSIX_HOST) listOf("/opt/homebrew/bin", "/usr/local/bin").map { Paths.get(it) } else emptyList()
 
 /** Where Windows is installed when the environment names it nowhere. */
 private const val DEFAULT_WINDOWS_ROOT = "C:\\Windows"
