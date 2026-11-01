@@ -7,6 +7,7 @@ import org.unitedsoftware.alexandrite.sdk.model.ModelEndpoint
 import org.unitedsoftware.alexandrite.sdk.model.ModelError
 import org.unitedsoftware.alexandrite.sdk.model.ModelErrorKind
 import org.unitedsoftware.alexandrite.sdk.model.ModelEvent
+import org.unitedsoftware.alexandrite.sdk.model.ModelException
 import org.unitedsoftware.alexandrite.sdk.model.ModelInfo
 import org.unitedsoftware.alexandrite.sdk.model.ModelOptions
 import org.unitedsoftware.alexandrite.sdk.model.ModelRequest
@@ -33,6 +34,11 @@ internal suspend fun Endpoints.select(ref: ModelRef): SelectedModel? {
     val endpoint = endpoint(ref.endpoint) ?: return null
     return model(ref)?.let { SelectedModel(ref, endpoint, it) }
 }
+
+/** The model [ref] names, throwing a [ModelException] of [ModelErrorKind.MODEL_NOT_FOUND] when no endpoint lists it. */
+internal suspend fun Endpoints.listed(ref: ModelRef): SelectedModel = select(ref) ?: throw ModelException(
+    ModelError.builder(ModelErrorKind.MODEL_NOT_FOUND, "No endpoint lists the model $ref.").retryable(false).build(),
+)
 
 /** The [text] that a side model answered and what its call took. */
 internal class SideAnswer(val text: String, val usage: Usage)

@@ -4,11 +4,8 @@ import org.unitedsoftware.alexandrite.agent.model.Endpoints
 import org.unitedsoftware.alexandrite.agent.model.RetryPolicy
 import org.unitedsoftware.alexandrite.agent.model.SideAnswer
 import org.unitedsoftware.alexandrite.agent.model.ask
-import org.unitedsoftware.alexandrite.agent.model.select
+import org.unitedsoftware.alexandrite.agent.model.listed
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
-import org.unitedsoftware.alexandrite.sdk.model.ModelError
-import org.unitedsoftware.alexandrite.sdk.model.ModelErrorKind
-import org.unitedsoftware.alexandrite.sdk.model.ModelException
 import org.unitedsoftware.alexandrite.sdk.model.RequestIds
 import org.unitedsoftware.alexandrite.sdk.transcript.ModelRef
 import org.unitedsoftware.alexandrite.sdk.transcript.SummaryEntry
@@ -29,12 +26,7 @@ internal class Summarizer(private val endpoints: Endpoints, private val retries:
         focus: String?,
         maxTokens: Int,
     ): SideAnswer {
-        val selected = endpoints.select(model) ?: throw ModelException(
-            ModelError.builder(ModelErrorKind.MODEL_NOT_FOUND, "No endpoint lists the model $model.")
-                .retryable(false)
-                .build(),
-        )
-        val answer = selected.ask(
+        val answer = endpoints.listed(model).ask(
             ids,
             SUMMARY_SOURCE,
             summarizerInput(previous, entries),
