@@ -23,7 +23,9 @@ import org.unitedsoftware.alexandrite.sdk.chat.TurnKind
 import org.unitedsoftware.alexandrite.sdk.di.Lifecycle
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
 import org.unitedsoftware.alexandrite.sdk.model.Trust
+import org.unitedsoftware.alexandrite.sdk.plugin.PluginInfo
 import org.unitedsoftware.alexandrite.sdk.plugin.PluginScope
+import org.unitedsoftware.alexandrite.sdk.runtime.WakeScheduler
 import org.unitedsoftware.alexandrite.sdk.turn.Admission
 import org.unitedsoftware.alexandrite.sdk.turn.InitiatedTurn
 import org.unitedsoftware.alexandrite.sdk.turn.RefusalReason
@@ -39,7 +41,7 @@ import kotlin.time.Duration.Companion.seconds
 
 /**
  * Runs the schedule of [tasks] from the open until the stop, starting it again with a growing pause when it fails,
- * and fires each occurrence as a reminder turn in its task's chat.
+ * and fires each occurrence as a reminder turn in its task's chat; [wakes] is told when the next task is due.
  */
 @Singleton
 internal class Scheduling(
@@ -48,6 +50,8 @@ internal class Scheduling(
     private val initiator: TurnInitiator,
     private val notices: Notices,
     private val scope: PluginScope,
+    private val info: PluginInfo,
+    private val wakes: WakeScheduler?,
     clock: Clock,
     time: TimeSource?,
 ) : Lifecycle {
@@ -192,6 +196,15 @@ internal class Scheduling(
 
         override fun failed(task: Task<String>, occurrence: Occurrence, error: Exception) {
             logger.warn("Scheduled task {} failed to fire, due {}", task.id, occurrence.due, error)
+        }
+
+        override fun nextDue(at: Instant?) {
+            val wakes = wakes ?: return
+            try {
+                wakes.wakeAt(info.id, at)
+            } catch (e: Exception) {
+                logger.warn("The host's wake for {} was not set", at ?: "no task", e)
+            }
         }
     }
 

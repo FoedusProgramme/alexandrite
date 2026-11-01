@@ -70,9 +70,11 @@ class PublicApiTest {
 
         suspend fun harness(index: PluginIndex, backend: PluginIndex): List<Any?> {
             val store = MemoryStore()
+            val wakes = RecordingWakeScheduler()
             val seen = mutableListOf<Any?>()
             PluginHarness.builder(index)
                 .tool(recordingTool())
+                .wakeScheduler(wakes)
                 .model(ScriptedModel())
                 .channel("main", "test", setOf("ada"), 100)
                 .agent(RecordingAgent())
@@ -81,6 +83,7 @@ class PublicApiTest {
                 .build()
                 .run {
                     seen += channel(TEST_INSTANCE)
+                    seen += wakes.pending
                     stop()
                 }
             for (check in STORE_CONTRACT) check.run { PluginHarness.builder(backend) }

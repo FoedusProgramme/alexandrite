@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.unitedsoftware.alexandrite.automation.common.TimeSource
+import org.unitedsoftware.alexandrite.sdk.AlexandriteSdk
 import org.unitedsoftware.alexandrite.sdk.channel.Channel
 import org.unitedsoftware.alexandrite.sdk.channel.ChannelDirectory
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
@@ -18,6 +19,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChatUser
 import org.unitedsoftware.alexandrite.sdk.chat.LanguageTag
 import org.unitedsoftware.alexandrite.sdk.chat.TurnInfo
 import org.unitedsoftware.alexandrite.sdk.chat.TurnKind
+import org.unitedsoftware.alexandrite.sdk.plugin.PluginInfo
 import org.unitedsoftware.alexandrite.sdk.plugin.PluginScope
 import org.unitedsoftware.alexandrite.sdk.store.Records
 import org.unitedsoftware.alexandrite.sdk.tool.Mandate
@@ -30,6 +32,7 @@ import org.unitedsoftware.alexandrite.sdk.turn.TurnInitiator
 import org.unitedsoftware.alexandrite.testkit.RecordingAgent
 import org.unitedsoftware.alexandrite.testkit.RecordingChannel
 import org.unitedsoftware.alexandrite.testkit.RecordingTurnInitiator
+import org.unitedsoftware.alexandrite.testkit.RecordingWakeScheduler
 import org.unitedsoftware.alexandrite.testkit.TEST_INSTANCE
 import org.unitedsoftware.alexandrite.testkit.TestRecords
 import org.unitedsoftware.alexandrite.testkit.TestTurnTicket
@@ -97,6 +100,7 @@ internal class Schedule(
 ) {
     val initiator = Initiator()
     val channel = RecordingChannel()
+    val wakes = RecordingWakeScheduler()
     private val start = test.testScheduler.currentTime
     val time: TimeSource = TimeSource.delaying { origin.plusMillis(test.testScheduler.currentTime - start) }
     private val scope = object : PluginScope, CoroutineScope by test.backgroundScope {}
@@ -111,8 +115,18 @@ internal class Schedule(
     private val clock = Clock.fixed(origin, ZoneOffset.UTC)
     val texts = testTexts(PLUGIN)
     val tasks = TaskRecords(wrap(records.of(PLUGIN)), initiator)
-    val scheduling =
-        Scheduling(config, tasks, initiator, Notices(directory, settings, texts, clock, scope), scope, clock, time)
+    private val info = PluginInfo(PLUGIN, "Schedule", "test", "", AlexandriteSdk.API_VERSION, emptyList(), "Schedule")
+    val scheduling = Scheduling(
+        config,
+        tasks,
+        initiator,
+        Notices(directory, settings, texts, clock, scope),
+        scope,
+        info,
+        wakes,
+        clock,
+        time,
+    )
     val control = ScheduleControl(config, tasks, scheduling)
     val create = CreateTool(config, lazyOf(control), clock)
     val list = ListTool(lazyOf(control), clock)
