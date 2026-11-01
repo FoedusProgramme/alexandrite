@@ -6,7 +6,7 @@ plugins {
 description = "The OneBot v11 channel of Alexandrite"
 
 dependencies {
-    implementation(project(":libraries:channel-common"))
+    implementation(project(":libraries:common:channel"))
     api(project(":libraries:plugin-sdk"))
     implementation(project(":libraries:internal"))
 

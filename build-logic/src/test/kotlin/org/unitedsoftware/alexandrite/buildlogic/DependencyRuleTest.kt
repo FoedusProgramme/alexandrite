@@ -59,10 +59,10 @@ class DependencyRuleTest {
                 "libraries/internal" to "",
                 "libraries/runtime" to "implementation(project(\":libraries:plugin-sdk\"))",
                 "libraries/testkit" to "api(project(\":libraries:runtime\"))",
-                "libraries/provider-common" to "api(project(\":libraries:plugin-sdk\"))\n" +
+                "libraries/common/provider" to "api(project(\":libraries:plugin-sdk\"))\n" +
                     "    implementation(project(\":libraries:internal\"))",
                 "examples/echo" to "compileOnly(project(\":libraries:plugin-sdk\"))\n" +
-                    "    compileOnly(project(\":libraries:provider-common\"))\n" +
+                    "    compileOnly(project(\":libraries:common:provider\"))\n" +
                     "    testImplementation(project(\":libraries:testkit\"))",
             ),
         ).build()
@@ -72,9 +72,9 @@ class DependencyRuleTest {
     fun `examples and the common libraries compile without the SDK's internal API`() {
         val modules = listOf(
             "examples/x",
-            "libraries/provider-common",
-            "libraries/channel-common",
-            "libraries/automation-common",
+            "libraries/common/provider",
+            "libraries/common/channel",
+            "libraries/common/automation",
             "libraries/runtime",
         )
         val printOptIns = "afterEvaluate {\n" +

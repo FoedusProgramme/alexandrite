@@ -14,10 +14,10 @@ dependencies {
     implementation(project(":libraries:mcp"))
     implementation(project(":libraries:commands"))
     implementation(project(":libraries:channels:telegram"))
-    implementation(project(":libraries:channel-common"))
+    implementation(project(":libraries:common:channel"))
     implementation(project(":libraries:channels:onebot"))
     implementation(project(":libraries:channels:qqbot"))
-    implementation(project(":libraries:provider-common"))
+    implementation(project(":libraries:common:provider"))
     implementation(project(":libraries:providers:openai-compatible"))
     implementation(project(":libraries:providers:openai-responses"))
     implementation(project(":libraries:providers:deepseek"))
@@ -39,7 +39,7 @@ dependencies {
     testImplementation(project(":examples:notes"))
     testImplementation(testFixtures(project(":libraries:channels:telegram")))
     testImplementation(testFixtures(project(":libraries:mcp")))
-    testImplementation(project(":libraries:automation-common"))
+    testImplementation(project(":libraries:common:automation"))
     testImplementation(libs.logback.classic)
 }
 

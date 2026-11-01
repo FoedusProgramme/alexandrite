@@ -21,15 +21,15 @@ class AlexandriteLayoutTest {
     private val mcp = ":libraries:mcp"
     private val commands = ":libraries:commands"
     private val telegram = ":libraries:channels:telegram"
-    private val channelCommon = ":libraries:channel-common"
+    private val channelCommon = ":libraries:common:channel"
     private val openAi = ":libraries:providers:openai-compatible"
     private val anthropic = ":libraries:providers:anthropic-compatible"
     private val deepSeek = ":libraries:providers:deepseek"
     private val lmStudio = ":libraries:providers:lmstudio"
     private val openRouter = ":libraries:providers:openrouter"
-    private val providerCommon = ":libraries:provider-common"
+    private val providerCommon = ":libraries:common:provider"
     private val sqlite = ":libraries:stores:sqlite"
-    private val automationCommon = ":libraries:automation-common"
+    private val automationCommon = ":libraries:common:automation"
     private val schedule = ":libraries:automations:schedule"
     private val seatbelt = ":libraries:sandboxes:seatbelt"
     private val bubblewrap = ":libraries:sandboxes:bubblewrap"
@@ -124,8 +124,8 @@ class AlexandriteLayoutTest {
         for (path in listOf(
             "", ":", ":libraries", ":libraries:channels", ":libraries:providers", ":libraries:stores", ":libraries:foo",
             ":libraries:providers:x:y", ":libraries:agent:sub", ":libraries:runtime:sub", ":build-logic", ":other",
-            ":libraries:provider-common:sub", ":libraries:commands:sub", ":libraries:channel-common:sub",
-            ":libraries:automations", ":libraries:automation-common:sub", ":libraries:automations:x:y",
+            ":libraries:common:provider:sub", ":libraries:commands:sub", ":libraries:common:channel:sub",
+            ":libraries:automations", ":libraries:common:automation:sub", ":libraries:automations:x:y",
             "libraries:agent", ":examples", ":examples:hello:sub", ":libraries:examples:hello",
         )) {
             assertNull(AlexandriteLayout.moduleAt(path), path)
@@ -510,8 +510,8 @@ class AlexandriteLayoutTest {
     fun `a slot without a build file fails`() {
         for (slot in listOf(
             "libraries/agent",
-            "libraries/channel-common",
-            "libraries/automation-common",
+            "libraries/common/channel",
+            "libraries/common/automation",
             "libraries/commands",
             "libraries/runtime",
             "libraries/testkit",
@@ -530,11 +530,11 @@ class AlexandriteLayoutTest {
         assertContains(failure, "libraries/plugin-sdk/ (SDK)")
         assertContains(failure, "libraries/commands/ (COMMANDS)")
         assertContains(failure, "libraries/channels/<name>/ (CHANNEL)")
-        assertContains(failure, "libraries/channel-common/ (CHANNEL_COMMON)")
+        assertContains(failure, "libraries/common/channel/ (CHANNEL_COMMON)")
         assertContains(failure, "libraries/providers/<name>/ (PROVIDER)")
         assertContains(failure, "libraries/stores/<name>/ (STORE)")
         assertContains(failure, "libraries/automations/<name>/ (AUTOMATION)")
-        assertContains(failure, "libraries/automation-common/ (AUTOMATION_COMMON)")
+        assertContains(failure, "libraries/common/automation/ (AUTOMATION_COMMON)")
         assertContains(failure, "libraries/runtime/ (RUNTIME)")
         assertContains(failure, "libraries/testkit/ (TESTKIT)")
         assertContains(failure, "examples/<name>/ (EXAMPLE)")
@@ -563,7 +563,7 @@ class AlexandriteLayoutTest {
         val failure = assertNotNull(discovery.failure)
         assertContains(
             failure,
-            "  - :libraries:channel-common and :libraries:channels:common are named 'alexandrite-channel-common'.",
+            "  - :libraries:channels:common and :libraries:common:channel are named 'alexandrite-channel-common'.",
         )
     }
 
@@ -949,7 +949,7 @@ class AlexandriteLayoutTest {
         assertContains(message, AlexandriteLayout.LAYOUT_LOCATION)
         assertContains(
             assertNotNull(violation(app, ksp)),
-            ":libraries:channels:*, $channelCommon, :libraries:providers:*, :libraries:provider-common, " +
+            ":libraries:channels:*, $channelCommon, :libraries:providers:*, :libraries:common:provider, " +
                 ":libraries:stores:*, :libraries:accounts:*, :libraries:automations:*, $automationCommon, " +
                 ":libraries:sandboxes:*, :libraries:engines:*, $discovery; $testkit, :examples:* only from configurations named test*;",
         )

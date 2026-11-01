@@ -7,9 +7,9 @@ description = "The Alexandrite model provider for Anthropic-compatible Messages 
 
 dependencies {
     api(project(":libraries:plugin-sdk"))
-    implementation(project(":libraries:provider-common"))
+    implementation(project(":libraries:common:provider"))
 
     testImplementation(project(":libraries:testkit"))
-    testImplementation(testFixtures(project(":libraries:provider-common")))
+    testImplementation(testFixtures(project(":libraries:common:provider")))
     testRuntimeOnly(libs.logback.classic)
 }

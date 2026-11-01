@@ -7,10 +7,10 @@ description = "The Alexandrite model provider for the OpenAI Responses API"
 
 dependencies {
     api(project(":libraries:plugin-sdk"))
-    implementation(project(":libraries:provider-common"))
+    implementation(project(":libraries:common:provider"))
 
     testImplementation(project(":libraries:testkit"))
-    testImplementation(testFixtures(project(":libraries:provider-common")))
+    testImplementation(testFixtures(project(":libraries:common:provider")))
     testImplementation(libs.kotlinx.coroutines.test)
     testRuntimeOnly(libs.logback.classic)
 }

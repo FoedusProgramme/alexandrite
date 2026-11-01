@@ -178,14 +178,14 @@ object AlexandriteLayout {
             jarPrefix = "alexandrite-channel-",
             packagePrefix = "$PACKAGE.channel.",
         ),
-        Location.Slot("libraries/channel-common", Layer.CHANNEL_COMMON),
+        Location.Slot("libraries/common/channel", Layer.CHANNEL_COMMON, jarName = "alexandrite-channel-common"),
         Location.Family(
             "libraries/providers",
             Layer.PROVIDER,
             jarPrefix = "alexandrite-provider-",
             packagePrefix = "$PACKAGE.provider.",
         ),
-        Location.Slot("libraries/provider-common", Layer.PROVIDER_COMMON),
+        Location.Slot("libraries/common/provider", Layer.PROVIDER_COMMON, jarName = "alexandrite-provider-common"),
         Location.Family(
             "libraries/stores",
             Layer.STORE,
@@ -204,7 +204,11 @@ object AlexandriteLayout {
             jarPrefix = "alexandrite-automation-",
             packagePrefix = "$PACKAGE.automation.",
         ),
-        Location.Slot("libraries/automation-common", Layer.AUTOMATION_COMMON),
+        Location.Slot(
+            "libraries/common/automation",
+            Layer.AUTOMATION_COMMON,
+            jarName = "alexandrite-automation-common",
+        ),
         Location.Family(
             "libraries/sandboxes",
             Layer.SANDBOX,

@@ -9,7 +9,7 @@ description = "The Telegram channel of Alexandrite"
 dependencies {
     api(project(":libraries:plugin-sdk"))
     implementation(project(":libraries:internal"))
-    implementation(project(":libraries:channel-common"))
+    implementation(project(":libraries:common:channel"))
 
     testFixturesApi(libs.kotlinx.serialization.json)
     testFixturesImplementation(project(":libraries:plugin-sdk"))

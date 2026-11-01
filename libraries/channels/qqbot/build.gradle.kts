@@ -8,7 +8,7 @@ description = "The QQ Bot channel of Alexandrite"
 dependencies {
     api(project(":libraries:plugin-sdk"))
     implementation(project(":libraries:internal"))
-    implementation(project(":libraries:channel-common"))
+    implementation(project(":libraries:common:channel"))
 
     // The client of the gateway, of which the JDK serves none.
     implementation(libs.java.websocket)
