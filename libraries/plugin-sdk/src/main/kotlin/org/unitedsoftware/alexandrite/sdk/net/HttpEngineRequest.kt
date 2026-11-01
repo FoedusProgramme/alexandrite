@@ -3,13 +3,13 @@ package org.unitedsoftware.alexandrite.sdk.net
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-/** A request for an [HttpEngine], whose string form shows the method and the origin alone. */
+/** A request for an [HttpEngine]. */
 public class HttpEngineRequest private constructor(
     /** An HTTP token, sent as given. */
     public val method: String,
     /** An absolute `http` or `https` URL. */
     public val url: String,
-    /** None of [RESERVED_HEADERS], each sent with its name as given and its values free of control characters. */
+    /** None of [RESERVED_HEADERS], each sent with its name as given and values of visible ASCII, spaces and tabs. */
     public val headers: HttpHeaders,
     /** Null for no body. */
     public val body: HttpRequestBody?,
@@ -21,8 +21,8 @@ public class HttpEngineRequest private constructor(
         for (name in headers.names) {
             require(TOKEN.matches(name)) { "A header name is a token, was '$name'." }
             require(name.lowercase() !in RESERVED_HEADERS) { "The engine writes the header '$name' itself." }
-            require(headers.all(name).all { value -> value.all { it == '\t' || (it >= ' ' && it != '\u007f') } }) {
-                "The value of the header '$name' holds a control character."
+            require(headers.all(name).all(HttpHeaders::isValue)) {
+                "The value of the header '$name' holds a character other than visible ASCII, space and tab."
             }
         }
         require(connectTimeout.isPositive() && connectTimeout.isFinite()) {

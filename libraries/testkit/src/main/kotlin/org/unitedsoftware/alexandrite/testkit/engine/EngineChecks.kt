@@ -1,12 +1,14 @@
 package org.unitedsoftware.alexandrite.testkit.engine
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.unitedsoftware.alexandrite.sdk.net.HttpBodySource
 import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
@@ -79,6 +81,8 @@ private suspend fun thrown(what: String, block: suspend () -> Unit): Throwable {
 
 private val TEXT = "Grüße, engine!".encodeToByteArray()
 
+private const val STREAM_CLOSES = 20
+
 internal val REQUEST_CHECKS: List<HttpEngineCheck> = listOf(
     HttpEngineCheck("a request reaches the server as HTTP/1.1 with its method, target, headers and body") {
         server.handle { it.respond(200) }
@@ -147,6 +151,20 @@ internal val REQUEST_CHECKS: List<HttpEngineCheck> = listOf(
         expectEqual(0, get.body.size, "the bytes of a GET")
         expectEqual(false, get.chunked || post.chunked, "whether a request without a body came in chunks")
         expectEqual(0, post.body.size, "the bytes of a POST without a body")
+    },
+    HttpEngineCheck("a header value of visible ASCII, spaces and tabs arrives as given, and any other is refused") {
+        val value = "a" + (' '..'~').joinToString("") + "\tz"
+        server.handle { it.respond(200) }
+
+        open(request { header("x-printable", value) }).readAll()
+
+        expectEqual(value, server.nextRequest().header("x-printable"), "the value of x-printable")
+        for (other in listOf("caf\u00e9", "a\u0085b", "\u0100", "a\u0000b")) {
+            val error = thrown("Building a request with a header value of '${other.map { it.code }}'") {
+                request { header("x-other", other) }
+            }
+            expect(error is IllegalArgumentException) { "Expected an IllegalArgumentException, was $error." }
+        }
     },
     HttpEngineCheck("a URL the engine cannot use is refused with an IllegalArgumentException") {
         val error = thrown("Opening a URL with a space in its host") {
@@ -263,6 +281,35 @@ internal val STREAM_CHECKS: List<HttpEngineCheck> = listOf(
 
         expect(awaited(closed, 15.seconds, "The server's wait")) { "The server still holds the connection." }
     },
+    HttpEngineCheck("closing a response from another thread while its body streams ends the read, each time") {
+        val piece = ByteArray(512) { 'x'.code.toByte() }
+        repeat(STREAM_CLOSES) { round ->
+            server.handle {
+                it.head(200)
+                val until = TimeSource.Monotonic.markNow() + 20.seconds
+                while (until.hasNotPassedNow()) it.chunk(piece)
+            }
+
+            val response = open()
+            coroutineScope {
+                val streaming = CompletableDeferred<Unit>()
+                val reading = async(Dispatchers.Default) {
+                    runCatching {
+                        while (response.body.read() != null) streaming.complete(Unit)
+                    }
+                }
+                within(10.seconds, "The first piece of a streaming body") { streaming.await() }
+                delay((round % 3).milliseconds)
+                withContext(Dispatchers.IO) { response.close() }
+                val result = within(10.seconds, "A read after the response was closed") { reading.await() }
+                expect(result.isFailure) { "The body closed while it streamed ended as whole." }
+            }
+        }
+        val bytes = ByteArray(1_000_000) { (it * 7 % 251).toByte() }
+        server.handle { it.respond(200, body = bytes) }
+
+        expect(open().readAll().contentEquals(bytes)) { "A body read after the closes arrived changed." }
+    },
     HttpEngineCheck("closing a response ends a read that waits for the body") {
         val closed = CompletableFuture<Boolean>()
         server.handle {
@@ -351,6 +398,39 @@ internal val CONNECTION_CHECKS: List<HttpEngineCheck> = listOf(
         }
 
         expect(started.elapsedNow() < 6.seconds) { "The connect took ${started.elapsedNow()}." }
+    },
+    HttpEngineCheck("a 408 or a 503 with retry-after 0 is the response, the request sent once") {
+        val requests = listOf(request("POST") { body(HttpRequestBody.of(TEXT)) }, request("POST"), request("GET"))
+        for (status in listOf(408, 503)) {
+            for (sent in requests) {
+                server.handle { it.respond(status, listOf("retry-after" to "0")) }
+
+                val response = open(sent)
+                response.readAll()
+
+                val what = "${sent.method} ${if (sent.body == null) "without" else "with"} a body answered $status"
+                expectEqual(status, response.status, "the status of a $what")
+                expectEqual("0", response.headers["retry-after"], "the retry-after of a $what")
+                server.nextRequest()
+                delay(100.milliseconds)
+                expectEqual(emptyList(), server.pending().map { it.method }, "the requests sent again for a $what")
+            }
+        }
+    },
+    HttpEngineCheck("a POST whose connection drops after the server read it fails, sent once") {
+        server.handle { it.respond(200) }
+        server.handle { }
+        open().readAll()
+        server.nextRequest()
+
+        val error = thrown("Sending a POST that the server reads and drops") {
+            open(request("POST") { body(HttpRequestBody.of(TEXT)) }).readAll()
+        }
+
+        expect(error !is AssertionError) { "The engine took the dropped POST for an answer: $error" }
+        expectEqual("POST", server.nextRequest().method, "the method of the dropped request")
+        delay(200.milliseconds)
+        expectEqual(emptyList(), server.pending().map { it.method }, "the requests sent again after the drop")
     },
     HttpEngineCheck("requests one after another each get their response") {
         repeat(5) { index -> server.handle { it.respond(200, body = "r$index".toByteArray()) } }

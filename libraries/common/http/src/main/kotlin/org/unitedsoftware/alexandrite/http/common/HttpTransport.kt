@@ -90,9 +90,6 @@ public class HttpCall(
     }
 }
 
-/** Whether [value] holds neither a control character other than tab nor one beyond Latin-1. */
-public fun isHeaderValue(value: String): Boolean = value.all { it == '\t' || (!it.isISOControl() && it <= '\u00ff') }
-
 /** [uri] without user info, query and fragment. */
 public fun printable(uri: URI): String = buildString {
     append(uri.scheme).append("://").append(uri.host ?: "")
@@ -122,11 +119,11 @@ public class HttpTransport(
      */
     public suspend fun <T> open(call: HttpCall, block: suspend (HttpResponseStream) -> T): T {
         val started = TimeSource.Monotonic.markNow()
-        call.headers.entries.firstOrNull { !isHeaderValue(it.value) }?.let { (name, _) ->
+        call.headers.entries.firstOrNull { !HttpHeaders.isValue(it.value) }?.let { (name, _) ->
             throw HttpException(
                 HttpFailureKind.PROTOCOL,
-                "$call cannot be sent: the value of the header '$name' holds a control character or one beyond " +
-                    "Latin-1.",
+                "$call cannot be sent: the value of the header '$name' holds a character other than visible ASCII, " +
+                    "space and tab.",
             )
         }
         val request = try {

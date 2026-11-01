@@ -9,11 +9,11 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
-import org.unitedsoftware.alexandrite.http.common.isHeaderValue
 import org.unitedsoftware.alexandrite.sdk.config.Secret
 import org.unitedsoftware.alexandrite.sdk.model.ModelPrice
 import org.unitedsoftware.alexandrite.sdk.model.ReasoningEffort
 import org.unitedsoftware.alexandrite.sdk.model.TurnContextMode
+import org.unitedsoftware.alexandrite.sdk.net.HttpHeaders
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 import java.math.BigDecimal
 import java.net.URI
@@ -54,16 +54,16 @@ public class EndpointSettings(
     init {
         require(isHttpUrl(baseUrl)) { "baseUrl must be an http or https URL without user info, query or fragment" }
         val reserved = RESERVED_HEADERS + wire?.own.orEmpty().map { it.lowercase() }
-        require(apiKey == null || isHeaderValue(apiKey.reveal())) {
-            "apiKey holds a control character or one beyond Latin-1"
+        require(apiKey == null || HttpHeaders.isValue(apiKey.reveal())) {
+            "apiKey holds a character other than visible ASCII, space and tab"
         }
         for ((name, value) in headers) {
             require(name.isNotEmpty() && name.all { it in TOKEN }) { "headers holds a malformed header name" }
             require(name.lowercase() !in reserved) {
                 "headers may not set ${name.lowercase()}, which the provider sets itself"
             }
-            require(isHeaderValue(value.reveal())) {
-                "headers.$name holds a control character or one beyond Latin-1"
+            require(HttpHeaders.isValue(value.reveal())) {
+                "headers.$name holds a character other than visible ASCII, space and tab"
             }
         }
         val keyHeaders = wire?.auth?.let(::listOf) ?: WIRE_AUTH_HEADERS

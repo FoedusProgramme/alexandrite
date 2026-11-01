@@ -40,11 +40,13 @@ class EndpointSettingsTest {
 
     @Test
     fun `a key or a header value that no request can carry is refused without its value`() {
-        refused("apiKey holds a control character") { EndpointSettings("https://a.example", Secret("sk-a\r\nb")) }
-        refused("headers.X-Team holds a control character") {
+        val other = "holds a character other than visible ASCII, space and tab"
+        refused("apiKey $other") { EndpointSettings("https://a.example", Secret("sk-a\r\nb")) }
+        refused("apiKey $other") { EndpointSettings("https://a.example", Secret("sk-\u00e9")) }
+        refused("headers.X-Team $other") {
             EndpointSettings("https://a.example", headers = mapOf("X-Team" to Secret("core\u200b")))
         }
-        EndpointSettings("https://a.example", Secret("sk-\u00e9\tb"), mapOf("X-Team" to Secret("caf\u00e9")))
+        EndpointSettings("https://a.example", Secret("sk-a\tb"), mapOf("X-Team" to Secret("core team")))
     }
 
     @Test

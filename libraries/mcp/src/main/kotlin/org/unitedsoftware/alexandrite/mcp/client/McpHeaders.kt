@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
+import org.unitedsoftware.alexandrite.sdk.net.HttpHeaders
 import java.util.Base64
 
 /** A tool parameter mirrored into the header `Mcp-Param-<name>`. */
@@ -39,7 +40,7 @@ internal object McpHeaders {
 
     /** [value] as a header value: plain when it is safe, in the Base64 sentinel form otherwise. */
     fun encode(value: String): String {
-        val plain = value.all { it == '\t' || it in ' '..'~' } &&
+        val plain = HttpHeaders.isValue(value) &&
             value.trim() == value &&
             !(value.startsWith(SENTINEL_START) && value.endsWith(SENTINEL_END))
         if (plain) return value

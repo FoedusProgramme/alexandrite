@@ -12,7 +12,7 @@ import org.unitedsoftware.alexandrite.sdk.di.BoundSpi
  * - it gives up connecting after [HttpEngineRequest.connectTimeout] and sets no other timeout;
  * - [open] suspends until the status and headers arrive, and the caller reads the body as it arrives;
  * - cancelling [open] or a read of the body ends the exchange at once and closes its connection;
- * - it resends a request only when a connection it reused turns out closed.
+ * - it resends only a `GET` or `HEAD` request, and only when a connection it reused turns out closed.
  */
 @BoundSpi
 public interface HttpEngine {
