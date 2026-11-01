@@ -22,7 +22,6 @@ import org.unitedsoftware.alexandrite.sdk.web.WebSearchResult
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
 import org.unitedsoftware.alexandrite.testkit.testToolContext
-import org.unitedsoftware.alexandrite.tools.media.SWING_HTML
 import java.io.ByteArrayInputStream
 import java.net.InetAddress
 import java.net.InetSocketAddress

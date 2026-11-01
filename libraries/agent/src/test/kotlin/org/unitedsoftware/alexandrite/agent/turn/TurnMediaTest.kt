@@ -63,7 +63,7 @@ class TurnMediaTest {
     private val readerModel = ModelRef.parse("scripted/reader")
     private val png = "png!".encodeToByteArray()
 
-    private fun media(maxBytes: Long = 8, config: String = "{}", codec: ImageCodec? = AwtCodec) =
+    private fun media(maxBytes: Long = 8, config: String = "{}", codec: ImageCodec? = AWT_CODEC) =
         TurnMedia(TurnId("t-1"), store, maxBytes, inbox(data, config), reader, codec)
 
     private fun attachment(
@@ -413,4 +413,4 @@ private class Media(private val store: MediaStore) : MediaStore by store {
 }
 
 /** The codec the desktop host binds. */
-private val AwtCodec: ImageCodec = AwtImageCodec()
+private val AWT_CODEC: ImageCodec = AwtImageCodec()
