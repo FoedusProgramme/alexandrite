@@ -25,6 +25,9 @@ public class HttpHeaders private constructor(private val fields: Map<String, Lis
     public companion object {
         public val EMPTY: HttpHeaders = HttpHeaders(emptyMap())
 
+        /** Whether [value] holds only visible ASCII, spaces and tabs. */
+        public fun isValue(value: String): Boolean = value.all { it == '\t' || it in ' '..'~' }
+
         /** [fields] with the names that differ only in case merged under the first of them. */
         public fun of(fields: Map<String, List<String>>): HttpHeaders {
             val merged = LinkedHashMap<String, MutableList<String>>()

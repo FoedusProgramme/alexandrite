@@ -250,23 +250,21 @@ class HttpTransportTest {
         }
 
     @Test
-    fun `a header value with a control character fails the call as an HTTP failure naming only the header`() =
-        runBlocking {
-            val calls = listOf(
-                HttpCall("GET", server.uri, mapOf("authorization" to "Bearer $TOKEN\r")),
-                HttpCall("GET", server.uri, mapOf("x-key" to "$TOKEN\u200b")),
-            )
+    fun `a header value beyond visible ASCII fails the call as an HTTP failure naming only the header`() = runBlocking {
+        val calls = listOf(
+            HttpCall("GET", server.uri, mapOf("authorization" to "Bearer $TOKEN\r")),
+            HttpCall("GET", server.uri, mapOf("x-key" to "$TOKEN\u200b")),
+            HttpCall("GET", server.uri, mapOf("x-team" to "caf\u00e9")),
+        )
 
-            val errors = calls.map { call -> assertFailsWith<HttpException> { transport.send(call) } }
+        val errors = calls.map { call -> assertFailsWith<HttpException> { transport.send(call) } }
 
-            assertEquals(List(2) { HttpFailureKind.PROTOCOL }, errors.map { it.kind })
-            assertTrue("'authorization'" in errors[0].message.orEmpty(), errors[0].message)
-            assertTrue("'x-key'" in errors[1].message.orEmpty(), errors[1].message)
-            errors.forEach(::assertMasked)
-            assertTrue(server.requests.isEmpty())
-            assertFalse(isHeaderValue("a\u0085b") || isHeaderValue("\u0100"))
-            assertTrue(isHeaderValue("Bearer \tk\u00e9y"))
-        }
+        assertEquals(List(3) { HttpFailureKind.PROTOCOL }, errors.map { it.kind })
+        assertTrue("'authorization'" in errors[0].message.orEmpty(), errors[0].message)
+        assertTrue("'x-key'" in errors[1].message.orEmpty(), errors[1].message)
+        errors.forEach(::assertMasked)
+        assertTrue(server.requests.isEmpty())
+    }
 
     @Test
     fun `a call masks its secrets longest first and leaves those shorter than four characters`() {

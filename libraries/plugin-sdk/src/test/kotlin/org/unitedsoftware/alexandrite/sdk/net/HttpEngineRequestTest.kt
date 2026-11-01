@@ -40,6 +40,9 @@ class HttpEngineRequestTest {
             { header("Content-Length", "3") },
             { header("host", "example.com") },
             { header("x-key", "a\r\nb") },
+            { header("x-key", "caf\u00e9") },
+            { header("x-key", "a\u0085b") },
+            { header("x-key", "\u0100") },
             { header("bad name", "a") },
             { method("GE T") },
             { url("ftp://example.com/") },
@@ -47,6 +50,7 @@ class HttpEngineRequestTest {
         )
 
         for (change in refused) assertFailsWith<IllegalArgumentException> { request(change) }
+        assertEquals(listOf("a \t~"), request { header("x-key", "a \t~") }.headers.all("x-key"))
     }
 
     @Test

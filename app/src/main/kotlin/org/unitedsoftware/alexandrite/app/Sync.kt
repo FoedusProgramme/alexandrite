@@ -21,7 +21,6 @@ import org.unitedsoftware.alexandrite.account.pleochroic.SyncServiceException
 import org.unitedsoftware.alexandrite.account.pleochroic.SyncState
 import org.unitedsoftware.alexandrite.account.pleochroic.SyncStateFile
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
-import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
 import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import org.unitedsoftware.alexandrite.runtime.config.EnvReferences
 import org.unitedsoftware.alexandrite.runtime.config.writtenConfig
@@ -34,7 +33,6 @@ import org.unitedsoftware.alexandrite.sdk.config.ConfigPath
 import org.unitedsoftware.alexandrite.sdk.config.HostConfig
 import java.io.IOException
 import java.nio.file.Files
-import kotlin.time.Duration.Companion.seconds
 
 /** The id of the one Pleochroic endpoint `pleochroic login`/`logout` manage (`PleochroicCommands.kt`). */
 private const val SIGNED_IN_ENDPOINT = "default"
@@ -65,7 +63,7 @@ internal fun syncNow(cli: Cli, json: Boolean, dryRun: Boolean = false): Int {
     val state = readSyncState(cli)
     if (!state.enabled) return cli.fail(cli.t("sync.not_enabled"))
     val local = HostConfigSyncLocal(CliHostConfig(cli), cli.locations.configFile, cli.secrets)
-    val http = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds), cliEngine)
+    val http = pleochroicHttp()
     val (report, next) = try {
         http.use { transport ->
             runBlocking { SyncRunner(local, HttpSyncTransport(transport, apiBase, key)).run(state, dryRun) }
@@ -179,7 +177,7 @@ private fun withPendingSync(cli: Cli, block: (PendingSync, SyncState) -> Int): I
     val (apiBase, key) = credentials(cli) ?: return cli.fail(cli.t("sync.not_signed_in"))
     val state = readSyncState(cli)
     val local = HostConfigSyncLocal(CliHostConfig(cli), cli.locations.configFile, cli.secrets)
-    val http = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds), cliEngine)
+    val http = pleochroicHttp()
     return try {
         http.use { transport -> block(PendingSync(local, HttpSyncTransport(transport, apiBase, key)), state) }
     } catch (e: SyncServiceException) {

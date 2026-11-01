@@ -16,6 +16,8 @@ import org.unitedsoftware.alexandrite.channel.qqbot.mapping.QqBotChats
 import org.unitedsoftware.alexandrite.channel.qqbot.net.QqBotAnswer
 import org.unitedsoftware.alexandrite.channel.qqbot.net.QqBotApi
 import org.unitedsoftware.alexandrite.channel.qqbot.protocol.asTextOrNull
+import org.unitedsoftware.alexandrite.http.common.MAX_REDIRECTS
+import org.unitedsoftware.alexandrite.http.common.redirectTarget
 import org.unitedsoftware.alexandrite.sdk.channel.OutboundFile
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 import org.unitedsoftware.alexandrite.sdk.chat.ChatKind
@@ -23,8 +25,6 @@ import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import org.unitedsoftware.alexandrite.sdk.net.HttpEngineRequest
 import org.unitedsoftware.alexandrite.sdk.net.HttpRequestBody
-import java.net.URI
-import java.net.URISyntaxException
 import java.security.MessageDigest
 import java.util.Base64
 import kotlin.time.Duration.Companion.milliseconds
@@ -197,7 +197,7 @@ internal class QqBotUploads(
             } catch (e: Exception) {
                 return QqBotUpload.Failed("The block could not be sent to the platform's storage: $e", null)
             }
-            val next = location?.takeIf { status in 300..399 }?.let { redirected(target, it) }
+            val next = location?.takeIf { status in 300..399 }?.let { redirectTarget(target, it) }
             when {
                 status in 200..299 -> return QqBotUpload.Uploaded("")
                 next != null -> target = next
@@ -289,8 +289,6 @@ internal class QqBotUploads(
     private class Part(val index: Int, val url: String, val start: Long, val end: Long)
 
     private companion object {
-        const val MAX_REDIRECTS = 5
-
         const val IMAGE = 1
         const val VIDEO = 2
         const val VOICE = 3
@@ -317,16 +315,4 @@ internal class QqBotUploads(
         val VIDEO_TYPES = setOf("video/mp4")
         val AUDIO_TYPES = setOf("audio/silk", "audio/mpeg", "audio/wav", "audio/ogg")
     }
-}
-
-/** Where [location] leads from [url], null when it is no address or leaves https for http. */
-private fun redirected(url: String, location: String): String? {
-    val next = try {
-        URI(url).resolve(location)
-    } catch (e: URISyntaxException) {
-        return null
-    } catch (e: IllegalArgumentException) {
-        return null
-    }
-    return next.toString().takeUnless { url.startsWith("https:") && next.scheme == "http" }
 }

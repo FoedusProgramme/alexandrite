@@ -43,8 +43,8 @@ private const val WEB_API_KEY = "tools.web.pleochroicApiKey"
 private const val PLEOCHROIC_ID = "pleochroic"
 private const val CLIENT = "alexandrite"
 
-/** The timeouts every Pleochroic account HTTP call uses. */
-private fun pleochroicHttp() = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds), cliEngine)
+/** The transport of every Pleochroic account HTTP call. */
+internal fun pleochroicHttp() = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds), cliEngine)
 
 /** The engine of the commands that send requests outside a runtime. */
 internal val cliEngine: HttpEngine by lazy { JdkHttpEngine() }

@@ -13,12 +13,13 @@ import org.unitedsoftware.alexandrite.http.common.HttpException
 import org.unitedsoftware.alexandrite.http.common.HttpResponseStream
 import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
 import org.unitedsoftware.alexandrite.http.common.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.MAX_REDIRECTS
+import org.unitedsoftware.alexandrite.http.common.redirectTarget
 import org.unitedsoftware.alexandrite.sdk.channel.MediaContent
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import java.io.ByteArrayOutputStream
 import java.net.URI
-import java.net.URISyntaxException
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -85,7 +86,7 @@ internal class OneBotMedia(private val link: OneBotLink, engine: HttpEngine) :
             } catch (e: HttpException) {
                 val status = e.status
                 if (status == null || e.afterResponse) throw IllegalStateException("Cannot read $address", e)
-                target = e.headers?.get("location")?.takeIf { status in 300..399 }?.let { redirected(target, it) }
+                target = e.headers?.get("location")?.takeIf { status in 300..399 }?.let { redirectTarget(target, it) }
                     ?: throw IllegalStateException("Reading $address answered $status.")
             }
         }
@@ -112,8 +113,6 @@ internal class OneBotMedia(private val link: OneBotLink, engine: HttpEngine) :
 
         val READ = 30.seconds
 
-        const val MAX_REDIRECTS = 5
-
         /** What a voice message is converted to when its bytes are read, which every implementation takes. */
         const val RECORD_FORMAT = "mp3"
     }
@@ -121,15 +120,3 @@ internal class OneBotMedia(private val link: OneBotLink, engine: HttpEngine) :
 
 /** Whether [this] is an address this host can read. */
 private fun String.isHttp(): Boolean = startsWith("http://") || startsWith("https://")
-
-/** Where [location] leads from [url], null when it is no address or leaves https for http. */
-private fun redirected(url: String, location: String): String? {
-    val next = try {
-        URI(url).resolve(location)
-    } catch (e: URISyntaxException) {
-        return null
-    } catch (e: IllegalArgumentException) {
-        return null
-    }
-    return next.toString().takeUnless { url.startsWith("https:") && next.scheme == "http" }
-}
