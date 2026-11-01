@@ -133,8 +133,8 @@ internal class ReadTool(private val floor: HardFloor, private val ledger: ReadLe
                     normalized.mediaType,
                     InlineMedia(normalized.bytes),
                     path.fileName?.toString(),
-                    normalized.width?.takeIf { it > 0 },
-                    normalized.height?.takeIf { it > 0 },
+                    normalized.width,
+                    normalized.height,
                 ),
             ),
         )

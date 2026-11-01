@@ -19,12 +19,10 @@ public fun imageType(bytes: ByteArray): String? = when {
 }
 
 /** An image ready to send a model: [bytes] of [mediaType], [width] by [height] pixels, each null when unknown. */
-public class NormalizedImage(
-    public val bytes: ByteArray,
-    public val mediaType: String,
-    public val width: Int?,
-    public val height: Int?,
-)
+public class NormalizedImage(public val bytes: ByteArray, public val mediaType: String, width: Int?, height: Int?) {
+    public val width: Int? = width?.takeIf { it > 0 }
+    public val height: Int? = height?.takeIf { it > 0 }
+}
 
 /** Why an image is not shown where the host fits no images and a model does not take it as it is. */
 public const val NO_IMAGE_CODEC: String = "this host cannot process images"

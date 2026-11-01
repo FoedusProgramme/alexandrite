@@ -15,8 +15,8 @@ internal class AwtImageCodec : ImageCodec {
 
     override fun fitted(bytes: ByteArray, mediaType: String, maxSide: Int, maxBytes: Int): FittedImage? =
         AwtImages.normalized(bytes, maxSide, maxBytes)?.let { image ->
-            val width = image.width?.takeIf { it > 0 }
-            val height = image.height?.takeIf { it > 0 }
+            val width = image.width
+            val height = image.height
             val dimensions = if (width != null && height != null) ImageDimensions(width, height) else null
             FittedImage(image.bytes, image.mediaType, dimensions)
         }

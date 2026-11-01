@@ -156,7 +156,7 @@ internal class BrowseTool(
                 val screenshot = report.image?.toByteArray()
                 val type = screenshot?.let(::imageType)
                 val image = type?.let { fittedImage(screenshot, it, codec) }
-                val shownWidth = image?.width?.takeIf { it > 0 }
+                val shownWidth = image?.width
                 if (shownWidth != null && !(step is BrowseStep.Look && step.fullPage)) {
                     imageDimensions(screenshot, type, codec)?.let { (width, _) ->
                         scaled(width.toDouble() / shownWidth)
@@ -259,8 +259,8 @@ internal class BrowseTool(
                     image.mediaType,
                     InlineMedia(image.bytes),
                     "screenshot.png",
-                    image.width?.takeIf { it > 0 },
-                    image.height?.takeIf { it > 0 },
+                    image.width,
+                    image.height,
                 )
             }
         }

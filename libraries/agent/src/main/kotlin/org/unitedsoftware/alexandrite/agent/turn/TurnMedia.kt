@@ -259,9 +259,14 @@ internal class TurnMedia(
     private fun normalized(part: MediaPart): MediaPart? {
         val bytes = (part.source as InlineMedia).bytes()
         val image = fitted(bytes) ?: return null
-        val width = image.width?.takeIf { it > 0 }
-        val height = image.height?.takeIf { it > 0 }
-        return MediaPart(MediaKind.IMAGE, image.mediaType, InlineMedia(image.bytes), part.name, width, height)
+        return MediaPart(
+            MediaKind.IMAGE,
+            image.mediaType,
+            InlineMedia(image.bytes),
+            part.name,
+            image.width,
+            image.height,
+        )
     }
 
     /** [bytes] fit by the [codec], or as they are where none is bound. */

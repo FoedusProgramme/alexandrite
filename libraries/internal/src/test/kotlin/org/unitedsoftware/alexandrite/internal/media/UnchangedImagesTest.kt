@@ -31,6 +31,11 @@ class UnchangedImagesTest {
         assertSame(png, passed.bytes)
         assertEquals("image/png" to (100 to 60), passed.mediaType to (passed.width to passed.height))
         assertEquals(300 to 200, unchangedImage(webp(300, 200, 40), "image/webp")!!.let { it.width to it.height })
+        val unsized = ByteArray(40).also {
+            "RIFF".toByteArray(Charsets.US_ASCII).copyInto(it, 0)
+            "WEBPVP8 ".toByteArray(Charsets.US_ASCII).copyInto(it, 8)
+        }
+        assertEquals(null to null, unchangedImage(unsized, "image/webp")!!.let { it.width to it.height }, "no size")
 
         assertNull(unchangedImage(encoded(2000, 10, "png"), "image/png"), "too wide")
         assertNull(unchangedImage(png, "image/png", maxBytes = png.size - 1), "too large")
