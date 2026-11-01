@@ -21,8 +21,8 @@ import org.unitedsoftware.alexandrite.account.pleochroic.SyncServiceException
 import org.unitedsoftware.alexandrite.account.pleochroic.SyncState
 import org.unitedsoftware.alexandrite.account.pleochroic.SyncStateFile
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
-import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import org.unitedsoftware.alexandrite.runtime.config.EnvReferences
 import org.unitedsoftware.alexandrite.runtime.config.writtenConfig
 import org.unitedsoftware.alexandrite.sdk.InternalAlexandriteApi

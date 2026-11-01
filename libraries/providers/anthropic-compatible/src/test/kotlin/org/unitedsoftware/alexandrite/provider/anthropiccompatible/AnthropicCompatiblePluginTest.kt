@@ -1,6 +1,7 @@
 package org.unitedsoftware.alexandrite.provider.anthropiccompatible
 
 import kotlinx.coroutines.runBlocking
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.runtime.RuntimeStartException
 import org.unitedsoftware.alexandrite.runtime.StartStage
 import org.unitedsoftware.alexandrite.sdk.model.ModelOptions
@@ -15,8 +16,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AnthropicCompatiblePluginTest {
-    private fun harness(config: String) =
-        PluginHarness.builder(AlexandriteProviderAnthropicCompatibleIndex()).config(config)
+    private fun harness(config: String) = PluginHarness.builder(
+        AlexandriteProviderAnthropicCompatibleIndex(),
+    ).plugin(AlexandriteEngineJdkHttpIndex()).config(config)
 
     /** The config of one endpoint `x` with [fields]. */
     private fun endpoint(fields: String = ""): String = """{"endpoints": {"x": {"apiKey": "hunter2"$fields}}}"""

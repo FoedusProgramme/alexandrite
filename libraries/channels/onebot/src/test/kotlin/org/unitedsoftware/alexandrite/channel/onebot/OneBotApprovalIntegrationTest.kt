@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import org.java_websocket.WebSocket
 import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.sdk.channel.ApprovalAnswer
 import org.unitedsoftware.alexandrite.sdk.channel.ApprovalRequest
 import org.unitedsoftware.alexandrite.sdk.channel.Channel
@@ -292,7 +293,7 @@ class OneBotApprovalIntegrationTest {
         allowedChats: List<String> = listOf("group:987654", "private:12345678"),
         block: suspend Running.() -> Unit,
     ) {
-        PluginHarness.builder(AlexandriteChannelOnebotIndex())
+        PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
             .config(config(port, allowedChats))
             .turnSubmitter(RecordingTurnSubmitter())
             .build()

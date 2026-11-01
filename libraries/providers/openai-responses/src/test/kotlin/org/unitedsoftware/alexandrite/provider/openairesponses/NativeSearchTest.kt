@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.read
 import org.unitedsoftware.alexandrite.provider.common.responses.ResponsesEndpoint
 import org.unitedsoftware.alexandrite.provider.common.responses.ResponsesFlavor
@@ -14,7 +15,6 @@ import org.unitedsoftware.alexandrite.sdk.transcript.ModelRef
 import org.unitedsoftware.alexandrite.sdk.web.WebQuery
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
-import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -32,7 +32,7 @@ class NativeSearchTest {
         return ResponsesEndpoint(
             ref.endpoint,
             config.settings,
-            testHttpEngine(),
+            JdkHttpEngine(),
             ResponsesFlavor.STANDARD,
             config.options,
         )

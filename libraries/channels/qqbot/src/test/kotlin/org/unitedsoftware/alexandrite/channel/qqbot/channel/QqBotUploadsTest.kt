@@ -7,11 +7,11 @@ import org.unitedsoftware.alexandrite.channel.qqbot.net.QqBotHttp
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.FakeApiServer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.MutableClock
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.testConfig
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.sdk.channel.OutboundFile
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
-import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
@@ -100,9 +100,9 @@ class QqBotUploadsTest {
         init {
             server.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
             val config = testConfig(server.base)
-            http = QqBotHttp(config, testHttpEngine())
+            http = QqBotHttp(config, JdkHttpEngine())
             val tokens = QqBotTokens(config, http, clock)
-            uploads = QqBotUploads(QqBotApi(http, tokens), config, testHttpEngine())
+            uploads = QqBotUploads(QqBotApi(http, tokens), config, JdkHttpEngine())
         }
 
         override fun close() {

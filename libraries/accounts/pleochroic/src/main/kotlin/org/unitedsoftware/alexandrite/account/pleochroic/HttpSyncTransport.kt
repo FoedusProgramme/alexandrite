@@ -8,9 +8,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import org.unitedsoftware.alexandrite.internal.http.HttpCall
-import org.unitedsoftware.alexandrite.internal.http.HttpException
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.HttpCall
+import org.unitedsoftware.alexandrite.http.common.HttpException
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import java.net.URI
 import java.net.URLEncoder
 
@@ -115,11 +115,11 @@ public class HttpSyncTransport(
     }
 
     private fun path(area: String, kind: String, id: String): String {
-        val encodedId = URLEncoder.encode(id, Charsets.UTF_8).replace("+", "%20")
+        val encodedId = URLEncoder.encode(id, "UTF-8").replace("+", "%20")
         return when (area) {
             AREA_SECRET -> "/secrets/$encodedId"
-            AREA_SKILL -> "/skills/${URLEncoder.encode(kind, Charsets.UTF_8)}/$encodedId"
-            else -> "/config/${URLEncoder.encode(kind, Charsets.UTF_8)}/$encodedId"
+            AREA_SKILL -> "/skills/${URLEncoder.encode(kind, "UTF-8")}/$encodedId"
+            else -> "/config/${URLEncoder.encode(kind, "UTF-8")}/$encodedId"
         }
     }
 

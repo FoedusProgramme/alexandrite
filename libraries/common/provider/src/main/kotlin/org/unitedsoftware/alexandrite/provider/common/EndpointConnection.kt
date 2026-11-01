@@ -1,7 +1,7 @@
 package org.unitedsoftware.alexandrite.provider.common
 
-import org.unitedsoftware.alexandrite.internal.http.HttpCall
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.HttpCall
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import java.net.URI
 

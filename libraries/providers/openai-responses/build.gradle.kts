@@ -13,4 +13,5 @@ dependencies {
     testImplementation(testFixtures(project(":libraries:common:provider")))
     testImplementation(libs.kotlinx.coroutines.test)
     testRuntimeOnly(libs.logback.classic)
+    testImplementation(project(":libraries:engines:jdk-http"))
 }

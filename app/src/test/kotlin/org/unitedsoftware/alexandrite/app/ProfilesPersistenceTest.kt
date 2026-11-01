@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.agent.AlexandriteAgentIndex
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.engine.sqlitexerial.AlexandriteEngineSqliteXerialIndex
 import org.unitedsoftware.alexandrite.sdk.agent.ProfileSource
 import org.unitedsoftware.alexandrite.sdk.turn.Admission
@@ -32,7 +33,7 @@ class ProfilesPersistenceTest {
               "agents": {"coder": {"model": "scripted/test-model", "channels": {"test:main": {}}}}
             }
         """.trimIndent()
-        val harness = PluginHarness.builder(AlexandriteAgentIndex())
+        val harness = PluginHarness.builder(AlexandriteAgentIndex()).plugin(AlexandriteEngineJdkHttpIndex())
             .plugin(AlexandriteStoreSqliteIndex())
             .plugin(AlexandriteEngineSqliteXerialIndex())
             .config(config)

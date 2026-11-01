@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import org.java_websocket.WebSocket
 import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.sdk.channel.ChannelNotice
 import org.unitedsoftware.alexandrite.sdk.channel.ChannelNoticeKind
 import org.unitedsoftware.alexandrite.sdk.channel.ChannelPoints
@@ -35,7 +36,7 @@ class OneBotNoticeIntegrationTest {
         val observer = RecordingObserver()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(RecordingTurnSubmitter())
                     .hook(observer)

@@ -6,7 +6,7 @@ import ch.qos.logback.classic.spi.ThrowableProxyUtil
 import ch.qos.logback.core.AppenderBase
 import org.slf4j.LoggerFactory
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeBotApi
-import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
+import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
 import org.unitedsoftware.alexandrite.sdk.config.Secret
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration.Companion.milliseconds

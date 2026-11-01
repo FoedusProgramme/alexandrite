@@ -3,8 +3,8 @@ package org.unitedsoftware.alexandrite.sdk.net
 import org.unitedsoftware.alexandrite.sdk.di.BoundSpi
 
 /**
- * Sends the HTTP requests of Alexandrite and its plugins, bound by one engine plugin at most, else by the runtime's
- * JDK default. The contract, which the testkit's `HTTP_ENGINE_CONTRACT` checks:
+ * Sends the HTTP requests of Alexandrite and its plugins, bound by one engine plugin. The contract, which the testkit's
+ * `HTTP_ENGINE_CONTRACT` checks:
  * - it speaks HTTP/1.1, over TLS for `https`, with the platform's trusted certificates and proxy settings;
  * - it never follows a redirect;
  * - it sends the request's headers as given, adding only `host`, `content-length`, `connection` and a default

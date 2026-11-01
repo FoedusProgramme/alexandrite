@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.EndpointSettings
 import org.unitedsoftware.alexandrite.provider.common.ModelConfig
 import org.unitedsoftware.alexandrite.provider.common.TurnContextSetting
@@ -28,7 +29,6 @@ import org.unitedsoftware.alexandrite.testkit.ProviderFixture
 import org.unitedsoftware.alexandrite.testkit.RecordedRequest
 import org.unitedsoftware.alexandrite.testkit.ScriptedToolCall
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
-import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 
 /** An endpoint `test` of [flavor] at [server], with the models [models] configured. */
 public fun messagesEndpoint(
@@ -48,7 +48,7 @@ public fun messagesEndpoint(
         timeouts = FIXTURE_TIMEOUTS,
         wire = MessagesEndpoint.WIRE,
     )
-    return MessagesEndpoint(EndpointId("test"), settings, testHttpEngine(), flavor, messages)
+    return MessagesEndpoint(EndpointId("test"), settings, JdkHttpEngine(), flavor, messages)
 }
 
 /** The events of [request]'s response. */

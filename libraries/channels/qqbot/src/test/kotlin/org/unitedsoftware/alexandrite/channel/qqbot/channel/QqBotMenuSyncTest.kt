@@ -12,11 +12,11 @@ import org.unitedsoftware.alexandrite.channel.qqbot.testing.MutableClock
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.PlatformAnswer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.PlatformRequest
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.testConfig
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.sdk.turn.CommandContext
 import org.unitedsoftware.alexandrite.sdk.turn.CommandHandler
 import org.unitedsoftware.alexandrite.sdk.turn.CommandInvocation
 import org.unitedsoftware.alexandrite.sdk.turn.CommandSpec
-import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -294,7 +294,7 @@ class QqBotMenuSyncTest {
 
         init {
             server.on("/app/getAppAccessToken", """{"access_token":"access","expires_in":"7200"}""")
-            http = QqBotHttp(config, testHttpEngine())
+            http = QqBotHttp(config, JdkHttpEngine())
             api = QqBotApi(http, QqBotTokens(config, http, clock))
         }
 

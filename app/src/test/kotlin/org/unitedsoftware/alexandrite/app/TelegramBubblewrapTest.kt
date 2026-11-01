@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.sandbox.bubblewrap.AlexandriteSandboxBubblewrapIndex
 import org.unitedsoftware.alexandrite.sdk.sandbox.ExecutionEnvironment
 import org.unitedsoftware.alexandrite.sdk.transcript.ContextPart
@@ -58,7 +59,7 @@ class TelegramBubblewrapTest {
     fun available() {
         var available = false
         runBlocking {
-            PluginHarness.builder(AlexandriteSandboxBubblewrapIndex()).build()
+            PluginHarness.builder(AlexandriteSandboxBubblewrapIndex()).plugin(AlexandriteEngineJdkHttpIndex()).build()
                 .run { available = getAll<ExecutionEnvironment>().single().available() }
         }
         assumeTrue(available, "bubblewrap cannot make a sandbox here")

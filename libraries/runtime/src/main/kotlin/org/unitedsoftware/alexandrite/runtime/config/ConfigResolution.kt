@@ -6,7 +6,6 @@ import org.unitedsoftware.alexandrite.runtime.RuntimeProblemKind
 import org.unitedsoftware.alexandrite.runtime.channel.PluginChannel
 import org.unitedsoftware.alexandrite.runtime.channel.pluginChannel
 import org.unitedsoftware.alexandrite.runtime.engine.engineProblems
-import org.unitedsoftware.alexandrite.runtime.engine.missingEngines
 import org.unitedsoftware.alexandrite.runtime.plugin.BuiltInLayer
 import org.unitedsoftware.alexandrite.runtime.plugin.DisabledPlugin
 import org.unitedsoftware.alexandrite.runtime.plugin.PluginSet
@@ -62,7 +61,6 @@ internal fun resolveConfig(
     problems += duplicateChannelTypes(channels)
     problems += listOfNotNull(duplicateStores(enabled, bindings))
     problems += engineProblems(enabled, bindings)
-    problems += missingEngines(enabled, bindings)
     problems += missingRequirements(members, enabled, disabled)
     val unknown = unknownConfig(members, source, failedRoots)
     problems += unknown.problems

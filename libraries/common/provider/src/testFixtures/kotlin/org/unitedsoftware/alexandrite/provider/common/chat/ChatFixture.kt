@@ -13,6 +13,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.EndpointSettings
 import org.unitedsoftware.alexandrite.provider.common.ModelConfig
 import org.unitedsoftware.alexandrite.provider.common.TimeoutConfig
@@ -29,7 +30,6 @@ import org.unitedsoftware.alexandrite.testkit.ProviderFixture
 import org.unitedsoftware.alexandrite.testkit.RecordedRequest
 import org.unitedsoftware.alexandrite.testkit.ScriptedToolCall
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
-import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 
 public const val FIXTURE_API_KEY: String = "sk-fixture-0123456789"
 
@@ -55,7 +55,7 @@ public fun chatEndpoint(
         timeouts = FIXTURE_TIMEOUTS,
         wire = WireHeaders(authHeader),
     )
-    return ChatEndpoint(EndpointId("test"), settings, testHttpEngine(), flavor, ChatApiSettings(promptCacheKey))
+    return ChatEndpoint(EndpointId("test"), settings, JdkHttpEngine(), flavor, ChatApiSettings(promptCacheKey))
 }
 
 /** The events of [request]'s response. */

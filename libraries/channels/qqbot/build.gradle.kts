@@ -9,10 +9,12 @@ dependencies {
     api(project(":libraries:plugin-sdk"))
     implementation(project(":libraries:internal"))
     implementation(project(":libraries:common:channel"))
+    implementation(project(":libraries:common:http"))
 
     // The client of the gateway, of which the JDK serves none.
     implementation(libs.java.websocket)
 
     testImplementation(project(":libraries:testkit"))
     testImplementation(libs.logback.classic)
+    testImplementation(project(":libraries:engines:jdk-http"))
 }

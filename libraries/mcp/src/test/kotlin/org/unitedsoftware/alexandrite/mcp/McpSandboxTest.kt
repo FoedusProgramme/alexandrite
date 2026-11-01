@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.io.TempDir
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.internal.sandbox.DEFAULT_PROTECT
 import org.unitedsoftware.alexandrite.mcp.fake.FakeStdioServers
 import org.unitedsoftware.alexandrite.runtime.RuntimeStartException
@@ -63,7 +64,7 @@ class McpSandboxTest {
     }"""
 
     private fun harness(server: String, environment: RecordingEnvironment? = RecordingEnvironment("bubblewrap")) =
-        PluginHarness.builder(AlexandriteMcpIndex())
+        PluginHarness.builder(AlexandriteMcpIndex()).plugin(AlexandriteEngineJdkHttpIndex())
             .apply { environment?.let { executionEnvironment(it) } }
             .config("""{"servers": {"files": {$launch, $server}}}""")
             .build()
@@ -185,7 +186,7 @@ class McpSandboxTest {
         )
         val error = assertFailsWith<RuntimeStartException> {
             runBlocking {
-                PluginHarness.builder(AlexandriteMcpIndex())
+                PluginHarness.builder(AlexandriteMcpIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(
                         """{"servers": {"web": {"url": "https://mcp.example.test/mcp", "sandbox": {"type": "auto"}}}}""",
                     )

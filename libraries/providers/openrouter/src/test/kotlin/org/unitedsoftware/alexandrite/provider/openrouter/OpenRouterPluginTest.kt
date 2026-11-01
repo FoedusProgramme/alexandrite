@@ -3,6 +3,7 @@ package org.unitedsoftware.alexandrite.provider.openrouter
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonPrimitive
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.provider.common.chat.chunk
 import org.unitedsoftware.alexandrite.provider.common.chat.chunks
 import org.unitedsoftware.alexandrite.provider.common.chat.with
@@ -26,7 +27,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OpenRouterPluginTest {
-    private fun harness(config: String) = PluginHarness.builder(AlexandriteProviderOpenrouterIndex()).config(config)
+    private fun harness(config: String) = PluginHarness.builder(
+        AlexandriteProviderOpenrouterIndex(),
+    ).plugin(AlexandriteEngineJdkHttpIndex()).config(config)
 
     @Test
     fun `an endpoint needs only its key and keeps turn context transient unless told otherwise`() = runBlocking {

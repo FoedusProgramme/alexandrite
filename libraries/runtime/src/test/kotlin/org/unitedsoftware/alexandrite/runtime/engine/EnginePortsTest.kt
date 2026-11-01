@@ -1,7 +1,6 @@
 package org.unitedsoftware.alexandrite.runtime.engine
 
 import org.junit.jupiter.api.io.TempDir
-import org.unitedsoftware.alexandrite.internal.http.JdkHttpEngine
 import org.unitedsoftware.alexandrite.runtime.Events
 import org.unitedsoftware.alexandrite.runtime.RuntimeProblemKind
 import org.unitedsoftware.alexandrite.runtime.StartStage
@@ -13,9 +12,9 @@ import org.unitedsoftware.alexandrite.runtime.startFailure
 import org.unitedsoftware.alexandrite.sdk.di.container.Binding
 import org.unitedsoftware.alexandrite.sdk.di.container.Dependency
 import org.unitedsoftware.alexandrite.sdk.di.container.DependencyKind
-import org.unitedsoftware.alexandrite.sdk.di.container.PluginBindings
 import org.unitedsoftware.alexandrite.sdk.di.container.binding
 import org.unitedsoftware.alexandrite.sdk.di.key
+import org.unitedsoftware.alexandrite.sdk.media.ImageCodec
 import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import org.unitedsoftware.alexandrite.sdk.net.HttpEngineRequest
 import org.unitedsoftware.alexandrite.sdk.net.HttpEngineResponse
@@ -23,7 +22,6 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
 import kotlin.test.assertSame
 
 class EnginePortsTest {
@@ -42,28 +40,27 @@ class EnginePortsTest {
             make()
         }
 
-    /** A binding of [plugin] that needs an engine as [kind]. */
-    private fun client(plugin: String, kind: DependencyKind = DependencyKind.INSTANCE): Binding<String> = binding(
-        key<String>("client"),
-        plugin,
-        "client of $plugin",
-        dependencies = listOf(Dependency(key<HttpEngine>(), kind, "engine")),
-    ) { "client" }
+    /** A plugin [id] with a binding that needs an engine as [kind]. */
+    private fun client(id: String, kind: DependencyKind = DependencyKind.INSTANCE) = TestIndex(
+        id,
+        bindings = listOf(
+            binding(
+                key<String>("client"),
+                id,
+                "client of $id",
+                dependencies = listOf(
+                    Dependency(key<HttpEngine>(), kind, "engine"),
+                    Dependency(key<ImageCodec>(), DependencyKind.OPTIONAL, "codec"),
+                ),
+            ) { "client" },
+        ),
+    )
 
     @Test
-    fun `the runtime binds the JDK engine when no plugin binds one`() {
-        var engine: HttpEngine? = null
-
-        spec(explicit(TestIndex("probe")), dataDir).execute { engine = services.resolver().get(key<HttpEngine>()) }
-
-        assertIs<JdkHttpEngine>(engine)
-    }
-
-    @Test
-    fun `the engine a plugin binds replaces the JDK default`() {
+    fun `the engine a plugin binds serves the plugins that need one`() {
         val own = OwnEngine()
         var engine: HttpEngine? = null
-        val plugins = explicit(TestIndex("okhttp", bindings = listOf(engine("okhttp") { own })), TestIndex("probe"))
+        val plugins = explicit(TestIndex("okhttp", bindings = listOf(engine("okhttp") { own })), client("web"))
 
         spec(plugins, dataDir).execute { engine = services.resolver().get(key<HttpEngine>()) }
 
@@ -102,26 +99,22 @@ class EnginePortsTest {
     }
 
     @Test
-    fun `a port without a JDK default that a plugin needs names the port, the plugins and an engine to add`() {
-        val port = EnginePort(key<HttpEngine>(), listOf("alexandrite-engine-okhttp"), jdkDefault = null)
-        val plugins = explicit(
-            TestIndex("web", bindings = listOf(client("web"))),
-            TestIndex("mcp", bindings = listOf(client("mcp", DependencyKind.LAZY))),
-            TestIndex("maybe", bindings = listOf(client("maybe", DependencyKind.OPTIONAL))),
-        ).members
-        val bindings = plugins.associate { it.id to it.index.bindings() }
+    fun `each plugin that needs a port no plugin binds fails CONFIG, naming the port and the engines that bind it`() {
+        val error = spec(explicit(client("web"), client("mcp", DependencyKind.LAZY)), dataDir).startFailure()
 
-        val problem = engineProblems(plugins, bindings, listOf(port)).single()
-        val unneeded = engineProblems(plugins.filter { it.id == "maybe" }, bindings, listOf(port))
-
-        assertEquals(RuntimeProblemKind.MISSING_ENGINE, problem.kind)
+        assertEquals(StartStage.CONFIG, error.stage)
         assertEquals(
-            "Missing engine: plugin 'web' and plugin 'mcp' need HttpEngine, but no enabled plugin binds it and " +
-                "this host has no JDK default for it. Add an engine plugin that binds it, such as " +
-                "alexandrite-engine-okhttp.",
-            problem.message,
+            listOf(RuntimeProblemKind.MISSING_ENGINE to "mcp", RuntimeProblemKind.MISSING_ENGINE to "web"),
+            error.problems.map { it.kind to it.plugin },
         )
-        assertEquals(emptyList(), unneeded)
-        assertEquals(emptyList(), engineDefaults(listOf(PluginBindings("web", bindings.getValue("web"))), listOf(port)))
+        val message = error.problems.first { it.plugin == "web" }.message
+        assertContains(message, "plugin 'web' needs HttpEngine, which no enabled plugin binds")
+        assertContains(message, "alexandrite-engine-jdk-http on a desktop JVM")
+        assertContains(message, "alexandrite-engine-okhttp")
+    }
+
+    @Test
+    fun `a plugin that takes a port only when one is bound starts without an engine`() {
+        spec(explicit(client("web", DependencyKind.OPTIONAL)), dataDir).execute {}
     }
 }

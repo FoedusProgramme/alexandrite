@@ -7,6 +7,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.EndpointSettings
 import org.unitedsoftware.alexandrite.provider.common.ModelConfig
 import org.unitedsoftware.alexandrite.provider.common.TimeoutConfig
@@ -37,7 +38,6 @@ import org.unitedsoftware.alexandrite.sdk.transcript.ToolCallPart
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.FakeResponse
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
-import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testToolDefinition
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import org.unitedsoftware.alexandrite.testkit.testUserEntry
@@ -552,7 +552,7 @@ class ChatResponseTest {
         val quick = TimeoutConfig(connectSeconds = 1, firstByteSeconds = 1, idleSeconds = 1)
         val settings = EndpointSettings("${server.baseUrl}/v1", Secret(FIXTURE_API_KEY), timeouts = quick)
 
-        val error = ChatEndpoint(EndpointId("test"), settings, testHttpEngine(), ChatFlavor.STANDARD).use { endpoint ->
+        val error = ChatEndpoint(EndpointId("test"), settings, JdkHttpEngine(), ChatFlavor.STANDARD).use { endpoint ->
             assertFailsWith<ModelException> { runBlocking { endpoint.events(request()) } }
         }.error
 

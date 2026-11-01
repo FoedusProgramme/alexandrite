@@ -1,7 +1,7 @@
 package org.unitedsoftware.alexandrite.channel.qqbot.mapping
 
 import org.unitedsoftware.alexandrite.channel.qqbot.net.QqBotHttp
-import org.unitedsoftware.alexandrite.internal.http.HttpCall
+import org.unitedsoftware.alexandrite.http.common.HttpCall
 import org.unitedsoftware.alexandrite.sdk.channel.MediaContent
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import java.io.ByteArrayOutputStream

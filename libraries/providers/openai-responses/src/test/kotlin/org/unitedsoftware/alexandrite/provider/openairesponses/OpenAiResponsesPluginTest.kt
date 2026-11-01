@@ -3,6 +3,7 @@ package org.unitedsoftware.alexandrite.provider.openairesponses
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonPrimitive
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.provider.common.responses.sse
 import org.unitedsoftware.alexandrite.provider.common.responses.textEvents
 import org.unitedsoftware.alexandrite.runtime.RuntimeStartException
@@ -25,8 +26,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OpenAiResponsesPluginTest {
-    private fun harness(config: String) =
-        PluginHarness.builder(AlexandriteProviderOpenaiResponsesIndex()).config(config)
+    private fun harness(config: String) = PluginHarness.builder(
+        AlexandriteProviderOpenaiResponsesIndex(),
+    ).plugin(AlexandriteEngineJdkHttpIndex()).config(config)
 
     /** The config of one endpoint `x` with [fields]. */
     private fun endpoint(fields: String = ""): String = """{"endpoints": {"x": {"apiKey": "hunter2"$fields}}}"""

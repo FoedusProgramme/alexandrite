@@ -28,6 +28,7 @@ class AlexandriteLayoutTest {
     private val lmStudio = ":libraries:providers:lmstudio"
     private val openRouter = ":libraries:providers:openrouter"
     private val providerCommon = ":libraries:common:provider"
+    private val httpCommon = ":libraries:common:http"
     private val sqlite = ":libraries:stores:sqlite"
     private val automationCommon = ":libraries:common:automation"
     private val schedule = ":libraries:automations:schedule"
@@ -44,7 +45,7 @@ class AlexandriteLayoutTest {
     private val libraries =
         listOf(sdk, internals, runtime, agent, tools, mcp, commands, telegram, channelCommon, openAi, anthropic) +
             vendors +
-            listOf(providerCommon, sqlite, automationCommon, discovery, testkit)
+            listOf(providerCommon, httpCommon, sqlite, automationCommon, discovery, testkit)
     private val builtIn = libraries + ksp + bom + app
     private val all = builtIn + notes
     private val indexed =
@@ -104,6 +105,7 @@ class AlexandriteLayoutTest {
             lmStudio to Layer.PROVIDER,
             openRouter to Layer.PROVIDER,
             providerCommon to Layer.PROVIDER_COMMON,
+            httpCommon to Layer.HTTP_COMMON,
             sqlite to Layer.STORE,
             automationCommon to Layer.AUTOMATION_COMMON,
             schedule to Layer.AUTOMATION,
@@ -150,6 +152,7 @@ class AlexandriteLayoutTest {
             lmStudio to "alexandrite-provider-lmstudio",
             openRouter to "alexandrite-provider-openrouter",
             providerCommon to "alexandrite-provider-common",
+            httpCommon to "alexandrite-http-common",
             sqlite to "alexandrite-store-sqlite",
             automationCommon to "alexandrite-automation-common",
             discovery to "alexandrite-discovery",
@@ -189,6 +192,7 @@ class AlexandriteLayoutTest {
             lmStudio to "providers.lmstudio",
             openRouter to "providers.openrouter",
             providerCommon to null,
+            httpCommon to null,
             sqlite to "stores.sqlite",
             automationCommon to null,
             discovery to null,
@@ -254,6 +258,7 @@ class AlexandriteLayoutTest {
             lmStudio to "org.unitedsoftware.alexandrite.provider.lmstudio",
             openRouter to "org.unitedsoftware.alexandrite.provider.openrouter",
             providerCommon to null,
+            httpCommon to null,
             channelCommon to null,
             automationCommon to null,
             sqlite to "org.unitedsoftware.alexandrite.store.sqlite",
@@ -315,6 +320,7 @@ class AlexandriteLayoutTest {
             ksp to base,
             app to base,
             providerCommon to base,
+            httpCommon to base,
             channelCommon to base,
             automationCommon to base,
             telegram to "$base.channels",
@@ -353,7 +359,7 @@ class AlexandriteLayoutTest {
         }
         assertEquals((libraries + ksp + bom).sorted(), all.filter { module(it).published }.sorted())
         assertEquals(
-            setOf(sdk, testkit, ksp, bom, channelCommon, providerCommon),
+            setOf(sdk, testkit, ksp, bom, channelCommon, providerCommon, httpCommon),
             all.filter {
                 module(it).layer in AlexandriteLayout.AUTHOR_LAYERS
             }.toSet(),
@@ -394,7 +400,7 @@ class AlexandriteLayoutTest {
         val shuffled = (today + added).shuffled(Random(7))
         val paths = AlexandriteLayout.discover(shuffled).modules.map { it.path }
         assertEquals(paths.sorted(), paths)
-        assertEquals(26, paths.size)
+        assertEquals(27, paths.size)
     }
 
     @Test
@@ -693,7 +699,6 @@ class AlexandriteLayoutTest {
         }
         assertAllowed(testkit, runtime)
         assertAllowed(notes, sdk)
-        assertAllowed(internals, sdk)
         for (library in libraries - testkit) assertAllowed(app, library)
         assertAllowed(app, ":libraries:providers:example")
         assertAllowed(":libraries:providers:example", internals)
@@ -706,6 +711,7 @@ class AlexandriteLayoutTest {
     @Test
     fun `forbidden pairs`() {
         assertForbidden(sdk, internals)
+        assertForbidden(internals, sdk)
         for (from in listOf(tools, telegram, openAi, anthropic, sqlite)) assertForbidden(from, agent)
         for (other in listOf(agent, tools, telegram, openAi, sqlite)) {
             assertForbidden(commands, other)
@@ -783,6 +789,26 @@ class AlexandriteLayoutTest {
         assertForbidden(sqlite, engine)
         assertForbidden(sqlite, engine, "runtimeOnly")
         assertForbidden(engine, sqlite, "testImplementation")
+    }
+
+    @Test
+    fun `http-common sits on the SDK and internal, below what sends HTTP, and tests with the testkit and engines`() {
+        for (from in listOf(tools, mcp, telegram, providerCommon, ":libraries:accounts:pleochroic", app)) {
+            assertAllowed(from, httpCommon)
+        }
+        for (from in listOf(sdk, internals, runtime, agent, commands, sqlite, openAi, testkit, notes)) {
+            assertForbidden(from, httpCommon)
+        }
+        assertAllowed(testkit, httpCommon, "testImplementation")
+        for (to in listOf(sdk, internals)) assertAllowed(httpCommon, to)
+        for (to in listOf(runtime, agent, tools, providerCommon, channelCommon, ":libraries:engines:okhttp")) {
+            assertForbidden(httpCommon, to)
+        }
+        assertAllowed(httpCommon, testkit, "testImplementation")
+        assertAllowed(httpCommon, ":libraries:engines:jdk-http", "testImplementation")
+        assertEquals("alexandrite-http-common", module(httpCommon).jarName)
+        assertTrue(module(httpCommon).portable)
+        assertFalse(module(":libraries:engines:jdk-http").portable)
     }
 
     @Test
@@ -925,7 +951,7 @@ class AlexandriteLayoutTest {
     @Test
     fun `a test configuration does not widen the other layer rules`() {
         assertForbidden(sdk, internals, "testImplementation")
-        assertForbidden(internals, runtime, "testImplementation")
+        assertForbidden(internals, sdk, "testImplementation")
         assertForbidden(telegram, agent, "testImplementation")
         assertForbidden(agent, tools, "testRuntimeOnly")
     }
@@ -945,11 +971,15 @@ class AlexandriteLayoutTest {
         assertContains(message, "'$telegram'")
         assertContains(message, "'$agent'")
         assertContains(message, "'implementation'")
-        assertContains(message, "$sdk, $internals, $channelCommon; $testkit only from configurations named test*;")
+        assertContains(
+            message,
+            "$sdk, $internals, $channelCommon, $httpCommon; :libraries:engines:*, $testkit only from configurations " +
+                "named test*;",
+        )
         assertContains(message, AlexandriteLayout.LAYOUT_LOCATION)
         assertContains(
             assertNotNull(violation(app, ksp)),
-            ":libraries:channels:*, $channelCommon, :libraries:providers:*, :libraries:common:provider, " +
+            ":libraries:channels:*, $channelCommon, :libraries:providers:*, :libraries:common:provider, $httpCommon, " +
                 ":libraries:stores:*, :libraries:accounts:*, :libraries:automations:*, $automationCommon, " +
                 ":libraries:sandboxes:*, :libraries:engines:*, $discovery; $testkit, :examples:* only from configurations named test*;",
         )

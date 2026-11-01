@@ -1,6 +1,7 @@
 package org.unitedsoftware.alexandrite.internal.media
 
 import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 import kotlin.test.Test
@@ -14,7 +15,8 @@ class UnchangedImagesTest {
         for (format in listOf("png", "jpg", "gif")) {
             val bytes = encoded(37, 21, format)
             val type = imageType(bytes)!!
-            assertEquals(AwtImages.dimensions(bytes), headerDimensions(bytes, type), format)
+            val decoded = ImageIO.read(ByteArrayInputStream(bytes))
+            assertEquals(decoded.width to decoded.height, headerDimensions(bytes, type), format)
             assertEquals(37 to 21, headerDimensions(bytes, type), format)
         }
         assertEquals(300 to 200, headerDimensions(webp(300, 200, 40), "image/webp"))

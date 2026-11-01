@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 import org.java_websocket.WebSocket
 import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.sdk.channel.ChannelDirectory
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
@@ -109,7 +110,7 @@ class OneBotQuoteIntegrationTest {
         submitter: RecordingTurnSubmitter,
         block: suspend Running.() -> Unit,
     ) {
-        PluginHarness.builder(AlexandriteChannelOnebotIndex())
+        PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
             .config(config(port))
             .turnSubmitter(submitter)
             .build()

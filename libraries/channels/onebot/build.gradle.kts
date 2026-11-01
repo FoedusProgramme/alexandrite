@@ -9,10 +9,12 @@ dependencies {
     implementation(project(":libraries:common:channel"))
     api(project(":libraries:plugin-sdk"))
     implementation(project(":libraries:internal"))
+    implementation(project(":libraries:common:http"))
 
     // The client and the server of the Websocket transports, of which the JDK offers a client only.
     implementation(libs.java.websocket)
 
     testImplementation(project(":libraries:testkit"))
     testImplementation(libs.logback.classic)
+    testImplementation(project(":libraries:engines:jdk-http"))
 }

@@ -231,14 +231,14 @@ public class HtmlReader(private val baseUrl: String?) {
 }
 
 /** The elements whose start and end end the line. */
-internal val BLOCK_ELEMENTS: Set<String> = setOf(
+public val BLOCK_ELEMENTS: Set<String> = setOf(
     "address", "article", "aside", "blockquote", "body", "caption", "center", "dd", "details", "dialog", "dir", "div",
     "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form", "frameset", "h1", "h2", "h3", "h4", "h5", "h6",
     "head", "header", "hgroup", "html", "legend", "li", "listing", "main", "menu", "nav", "ol", "optgroup", "option",
     "p", "plaintext", "pre", "search", "section", "summary", "table", "tbody", "tfoot", "thead", "tr", "ul", "xmp",
 )
 
-internal val HIDDEN_ELEMENTS: Set<String> = setOf("script", "style", "noscript")
+public val HIDDEN_ELEMENTS: Set<String> = setOf("script", "style", "noscript")
 
 private val WHITESPACE = charArrayOf(' ', '\t', '\n', '\u000C', '\r')
 

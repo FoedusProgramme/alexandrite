@@ -31,6 +31,9 @@ enum class Layer {
     /** The mapping that model back ends share. */
     PROVIDER_COMMON,
 
+    /** The HTTP that plugins share. */
+    HTTP_COMMON,
+
     /** Storage back ends. */
     STORE,
 
@@ -186,6 +189,7 @@ object AlexandriteLayout {
             packagePrefix = "$PACKAGE.provider.",
         ),
         Location.Slot("libraries/common/provider", Layer.PROVIDER_COMMON, jarName = "alexandrite-provider-common"),
+        Location.Slot("libraries/common/http", Layer.HTTP_COMMON, jarName = "alexandrite-http-common"),
         Location.Family(
             "libraries/stores",
             Layer.STORE,
@@ -245,18 +249,19 @@ object AlexandriteLayout {
 
     val LAYER_DEPENDENCIES: Map<Layer, Set<Layer>> = mapOf(
         Layer.SDK to emptySet(),
-        Layer.INTERNAL to setOf(Layer.SDK),
+        Layer.INTERNAL to emptySet(),
         Layer.KSP to emptySet(),
         Layer.RUNTIME to setOf(Layer.SDK, Layer.INTERNAL),
         Layer.AGENT to setOf(Layer.SDK, Layer.INTERNAL),
-        Layer.TOOLS to setOf(Layer.SDK, Layer.INTERNAL),
+        Layer.TOOLS to setOf(Layer.SDK, Layer.INTERNAL, Layer.HTTP_COMMON),
         Layer.COMMANDS to setOf(Layer.SDK, Layer.INTERNAL),
-        Layer.CHANNEL to setOf(Layer.SDK, Layer.INTERNAL, Layer.CHANNEL_COMMON),
+        Layer.CHANNEL to setOf(Layer.SDK, Layer.INTERNAL, Layer.CHANNEL_COMMON, Layer.HTTP_COMMON),
         Layer.CHANNEL_COMMON to setOf(Layer.SDK, Layer.INTERNAL),
         Layer.PROVIDER to setOf(Layer.SDK, Layer.INTERNAL, Layer.PROVIDER_COMMON),
-        Layer.PROVIDER_COMMON to setOf(Layer.SDK, Layer.INTERNAL),
+        Layer.PROVIDER_COMMON to setOf(Layer.SDK, Layer.INTERNAL, Layer.HTTP_COMMON),
+        Layer.HTTP_COMMON to setOf(Layer.SDK, Layer.INTERNAL),
         Layer.STORE to setOf(Layer.SDK, Layer.INTERNAL),
-        Layer.ACCOUNT to setOf(Layer.SDK, Layer.INTERNAL),
+        Layer.ACCOUNT to setOf(Layer.SDK, Layer.INTERNAL, Layer.HTTP_COMMON),
         Layer.AUTOMATION to setOf(Layer.SDK, Layer.INTERNAL, Layer.AUTOMATION_COMMON),
         Layer.AUTOMATION_COMMON to emptySet(),
         Layer.SANDBOX to setOf(Layer.SDK, Layer.INTERNAL),
@@ -276,6 +281,7 @@ object AlexandriteLayout {
             Layer.CHANNEL_COMMON,
             Layer.PROVIDER,
             Layer.PROVIDER_COMMON,
+            Layer.HTTP_COMMON,
             Layer.STORE,
             Layer.ACCOUNT,
             Layer.AUTOMATION,
@@ -287,26 +293,29 @@ object AlexandriteLayout {
     )
 
     val TEST_LAYER_DEPENDENCIES: Map<Layer, Set<Layer>> = mapOf(
-        Layer.AGENT to setOf(Layer.TESTKIT),
-        Layer.TOOLS to setOf(Layer.TESTKIT),
+        Layer.AGENT to setOf(Layer.TESTKIT, Layer.ENGINE),
+        Layer.TOOLS to setOf(Layer.TESTKIT, Layer.ENGINE),
         Layer.COMMANDS to setOf(Layer.TESTKIT),
-        Layer.CHANNEL to setOf(Layer.TESTKIT),
+        Layer.CHANNEL to setOf(Layer.TESTKIT, Layer.ENGINE),
         Layer.CHANNEL_COMMON to setOf(Layer.TESTKIT),
-        Layer.PROVIDER to setOf(Layer.TESTKIT),
-        Layer.PROVIDER_COMMON to setOf(Layer.TESTKIT),
+        Layer.PROVIDER to setOf(Layer.TESTKIT, Layer.ENGINE),
+        Layer.PROVIDER_COMMON to setOf(Layer.TESTKIT, Layer.ENGINE),
+        Layer.HTTP_COMMON to setOf(Layer.TESTKIT, Layer.ENGINE),
         Layer.STORE to setOf(Layer.TESTKIT, Layer.ENGINE),
-        Layer.ACCOUNT to setOf(Layer.TESTKIT),
+        Layer.ACCOUNT to setOf(Layer.TESTKIT, Layer.ENGINE),
         Layer.AUTOMATION to setOf(Layer.TESTKIT),
         Layer.SANDBOX to setOf(Layer.TESTKIT),
         Layer.ENGINE to setOf(Layer.TESTKIT),
         Layer.DISCOVERY to setOf(Layer.TESTKIT),
+        Layer.TESTKIT to setOf(Layer.HTTP_COMMON, Layer.ENGINE),
         Layer.KSP to setOf(Layer.SDK),
         Layer.EXAMPLE to setOf(Layer.TESTKIT),
         Layer.APP to setOf(Layer.TESTKIT, Layer.EXAMPLE),
     )
 
     /** Layers compiled without the SDK's internal API, as third-party plugins are */
-    val THIRD_PARTY_LAYERS: Set<Layer> = setOf(Layer.CHANNEL_COMMON, Layer.PROVIDER_COMMON, Layer.EXAMPLE)
+    val THIRD_PARTY_LAYERS: Set<Layer> =
+        setOf(Layer.CHANNEL_COMMON, Layer.PROVIDER_COMMON, Layer.HTTP_COMMON, Layer.EXAMPLE)
 
     /** Layers whose main code uses only the JDK API of Android's API level 26 */
     val PORTABLE_LAYERS: Set<Layer> = setOf(
@@ -317,20 +326,34 @@ object AlexandriteLayout {
         Layer.TOOLS,
         Layer.COMMANDS,
         Layer.PROVIDER_COMMON,
+        Layer.HTTP_COMMON,
         Layer.PROVIDER,
         Layer.STORE,
         Layer.ENGINE,
     )
 
     /** Modules of [PORTABLE_LAYERS] made for the desktop JVM alone */
-    val JDK_ONLY_MODULES: Set<String> = setOf(":libraries:engines:sqlite-xerial")
+    val JDK_ONLY_MODULES: Set<String> = setOf(
+        ":libraries:engines:awt-images",
+        ":libraries:engines:jdk-http",
+        ":libraries:engines:sqlite-xerial",
+        ":libraries:engines:swing-html",
+    )
 
     /** Layers whose modules are published to Maven Central */
     val PUBLISHED_LAYERS: Set<Layer> = Layer.entries.toSet() - setOf(Layer.EXAMPLE, Layer.APP)
 
     /** Published layers that plugin authors build on, whose POM carries no implementation-module warning */
     val AUTHOR_LAYERS: Set<Layer> =
-        setOf(Layer.SDK, Layer.TESTKIT, Layer.KSP, Layer.BOM, Layer.CHANNEL_COMMON, Layer.PROVIDER_COMMON)
+        setOf(
+            Layer.SDK,
+            Layer.TESTKIT,
+            Layer.KSP,
+            Layer.BOM,
+            Layer.CHANNEL_COMMON,
+            Layer.PROVIDER_COMMON,
+            Layer.HTTP_COMMON,
+        )
 
     /** Layers whose modules get a generated `PluginIndex` */
     val INDEXED_LAYERS: Set<Layer> = setOf(

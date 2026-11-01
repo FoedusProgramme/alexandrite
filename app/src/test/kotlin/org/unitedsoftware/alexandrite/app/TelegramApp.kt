@@ -13,6 +13,7 @@ import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeBotMessage
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeChat
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeUser
 import org.unitedsoftware.alexandrite.commands.AlexandriteCommandsIndex
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.engine.sqlitexerial.AlexandriteEngineSqliteXerialIndex
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
 import org.unitedsoftware.alexandrite.sdk.chat.AgentId
@@ -62,7 +63,7 @@ class TelegramApp(
         trusted: List<Long> = emptyList(),
     ): PluginHarness.Builder {
         val telegram = AlexandriteChannelTelegramIndex()
-        val builder = PluginHarness.builder(AlexandriteAgentIndex())
+        val builder = PluginHarness.builder(AlexandriteAgentIndex()).plugin(AlexandriteEngineJdkHttpIndex())
             .plugin(AlexandriteToolsIndex())
             .plugin(AlexandriteCommandsIndex())
             .plugin(telegram)

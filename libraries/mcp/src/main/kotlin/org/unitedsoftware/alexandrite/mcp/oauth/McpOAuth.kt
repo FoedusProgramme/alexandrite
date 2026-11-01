@@ -11,7 +11,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.slf4j.LoggerFactory
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import org.unitedsoftware.alexandrite.internal.text.cutWithEllipsis
 import org.unitedsoftware.alexandrite.mcp.McpSettings
 import org.unitedsoftware.alexandrite.mcp.OAuthSpec
@@ -538,7 +538,7 @@ internal class McpOAuth(
         }
 
         private fun decode(text: String): String = try {
-            URLDecoder.decode(text, Charsets.UTF_8)
+            URLDecoder.decode(text, "UTF-8")
         } catch (e: IllegalArgumentException) {
             throw OAuthException("The address is not encoded properly: copy the whole address.")
         }

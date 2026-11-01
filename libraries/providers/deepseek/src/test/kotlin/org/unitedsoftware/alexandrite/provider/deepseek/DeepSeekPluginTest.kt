@@ -1,6 +1,7 @@
 package org.unitedsoftware.alexandrite.provider.deepseek
 
 import kotlinx.coroutines.runBlocking
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.runtime.RuntimeStartException
 import org.unitedsoftware.alexandrite.runtime.StartStage
 import org.unitedsoftware.alexandrite.sdk.model.ModelOptions
@@ -15,7 +16,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DeepSeekPluginTest {
-    private fun harness(config: String) = PluginHarness.builder(AlexandriteProviderDeepseekIndex()).config(config)
+    private fun harness(config: String) =
+        PluginHarness.builder(AlexandriteProviderDeepseekIndex()).plugin(AlexandriteEngineJdkHttpIndex()).config(config)
 
     @Test
     fun `an endpoint needs only its key and bakes turn context unless told otherwise`() = runBlocking {

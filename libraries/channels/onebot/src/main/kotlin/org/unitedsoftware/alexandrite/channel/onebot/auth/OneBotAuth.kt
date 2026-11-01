@@ -92,7 +92,7 @@ public object OneBotAuth {
         return mac.doFinal(message).joinToString("") { "%02x".format(it) }
     }
 
-    private fun urlEncode(text: String): String = java.net.URLEncoder.encode(text, Charsets.UTF_8).replace("+", "%20")
+    private fun urlEncode(text: String): String = java.net.URLEncoder.encode(text, "UTF-8").replace("+", "%20")
 }
 
 /** One value of the config a transport must keep out of its logs, such as an access token or a signing key. */

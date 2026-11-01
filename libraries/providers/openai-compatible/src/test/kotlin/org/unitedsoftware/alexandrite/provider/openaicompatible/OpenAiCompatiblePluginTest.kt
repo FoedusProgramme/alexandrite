@@ -3,6 +3,7 @@ package org.unitedsoftware.alexandrite.provider.openaicompatible
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonPrimitive
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.provider.common.chat.chunk
 import org.unitedsoftware.alexandrite.provider.common.chat.chunks
 import org.unitedsoftware.alexandrite.provider.common.chat.with
@@ -26,8 +27,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OpenAiCompatiblePluginTest {
-    private fun harness(config: String) =
-        PluginHarness.builder(AlexandriteProviderOpenaiCompatibleIndex()).config(config)
+    private fun harness(config: String) = PluginHarness.builder(
+        AlexandriteProviderOpenaiCompatibleIndex(),
+    ).plugin(AlexandriteEngineJdkHttpIndex()).config(config)
 
     /** The config of one endpoint `x` at an example URL, with [fields] added. */
     private fun endpoint(fields: String = ""): String =

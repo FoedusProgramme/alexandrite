@@ -6,7 +6,7 @@ import org.unitedsoftware.alexandrite.channel.qqbot.testing.FakeApiServer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.MutableClock
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.PlatformAnswer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.testConfig
-import org.unitedsoftware.alexandrite.testkit.testHttpEngine
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertIs
@@ -25,7 +25,7 @@ class QqBotApiTest {
         val server = FakeApiServer()
         server.on(TOKEN_PATH) { PlatformAnswer(500, """{"message":"token endpoint unavailable"}""") }
         val config = testConfig(server.base)
-        val http = QqBotHttp(config, testHttpEngine())
+        val http = QqBotHttp(config, JdkHttpEngine())
         try {
             val api = QqBotApi(http, QqBotTokens(config, http, clock))
             assertIs<QqBotAnswer.Failed>(api.get("/users/@me"))

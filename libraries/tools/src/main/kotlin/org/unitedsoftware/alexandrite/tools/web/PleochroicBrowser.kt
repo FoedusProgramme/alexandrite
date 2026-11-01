@@ -8,10 +8,10 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
-import org.unitedsoftware.alexandrite.internal.http.HttpCall
-import org.unitedsoftware.alexandrite.internal.http.HttpException
-import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.HttpCall
+import org.unitedsoftware.alexandrite.http.common.HttpException
+import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import org.unitedsoftware.alexandrite.sdk.browse.BrowseAbilities
 import org.unitedsoftware.alexandrite.sdk.browse.BrowseBackend
 import org.unitedsoftware.alexandrite.sdk.browse.BrowseImage
@@ -242,7 +242,7 @@ internal class PleochroicBrowser(private val config: WebConfig, engine: HttpEngi
         const val MAX_VALUES = 100
         val REF = Regex("e\\d+")
 
-        fun segment(session: String): String = URLEncoder.encode(session, Charsets.UTF_8).replace("+", "%20")
+        fun segment(session: String): String = URLEncoder.encode(session, "UTF-8").replace("+", "%20")
 
         /** The `message` of the service's `{error: {…}}` body, which never holds the key. */
         fun serviceMessage(e: HttpException): String? = e.body?.let {

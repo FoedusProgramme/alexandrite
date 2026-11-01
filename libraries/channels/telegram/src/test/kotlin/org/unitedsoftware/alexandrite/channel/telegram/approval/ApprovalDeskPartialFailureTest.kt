@@ -19,6 +19,7 @@ import org.unitedsoftware.alexandrite.channel.telegram.intake.TestInstance
 import org.unitedsoftware.alexandrite.channel.telegram.pairing.TelegramPairingDesk
 import org.unitedsoftware.alexandrite.channel.telegram.reply.Outbox
 import org.unitedsoftware.alexandrite.channel.telegram.reply.SendLimiter
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.sdk.channel.ApprovalAnswer
 import org.unitedsoftware.alexandrite.sdk.channel.ApprovalRequest
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
@@ -27,7 +28,6 @@ import org.unitedsoftware.alexandrite.sdk.chat.UserAddress
 import org.unitedsoftware.alexandrite.sdk.config.Secret
 import org.unitedsoftware.alexandrite.sdk.tool.ReviewPreview
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
-import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testRecords
 import org.unitedsoftware.alexandrite.testkit.testTexts
 import org.unitedsoftware.alexandrite.testkit.testTurn
@@ -43,7 +43,7 @@ import kotlin.time.Duration
 /** How [ApprovalDesk] behaves when one part of a multi-message request fails to send, over a real [FakeBotApi]. */
 class ApprovalDeskPartialFailureTest {
     private val fake = FakeBotApi()
-    private val api = HttpBotApi(configOf(fake), testHttpEngine())
+    private val api = HttpBotApi(configOf(fake), JdkHttpEngine())
     private val ada = FakeUser(1001, "Ada")
     private val instanceScope = CoroutineScope(SupervisorJob())
 

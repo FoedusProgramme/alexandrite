@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.chat.ChatEndpoint
 import org.unitedsoftware.alexandrite.provider.common.chat.ChatFlavor
 import org.unitedsoftware.alexandrite.provider.common.chat.FIXTURE_API_KEY
@@ -27,7 +28,6 @@ import org.unitedsoftware.alexandrite.sdk.transcript.EndpointId
 import org.unitedsoftware.alexandrite.sdk.transcript.ModelRef
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.FakeResponse
-import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import org.unitedsoftware.alexandrite.testkit.testUserEntry
 import kotlin.test.AfterTest
@@ -57,12 +57,12 @@ class SecretMaskingTest {
     )
 
     private fun chat() =
-        ChatEndpoint(EndpointId("test"), settings("${server.baseUrl}/v1"), testHttpEngine(), ChatFlavor.STANDARD)
+        ChatEndpoint(EndpointId("test"), settings("${server.baseUrl}/v1"), JdkHttpEngine(), ChatFlavor.STANDARD)
 
     private fun messages() = MessagesEndpoint(
         EndpointId("test"),
         settings(server.baseUrl, MessagesEndpoint.WIRE),
-        testHttpEngine(),
+        JdkHttpEngine(),
         MessagesFlavor.STANDARD,
     )
 
@@ -121,10 +121,10 @@ class SecretMaskingTest {
         server.enqueue(sse(*textEvents(listOf("Hi."))))
 
         runBlocking {
-            ChatEndpoint(EndpointId("test"), plain("${server.baseUrl}/v1"), testHttpEngine(), ChatFlavor.STANDARD).use {
+            ChatEndpoint(EndpointId("test"), plain("${server.baseUrl}/v1"), JdkHttpEngine(), ChatFlavor.STANDARD).use {
                 it.stream(request()).toList()
             }
-            MessagesEndpoint(EndpointId("test"), plain(server.baseUrl), testHttpEngine(), MessagesFlavor.STANDARD).use {
+            MessagesEndpoint(EndpointId("test"), plain(server.baseUrl), JdkHttpEngine(), MessagesFlavor.STANDARD).use {
                 it.stream(request()).toList()
             }
         }

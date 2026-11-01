@@ -8,9 +8,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import org.unitedsoftware.alexandrite.internal.http.HttpCall
-import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.HttpCall
+import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import org.unitedsoftware.alexandrite.sdk.di.Contribute
 import org.unitedsoftware.alexandrite.sdk.di.Lifecycle
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
@@ -117,7 +117,7 @@ internal fun braveCall(
     base: String = "https://api.search.brave.com",
 ): HttpCall = HttpCall(
     "GET",
-    URI("$base/res/v1/web/search?q=${URLEncoder.encode(query, Charsets.UTF_8)}&count=$limit"),
+    URI("$base/res/v1/web/search?q=${URLEncoder.encode(query, "UTF-8")}&count=$limit"),
     headers = mapOf("Accept" to "application/json", "X-Subscription-Token" to key),
     secrets = listOf(key),
 )
@@ -140,7 +140,7 @@ internal fun tavilyCall(query: String, limit: Int, key: String, base: String = "
 internal fun searxngCall(query: String, limit: Int, base: String): HttpCall = HttpCall(
     "GET",
     URI(
-        "${base.trimEnd('/')}/search?q=${URLEncoder.encode(query, Charsets.UTF_8)}&format=json" +
+        "${base.trimEnd('/')}/search?q=${URLEncoder.encode(query, "UTF-8")}&format=json" +
             "&pageno=1&count=$limit",
     ),
     headers = mapOf("Accept" to "application/json"),
@@ -148,7 +148,7 @@ internal fun searxngCall(query: String, limit: Int, base: String): HttpCall = Ht
 
 internal fun duckDuckGoCall(query: String, base: String = "https://html.duckduckgo.com"): HttpCall = HttpCall(
     "GET",
-    URI("$base/html/?q=${URLEncoder.encode(query, Charsets.UTF_8)}"),
+    URI("$base/html/?q=${URLEncoder.encode(query, "UTF-8")}"),
     headers = mapOf("Accept" to "text/html", "User-Agent" to "Mozilla/5.0 (compatible; Alexandrite)"),
 )
 
@@ -182,7 +182,7 @@ private fun decodeDuckDuckGoUrl(href: String): String? {
     if (unescaped.startsWith("http://") || unescaped.startsWith("https://")) return unescaped
     val encoded = Regex("uddg=([^&]+)").find(unescaped)?.groupValues?.get(1) ?: return null
     val decoded = try {
-        java.net.URLDecoder.decode(encoded, Charsets.UTF_8)
+        java.net.URLDecoder.decode(encoded, "UTF-8")
     } catch (e: IllegalArgumentException) {
         return null
     }

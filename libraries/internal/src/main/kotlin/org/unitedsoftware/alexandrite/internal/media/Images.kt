@@ -60,7 +60,7 @@ public fun unchangedImage(
 }
 
 /** The canvas size a webp's `VP8X`, `VP8L` or `VP8 ` chunk declares, null when it cannot be read that cheaply. */
-internal fun webpDimensions(bytes: ByteArray): Pair<Int, Int>? {
+public fun webpDimensions(bytes: ByteArray): Pair<Int, Int>? {
     if (bytes.size < 30) return null
     return when (String(bytes, 12, 4, Charsets.US_ASCII)) {
         "VP8X" -> (readLe24(bytes, 24) + 1) to (readLe24(bytes, 27) + 1)
@@ -136,4 +136,4 @@ private val HEIC_BRANDS = setOf("heic", "heix", "heim", "heis", "hevc", "hevx", 
 private val HEIF_BRANDS = setOf("mif1", "msf1")
 
 /** The types that pass unchanged when they fit. */
-internal val PASSTHROUGH_TYPES: Set<String> = setOf("image/png", "image/jpeg", "image/gif")
+public val PASSTHROUGH_TYPES: Set<String> = setOf("image/png", "image/jpeg", "image/gif")

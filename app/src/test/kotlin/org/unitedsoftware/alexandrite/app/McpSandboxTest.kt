@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.io.TempDir
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.mcp.AlexandriteMcpIndex
 import org.unitedsoftware.alexandrite.mcp.fake.FakeStdioServers
 import org.unitedsoftware.alexandrite.sandbox.bubblewrap.AlexandriteSandboxBubblewrapIndex
@@ -65,7 +66,7 @@ class McpSandboxTest {
         val cwd = root.resolve("server").createDirectories()
         val outside = root.resolve("outside").createDirectories()
         val port = server.address.port
-        val harness = PluginHarness.builder(AlexandriteMcpIndex())
+        val harness = PluginHarness.builder(AlexandriteMcpIndex()).plugin(AlexandriteEngineJdkHttpIndex())
             .plugin(AlexandriteSandboxSeatbeltIndex())
             .plugin(AlexandriteSandboxBubblewrapIndex())
             .config(

@@ -21,9 +21,9 @@ import org.unitedsoftware.alexandrite.account.pleochroic.pollDeviceLogin
 import org.unitedsoftware.alexandrite.account.pleochroic.revokeKey
 import org.unitedsoftware.alexandrite.account.pleochroic.serviceAccount
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
-import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
-import org.unitedsoftware.alexandrite.internal.http.JdkHttpEngine
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
+import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import org.unitedsoftware.alexandrite.runtime.config.EnvReferences
 import org.unitedsoftware.alexandrite.runtime.config.writtenConfig
 import org.unitedsoftware.alexandrite.sdk.net.HttpEngine

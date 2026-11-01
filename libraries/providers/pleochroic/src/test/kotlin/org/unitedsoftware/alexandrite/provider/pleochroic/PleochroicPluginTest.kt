@@ -3,6 +3,7 @@ package org.unitedsoftware.alexandrite.provider.pleochroic
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonPrimitive
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.provider.common.chat.chunk
 import org.unitedsoftware.alexandrite.provider.common.chat.chunks
 import org.unitedsoftware.alexandrite.provider.common.chat.with
@@ -27,7 +28,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PleochroicPluginTest {
-    private fun harness(config: String) = PluginHarness.builder(AlexandriteProviderPleochroicIndex()).config(config)
+    private fun harness(config: String) = PluginHarness.builder(
+        AlexandriteProviderPleochroicIndex(),
+    ).plugin(AlexandriteEngineJdkHttpIndex()).config(config)
 
     @Test
     fun `an endpoint needs its base URL and key and keeps turn context transient unless told otherwise`() =

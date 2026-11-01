@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.agent.AlexandriteAgentIndex
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.engine.sqlitexerial.AlexandriteEngineSqliteXerialIndex
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelMessageRef
@@ -48,7 +49,12 @@ class TurnRecoveryTest {
     private val call = ToolCallPart(ToolCallId("call-1"), "fs.read", "{}")
 
     private fun run(plugin: PluginIndex, vararg others: PluginIndex, block: suspend PluginHarness.Running.() -> Unit) {
-        val harness = others.fold(PluginHarness.builder(plugin)) { builder, other -> builder.plugin(other) }
+        val harness = others.fold(PluginHarness.builder(plugin).plugin(AlexandriteEngineJdkHttpIndex())) {
+                builder,
+                other,
+            ->
+            builder.plugin(other)
+        }
         runBlocking { withTimeout(10.seconds) { harness.dataRoot(directory).build().run(block) } }
     }
 

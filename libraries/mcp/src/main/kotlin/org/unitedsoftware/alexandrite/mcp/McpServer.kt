@@ -17,7 +17,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import org.slf4j.LoggerFactory
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import org.unitedsoftware.alexandrite.internal.sandbox.NetworkProxy
 import org.unitedsoftware.alexandrite.internal.sandbox.SYSTEM_RESOLVER
 import org.unitedsoftware.alexandrite.internal.text.cutWithEllipsis

@@ -26,8 +26,8 @@ import org.unitedsoftware.alexandrite.channel.telegram.configOf
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeBotApi
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeUser
 import org.unitedsoftware.alexandrite.channel.telegram.logged
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.sdk.channel.OutboundFile
-import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -42,7 +42,7 @@ import kotlin.time.TimeSource
 
 class HttpBotApiTest {
     private val fake = FakeBotApi()
-    private val api = HttpBotApi(configOf(fake), testHttpEngine())
+    private val api = HttpBotApi(configOf(fake), JdkHttpEngine())
     private val ada = FakeUser(42, "Ada", "Lovelace", "ada_test")
     private val direct = fake.direct(ada)
 
@@ -269,7 +269,7 @@ class HttpBotApiTest {
 
     @Test
     fun `a long poll outlasts the first-byte timeout that ends any other call`() = runBlocking {
-        HttpBotApi(configOf(fake), testHttpEngine(), QUICK).use { quick ->
+        HttpBotApi(configOf(fake), JdkHttpEngine(), QUICK).use { quick ->
             val started = TimeSource.Monotonic.markNow()
 
             assertEquals(emptyList(), quick.getUpdates(null, 100, 1))
@@ -359,7 +359,7 @@ class HttpBotApiTest {
 
     @Test
     fun `401, and 404 on getMe`() = runBlocking {
-        val refused = HttpBotApi(configOf(fake, OTHER_TOKEN), testHttpEngine()).use { other ->
+        val refused = HttpBotApi(configOf(fake, OTHER_TOKEN), JdkHttpEngine()).use { other ->
             assertFailsWith<BotApiException> { other.sendMessage(SendMessage(direct.id, "Hi")) }
         }
         fake.fail("getMe", 404, "Not Found")
@@ -410,7 +410,7 @@ class HttpBotApiTest {
         val server = assertFailsWith<BotApiException> { api.sendMessage(SendMessage(direct.id, "Hi")) }
         fake.breakConnection("getMe")
         val broken = assertFailsWith<BotApiException> { api.getMe() }
-        val timedOut = HttpBotApi(configOf(fake), testHttpEngine(), QUICK).use { quick ->
+        val timedOut = HttpBotApi(configOf(fake), JdkHttpEngine(), QUICK).use { quick ->
             fake.delay("getWebhookInfo", 2.seconds)
             assertFailsWith<BotApiException> { quick.getWebhookInfo() }
         }

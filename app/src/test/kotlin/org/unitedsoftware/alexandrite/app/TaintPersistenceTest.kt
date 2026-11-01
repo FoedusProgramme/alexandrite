@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.agent.AlexandriteAgentIndex
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.engine.sqlitexerial.AlexandriteEngineSqliteXerialIndex
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
 import org.unitedsoftware.alexandrite.sdk.store.ConversationStore
@@ -48,7 +49,7 @@ class TaintPersistenceTest {
 
     /** Runs [block] on the agent over the SQLite store in [root], as one start of the app. */
     private fun started(block: suspend PluginHarness.Running.() -> Unit) {
-        val harness = PluginHarness.builder(AlexandriteAgentIndex())
+        val harness = PluginHarness.builder(AlexandriteAgentIndex()).plugin(AlexandriteEngineJdkHttpIndex())
             .plugin(AlexandriteStoreSqliteIndex())
             .plugin(AlexandriteEngineSqliteXerialIndex())
             .plugin(AlexandriteToolsIndex())

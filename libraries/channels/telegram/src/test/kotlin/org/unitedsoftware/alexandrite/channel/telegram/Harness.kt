@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeBotApi
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeUser
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.runtime.Termination
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
@@ -49,7 +50,7 @@ class TelegramHarness(outcome: TurnOutcome? = TurnOutcome.Completed(null)) : Aut
 
     /** A harness of the plugin whose instances are [instances], by name. */
     fun builder(vararg instances: Pair<String, String> = arrayOf("work" to instance())): PluginHarness.Builder =
-        PluginHarness.builder(AlexandriteChannelTelegramIndex())
+        PluginHarness.builder(AlexandriteChannelTelegramIndex()).plugin(AlexandriteEngineJdkHttpIndex())
             .config("""{"instances": {${instances.joinToString { (name, config) -> "\"$name\": $config" }}}}""")
             .turnSubmitter(submitter)
             .agent(control)

@@ -13,4 +13,6 @@ dependencies {
 
     testImplementation(libs.kctfork.core)
     testRuntimeOnly(libs.logback.classic)
+    testImplementation(project(":libraries:common:http"))
+    testImplementation(project(":libraries:engines:jdk-http"))
 }

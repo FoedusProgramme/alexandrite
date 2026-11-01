@@ -27,7 +27,7 @@ class OkHttpEngineTest {
     }
 
     @Test
-    fun `the plugin binds its engine in place of the JDK default`() {
+    fun `the plugin binds its engine`() {
         var bound: HttpEngine? = null
 
         runBlocking {

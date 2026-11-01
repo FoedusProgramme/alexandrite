@@ -58,7 +58,7 @@ public enum class RuntimeProblemKind : ProblemKind {
     /** Enabled plugins that each bind one engine port. */
     DUPLICATE_ENGINE,
 
-    /** An engine port that an enabled plugin needs, which no plugin binds and the host has no JDK default for. */
+    /** An engine port that an enabled plugin needs and no plugin binds. */
     MISSING_ENGINE,
 
     /** A data directory another runtime holds. */

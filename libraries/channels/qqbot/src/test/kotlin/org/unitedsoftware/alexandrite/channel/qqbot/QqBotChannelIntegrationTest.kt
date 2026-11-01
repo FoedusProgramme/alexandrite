@@ -11,6 +11,7 @@ import org.unitedsoftware.alexandrite.channel.qqbot.pairing.QqBotPairingDesk
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.FakeApiServer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.FakeGatewayServer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.PlatformAnswer
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.sdk.InternalAlexandriteApi
 import org.unitedsoftware.alexandrite.sdk.channel.ApprovalAnswer
 import org.unitedsoftware.alexandrite.sdk.channel.ApprovalRequest
@@ -73,7 +74,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url))
                     .turnSubmitter(submitter)
                     .build()
@@ -107,7 +108,7 @@ class QqBotChannelIntegrationTest {
         val platform = FakeGatewayServer().startAndAwait()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url, admins = setOf("u1")))
                     .turnSubmitter(RecordingTurnSubmitter())
                     .build()
@@ -135,7 +136,7 @@ class QqBotChannelIntegrationTest {
         val platform = FakeGatewayServer().startAndAwait()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url))
                     .turnSubmitter(RecordingTurnSubmitter())
                     .build()
@@ -161,7 +162,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url))
                     .turnSubmitter(submitter)
                     .build()
@@ -197,7 +198,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url))
                     .turnSubmitter(submitter)
                     .build()
@@ -231,7 +232,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url))
                     .turnSubmitter(submitter)
                     .build()
@@ -260,7 +261,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url))
                     .turnSubmitter(submitter)
                     .build()
@@ -317,7 +318,7 @@ class QqBotChannelIntegrationTest {
         val platform = FakeGatewayServer().startAndAwait()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url))
                     .turnSubmitter(RecordingTurnSubmitter())
                     .build()
@@ -359,7 +360,7 @@ class QqBotChannelIntegrationTest {
         val platform = FakeGatewayServer().startAndAwait()
         val submitter = RecordingTurnSubmitter()
         try {
-            PluginHarness.builder(AlexandriteChannelQqbotIndex())
+            PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                 .config(config(api.base, platform.url))
                 .turnSubmitter(submitter)
                 .build()
@@ -401,7 +402,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url, admins = setOf("u1")))
                     .turnSubmitter(submitter)
                     .build()
@@ -460,7 +461,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url, admins = setOf("u1")))
                     .turnSubmitter(submitter)
                     .build()
@@ -502,7 +503,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url, admins = setOf("u1")))
                     .turnSubmitter(submitter)
                     .build()
@@ -545,7 +546,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url, admins = setOf("u1")))
                     .turnSubmitter(submitter)
                     .build()
@@ -582,7 +583,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url))
                     .turnSubmitter(submitter)
                     .build()
@@ -617,7 +618,7 @@ class QqBotChannelIntegrationTest {
         val platform = FakeGatewayServer().startAndAwait()
         val submitter = RecordingTurnSubmitter()
         try {
-            PluginHarness.builder(AlexandriteChannelQqbotIndex())
+            PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                 .config(config(api.base, platform.url))
                 .turnSubmitter(submitter)
                 .build()
@@ -668,7 +669,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url, allowedChats = emptyList()))
                     .turnSubmitter(submitter)
                     .build()
@@ -703,7 +704,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url, allowedChats = emptyList()))
                     .turnSubmitter(submitter)
                     .build()
@@ -729,7 +730,7 @@ class QqBotChannelIntegrationTest {
         val platform = FakeGatewayServer().startAndAwait()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url, allowedChats = emptyList()))
                     .turnSubmitter(RecordingTurnSubmitter())
                     .build()
@@ -760,7 +761,7 @@ class QqBotChannelIntegrationTest {
         val platform = FakeGatewayServer().startAndAwait()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url))
                     .turnSubmitter(RecordingTurnSubmitter())
                     .build()
@@ -785,7 +786,7 @@ class QqBotChannelIntegrationTest {
         val platform = FakeGatewayServer().startAndAwait()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url, admins = setOf("u1")))
                     .turnSubmitter(RecordingTurnSubmitter())
                     .build()
@@ -817,7 +818,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url))
                     .turnSubmitter(submitter)
                     .build()
@@ -848,7 +849,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url, admins = setOf("u1")))
                     .turnSubmitter(submitter)
                     .build()
@@ -879,7 +880,7 @@ class QqBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelQqbotIndex())
+                PluginHarness.builder(AlexandriteChannelQqbotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(api.base, platform.url, admins = setOf("u1")))
                     .turnSubmitter(submitter)
                     .build()

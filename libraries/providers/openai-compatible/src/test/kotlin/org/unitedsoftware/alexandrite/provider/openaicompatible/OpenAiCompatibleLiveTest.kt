@@ -7,6 +7,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.EndpointSettings
 import org.unitedsoftware.alexandrite.provider.common.chat.ChatEndpoint
 import org.unitedsoftware.alexandrite.provider.common.chat.ChatFlavor
@@ -27,7 +28,6 @@ import org.unitedsoftware.alexandrite.sdk.transcript.ToolOutcome
 import org.unitedsoftware.alexandrite.sdk.transcript.ToolResultEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptRules
-import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import org.unitedsoftware.alexandrite.testkit.testUserEntry
 import kotlin.test.Test
@@ -44,7 +44,7 @@ class OpenAiCompatibleLiveTest {
     private fun live(): ChatEndpoint {
         assumeTrue(baseUrl != null && model != null, "No live endpoint is configured.")
         val settings = EndpointSettings(baseUrl!!, apiKey?.let(::Secret))
-        return ChatEndpoint(EndpointId("live"), settings, testHttpEngine(), ChatFlavor.STANDARD)
+        return ChatEndpoint(EndpointId("live"), settings, JdkHttpEngine(), ChatFlavor.STANDARD)
     }
 
     private fun request(history: List<TranscriptEntry>, round: Int, block: ModelRequest.Builder.() -> Unit) =

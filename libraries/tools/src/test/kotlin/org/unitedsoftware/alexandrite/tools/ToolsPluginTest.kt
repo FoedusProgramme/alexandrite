@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.io.TempDir
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.sdk.tool.Tool
 import org.unitedsoftware.alexandrite.sdk.tool.ToolDefinition
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
@@ -33,7 +34,9 @@ class ToolsPluginTest {
         lateinit var exec: ToolDefinition
 
         runBlocking {
-            PluginHarness.builder(AlexandriteToolsIndex()).hardFloor(testHardFloor(listOf(secret.parent))).build().run {
+            PluginHarness.builder(
+                AlexandriteToolsIndex(),
+            ).plugin(AlexandriteEngineJdkHttpIndex()).hardFloor(testHardFloor(listOf(secret.parent))).build().run {
                 val tools = getAll<Tool>()
                 risks = tools.associate { it.definition.name to it.definition.risk }
                 val read = tools.single { it.definition.name == "fs.read" }
@@ -68,7 +71,9 @@ class ToolsPluginTest {
 
         runBlocking {
             val config = """{"exec": {"maxTimeoutSeconds": 30, "maxOutputChars": 500, "environment": ["JAVA_HOME"]}}"""
-            PluginHarness.builder(AlexandriteToolsIndex()).config(config).hardFloor(testHardFloor()).build().run {
+            PluginHarness.builder(
+                AlexandriteToolsIndex(),
+            ).plugin(AlexandriteEngineJdkHttpIndex()).config(config).hardFloor(testHardFloor()).build().run {
                 definition = getAll<Tool>().single { it.definition.name == "command.exec" }.definition
                 description = definition.parameters.toString()
             }
@@ -80,7 +85,9 @@ class ToolsPluginTest {
 
     @Test
     fun `web search has the brave, tavily, searxng, duckduckgo and pleochroic backends`() = runBlocking {
-        PluginHarness.builder(AlexandriteToolsIndex()).hardFloor(testHardFloor()).build().run {
+        PluginHarness.builder(
+            AlexandriteToolsIndex(),
+        ).plugin(AlexandriteEngineJdkHttpIndex()).hardFloor(testHardFloor()).build().run {
             assertEquals(
                 setOf("brave", "tavily", "searxng", "duckduckgo", "pleochroic"),
                 getAll<WebSearchBackend>().map { it.id }.toSet(),
