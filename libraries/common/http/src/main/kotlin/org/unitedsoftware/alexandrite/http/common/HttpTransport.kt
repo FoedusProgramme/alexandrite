@@ -162,8 +162,7 @@ public class HttpTransport(
         exchange: Exchange,
         firstByte: Duration,
     ): HttpEngineResponse = supervisorScope {
-        // Undispatched, so that the request is on its way when the caller first suspends; held, so that the
-        // exchange's end closes a response that comes after the timeout
+        // Held in [exchange], so that its end closes a response that comes after the timeout
         val opening = async(start = CoroutineStart.UNDISPATCHED) {
             engine.open(request).also { exchange.response = it }
         }

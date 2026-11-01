@@ -3,10 +3,7 @@ package org.unitedsoftware.alexandrite.internal.text
 /** Whether [url] starts with a scheme. */
 public fun isAbsoluteUrl(url: String): Boolean = SCHEME.containsMatchIn(url)
 
-/**
- * [reference] resolved against the absolute URL [base] by RFC 3986 (section 5.2), with no other normalization: neither
- * string is checked, so a URL with characters RFC 3986 does not allow resolves as well.
- */
+/** [reference] resolved against the absolute URL [base] by RFC 3986 (section 5.2) alone. */
 public fun resolved(base: String, reference: String): String {
     val b = UrlParts.of(base)
     val r = UrlParts.of(reference)
