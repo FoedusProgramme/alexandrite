@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.agent.AlexandriteAgentIndex
+import org.unitedsoftware.alexandrite.engine.sqlitexerial.AlexandriteEngineSqliteXerialIndex
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
 import org.unitedsoftware.alexandrite.sdk.store.ConversationStore
 import org.unitedsoftware.alexandrite.sdk.store.TranscriptStore
@@ -46,6 +47,7 @@ class ToolChangesPersistenceTest {
         """.trimIndent()
         val harness = PluginHarness.builder(AlexandriteAgentIndex())
             .plugin(AlexandriteStoreSqliteIndex())
+            .plugin(AlexandriteEngineSqliteXerialIndex())
             .plugin(AlexandriteToolsIndex())
             .config(config)
             .model(model)

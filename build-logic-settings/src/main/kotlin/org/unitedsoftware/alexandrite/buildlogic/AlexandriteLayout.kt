@@ -290,7 +290,7 @@ object AlexandriteLayout {
         Layer.CHANNEL_COMMON to setOf(Layer.TESTKIT),
         Layer.PROVIDER to setOf(Layer.TESTKIT),
         Layer.PROVIDER_COMMON to setOf(Layer.TESTKIT),
-        Layer.STORE to setOf(Layer.TESTKIT),
+        Layer.STORE to setOf(Layer.TESTKIT, Layer.ENGINE),
         Layer.ACCOUNT to setOf(Layer.TESTKIT),
         Layer.AUTOMATION to setOf(Layer.TESTKIT),
         Layer.SANDBOX to setOf(Layer.TESTKIT),
@@ -318,6 +318,7 @@ object AlexandriteLayout {
         Layer.COMMANDS,
         Layer.PROVIDER_COMMON,
         Layer.PROVIDER,
+        Layer.STORE,
         Layer.ENGINE,
     )
 

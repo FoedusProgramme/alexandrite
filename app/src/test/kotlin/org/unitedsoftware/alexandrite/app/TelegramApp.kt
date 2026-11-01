@@ -13,6 +13,7 @@ import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeBotMessage
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeChat
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeUser
 import org.unitedsoftware.alexandrite.commands.AlexandriteCommandsIndex
+import org.unitedsoftware.alexandrite.engine.sqlitexerial.AlexandriteEngineSqliteXerialIndex
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
 import org.unitedsoftware.alexandrite.sdk.chat.AgentId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
@@ -70,7 +71,13 @@ class TelegramApp(
             .model(model)
             .dataRoot(dataDir(directory))
             .keptConfigFile(directory.toRealPath().resolve("config/alexandrite.json"))
-        return if (sqlite) builder.plugin(AlexandriteStoreSqliteIndex()) else builder.store(store)
+        return if (sqlite) {
+            builder.plugin(
+                AlexandriteStoreSqliteIndex(),
+            ).plugin(AlexandriteEngineSqliteXerialIndex())
+        } else {
+            builder.store(store)
+        }
     }
 
     fun run(builder: PluginHarness.Builder, block: suspend PluginHarness.Running.() -> Unit) {

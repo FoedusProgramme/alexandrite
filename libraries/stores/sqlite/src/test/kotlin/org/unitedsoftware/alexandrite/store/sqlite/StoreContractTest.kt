@@ -10,7 +10,7 @@ class StoreContractTest {
     @TestFactory
     fun `the SQLite store keeps the store contract`(): List<DynamicTest> = STORE_CONTRACT.map { check ->
         DynamicTest.dynamicTest(check.name) {
-            runBlocking { check.run { PluginHarness.builder(AlexandriteStoreSqliteIndex()) } }
+            runBlocking { check.run { PluginHarness.builder(AlexandriteStoreSqliteIndex()).plugin(driverIndex) } }
         }
     }
 }

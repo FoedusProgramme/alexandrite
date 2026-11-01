@@ -4,6 +4,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
+import org.unitedsoftware.alexandrite.engine.sqlitebundled.AlexandriteEngineSqliteBundledIndex
+import org.unitedsoftware.alexandrite.engine.sqlitexerial.AlexandriteEngineSqliteXerialIndex
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
 import org.unitedsoftware.alexandrite.sdk.chat.AgentId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelMessageRef
@@ -12,8 +14,14 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChatUser
 import org.unitedsoftware.alexandrite.sdk.chat.TurnId
 import org.unitedsoftware.alexandrite.sdk.chat.TurnInfo
 import org.unitedsoftware.alexandrite.sdk.chat.TurnKind
+import org.unitedsoftware.alexandrite.sdk.di.Key
+import org.unitedsoftware.alexandrite.sdk.di.container.Resolver
+import org.unitedsoftware.alexandrite.sdk.di.key
 import org.unitedsoftware.alexandrite.sdk.plugin.PluginFiles
+import org.unitedsoftware.alexandrite.sdk.plugin.PluginIndex
 import org.unitedsoftware.alexandrite.sdk.store.ConversationInfo
+import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteConnection
+import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteDriver
 import org.unitedsoftware.alexandrite.sdk.transcript.ContextPart
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaPart
@@ -26,8 +34,6 @@ import org.unitedsoftware.alexandrite.testkit.TEST_TIME
 import org.unitedsoftware.alexandrite.testkit.testChat
 import org.unitedsoftware.alexandrite.testkit.testUser
 import java.nio.file.Path
-import java.sql.Connection
-import java.sql.DriverManager
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -56,8 +62,38 @@ internal class MutableClock(var instant: Instant = TEST_TIME, private val zone: 
     }
 }
 
+/** The index of the driver engine the suite runs over, which the build names in a system property. */
+internal val driverIndex: PluginIndex = when (
+    val name = System.getProperty(
+        "alexandrite.store.sqlite.driver",
+        "xerial",
+    )
+) {
+    "xerial" -> AlexandriteEngineSqliteXerialIndex()
+    "bundled" -> AlexandriteEngineSqliteBundledIndex()
+    else -> error("No SQLite driver $name.")
+}
+
+internal val driver: SqliteDriver = IndexResolver(driverIndex).get(key<SqliteDriver>())
+
+/** Creates what [index] binds, each time it is asked for, from the bindings of [index] alone. */
+private class IndexResolver(private val index: PluginIndex) : Resolver {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : Any> get(key: Key<T>): T = index.bindings().single { it.key == key }.create(this) as T
+
+    override fun <T : Any> getOrNull(key: Key<T>): T? = null
+
+    override fun <T : Any> getAll(key: Key<T>): List<T> = emptyList()
+
+    override fun <T : Any> lazy(key: Key<T>): Lazy<T> = lazy { get(key) }
+
+    override fun <T : Any> provider(key: Key<T>): () -> T = { get(key) }
+
+    override fun pluginOf(instance: Any): String? = null
+}
+
 internal class TestStore(directory: Path, val clock: MutableClock) {
-    val database = StoreDatabase(TestFiles(directory), clock)
+    val database = StoreDatabase(TestFiles(directory), clock, driver)
     val conversations = SqliteConversationStore(database)
     val media = SqliteMediaStore(database, TestFiles(directory))
     val transcripts = SqliteTranscriptStore(database, media)
@@ -85,7 +121,7 @@ internal class TestStore(directory: Path, val clock: MutableClock) {
         transcripts.append(turn(conversations.current(key)).id, entries.toList())
 
     suspend fun rows(sql: String, vararg arguments: Any?): List<List<Any?>> = database.transaction {
-        query(sql, *arguments) { (1..metaData.columnCount).map { getObject(it) } }
+        query(sql, *arguments) { (1..columnCount).map { getObject(it) } }
     }
 }
 
@@ -100,20 +136,16 @@ internal fun <T> withStore(directory: Path, clock: MutableClock = MutableClock()
         }
     }
 
-internal fun connect(file: Path): Connection = DriverManager.getConnection("jdbc:sqlite:${file.toUri()}")
+internal fun connect(file: Path): SqliteConnection = driver.open(file.toString())
 
-internal fun Connection.userVersion(): Int = createStatement().use { statement ->
-    statement.executeQuery("PRAGMA user_version").use { rows ->
-        rows.next()
-        rows.getInt(1)
-    }
-}
+/** The first column of each row of [sql], as text. */
+internal fun SqliteConnection.texts(sql: String): List<String> =
+    prepare(sql).use { statement -> buildList { while (statement.step()) add(statement.getText(0)) } }
 
-internal fun Connection.tables(): Set<String> = createStatement().use { statement ->
-    statement.executeQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").use {
-        buildSet { while (it.next()) add(it.getString(1)) }
-    }
-}
+internal fun SqliteConnection.userVersion(): Int = texts("PRAGMA user_version").single().toInt()
+
+internal fun SqliteConnection.tables(): Set<String> =
+    texts("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").toSet()
 
 internal fun json(text: String): JsonObject = Json.parseToJsonElement(text).jsonObject
 

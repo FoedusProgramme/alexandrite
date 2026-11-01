@@ -61,7 +61,7 @@ class SqliteTranscriptStoreTest {
                 rows("SELECT type FROM entries ORDER BY id").map { it.single() },
             )
             assertEquals(
-                List(entries.size) { TranscriptCodec.FORMAT_VERSION },
+                List(entries.size) { TranscriptCodec.FORMAT_VERSION.toLong() },
                 rows("SELECT format FROM entries").map { it.single() },
             )
         }

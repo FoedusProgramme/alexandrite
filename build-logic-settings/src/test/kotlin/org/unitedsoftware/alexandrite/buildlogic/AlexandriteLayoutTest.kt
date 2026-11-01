@@ -776,6 +776,16 @@ class AlexandriteLayoutTest {
     }
 
     @Test
+    fun `a store tests over the engines but runs on none of them`() {
+        val engine = ":libraries:engines:sqlite-bundled"
+
+        assertAllowed(sqlite, engine, "testImplementation")
+        assertForbidden(sqlite, engine)
+        assertForbidden(sqlite, engine, "runtimeOnly")
+        assertForbidden(engine, sqlite, "testImplementation")
+    }
+
+    @Test
     fun `channel-common sits on SDK and internal, below channels, app and examples, and tests with the testkit`() {
         for (to in plugins + runtime + app + notes + providerCommon) {
             assertForbidden(channelCommon, to)
