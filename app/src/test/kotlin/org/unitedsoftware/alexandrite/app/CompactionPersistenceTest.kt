@@ -6,6 +6,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.agent.AlexandriteAgentIndex
 import org.unitedsoftware.alexandrite.commands.AlexandriteCommandsIndex
+import org.unitedsoftware.alexandrite.engine.sqlitexerial.AlexandriteEngineSqliteXerialIndex
 import org.unitedsoftware.alexandrite.sdk.model.ModelRequest
 import org.unitedsoftware.alexandrite.sdk.model.Usage
 import org.unitedsoftware.alexandrite.sdk.model.rebuild
@@ -56,6 +57,7 @@ class CompactionPersistenceTest {
         """.trimIndent()
         val harness = PluginHarness.builder(AlexandriteAgentIndex())
             .plugin(AlexandriteStoreSqliteIndex())
+            .plugin(AlexandriteEngineSqliteXerialIndex())
             .plugin(AlexandriteCommandsIndex())
             .config(config)
             .model(model)

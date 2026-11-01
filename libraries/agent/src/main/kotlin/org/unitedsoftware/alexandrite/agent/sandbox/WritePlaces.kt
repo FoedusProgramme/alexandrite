@@ -15,6 +15,7 @@ import org.unitedsoftware.alexandrite.sdk.di.Binds
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
 import org.unitedsoftware.alexandrite.sdk.runtime.HostPaths
 import java.nio.file.Path
+import java.nio.file.Paths
 
 /**
  * Where a turn's writes may land, the same for a sandbox's commands and for the file writes that `allowedit` runs: the
@@ -59,4 +60,4 @@ internal class WritePlaces(
 
 /** The per-user temp directory. */
 private fun temporary(): List<Path> =
-    listOfNotNull(System.getProperty("java.io.tmpdir")?.takeIf { it.isNotBlank() }?.let { Path.of(it) })
+    listOfNotNull(System.getProperty("java.io.tmpdir")?.takeIf { it.isNotBlank() }?.let { Paths.get(it) })

@@ -9,6 +9,7 @@ import org.unitedsoftware.alexandrite.sdk.browse.BrowseSurface
 import org.unitedsoftware.alexandrite.sdk.di.Contribute
 import org.unitedsoftware.alexandrite.sdk.di.Lifecycle
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
+import org.unitedsoftware.alexandrite.sdk.media.ImageCodec
 import org.unitedsoftware.alexandrite.sdk.tool.Tool
 import org.unitedsoftware.alexandrite.sdk.tool.ToolActivity
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
@@ -24,7 +25,7 @@ import java.net.URI
  */
 @Singleton
 @Contribute(ToolSource::class)
-internal class BrowserTools(config: WebConfig, backends: List<BrowseBackend>) :
+internal class BrowserTools(config: WebConfig, backends: List<BrowseBackend>, codec: ImageCodec?) :
     ToolSource,
     Lifecycle {
     override val namespace: String = "browser"
@@ -38,7 +39,7 @@ internal class BrowserTools(config: WebConfig, backends: List<BrowseBackend>) :
             require(backend.surface == BrowseSurface.WEB) {
                 "The browse backend '$id' that web.browserBackend names drives no web browser."
             }
-            listOf(BrowseTool(backend, sessions, BROWSER).asTool())
+            listOf(BrowseTool(backend, sessions, BROWSER, codec).asTool())
         }.orEmpty(),
     )
 

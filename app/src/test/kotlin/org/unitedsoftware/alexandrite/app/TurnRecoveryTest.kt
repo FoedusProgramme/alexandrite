@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.agent.AlexandriteAgentIndex
+import org.unitedsoftware.alexandrite.engine.sqlitexerial.AlexandriteEngineSqliteXerialIndex
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelMessageRef
 import org.unitedsoftware.alexandrite.sdk.chat.ToolCallId
@@ -53,7 +54,7 @@ class TurnRecoveryTest {
 
     /** Runs [block] once the agent started on the SQLite store. */
     private fun started(block: suspend PluginHarness.Running.() -> Unit) {
-        run(AlexandriteAgentIndex(), AlexandriteStoreSqliteIndex(), block = block)
+        run(AlexandriteAgentIndex(), AlexandriteStoreSqliteIndex(), AlexandriteEngineSqliteXerialIndex(), block = block)
     }
 
     private suspend fun PluginHarness.Running.state(): Pair<List<TranscriptEntry>, TurnRecord?> =
@@ -61,7 +62,7 @@ class TurnRecoveryTest {
 
     @Test
     fun `the agent ends a turn that a stopped run left in the SQLite store, and only once`() {
-        run(AlexandriteStoreSqliteIndex()) {
+        run(AlexandriteStoreSqliteIndex(), AlexandriteEngineSqliteXerialIndex()) {
             val conversation = get<ConversationStore>().current(key).id
             val info = TurnInfo.builder(turn, key.chat, conversation, TurnKind.MESSAGE)
                 .actor(testUser())

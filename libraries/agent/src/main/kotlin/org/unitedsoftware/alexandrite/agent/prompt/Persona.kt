@@ -10,6 +10,7 @@ import org.unitedsoftware.alexandrite.agent.config.AgentDirectory
 import org.unitedsoftware.alexandrite.agent.config.AgentSettings
 import org.unitedsoftware.alexandrite.agent.config.InstructionFile
 import org.unitedsoftware.alexandrite.agent.config.PersonaConfig
+import org.unitedsoftware.alexandrite.internal.io.readUtf8
 import org.unitedsoftware.alexandrite.internal.text.fittingLength
 import org.unitedsoftware.alexandrite.sdk.chat.AgentId
 import org.unitedsoftware.alexandrite.sdk.chat.ChatKind
@@ -25,6 +26,7 @@ import java.nio.charset.CharacterCodingException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.FileTime
 
@@ -124,7 +126,7 @@ private class AgentPersona(agent: Agent, private val limits: PersonaConfig, path
 
 /** The path of [entry], null when it is relative and there is no [directory] to resolve it against. */
 private fun resolve(entry: InstructionFile, directory: Path?): Path? {
-    val path = Path.of(entry.file)
+    val path = Paths.get(entry.file)
     return if (path.isAbsolute) path.normalize() else directory?.resolve(path)?.normalize()
 }
 
@@ -157,7 +159,7 @@ private class PersonaFile(
         )
         try {
             stamp = stampOf(path)
-            text = Files.readString(path)
+            text = readUtf8(path)
         } catch (e: NoSuchFileException) {
             if (required) throw ConfigException(configPath, "the instruction file $path does not exist")
         } catch (e: CharacterCodingException) {
@@ -182,7 +184,7 @@ private class PersonaFile(
             return false
         }
         val read = try {
-            Files.readString(path)
+            readUtf8(path)
         } catch (e: IOException) {
             return failed(path, e)
         }

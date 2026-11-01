@@ -8,15 +8,14 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
-import org.unitedsoftware.alexandrite.internal.process.destroyTree
-import org.unitedsoftware.alexandrite.internal.process.stopAll
+import org.unitedsoftware.alexandrite.internal.portable.ProcessIds
+import org.unitedsoftware.alexandrite.internal.process.ProcessTrees
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -40,6 +39,8 @@ internal class StdioLaunch(
     val start: (ProcessBuilder) -> Process = ProcessBuilder::start,
     /** Closed when the connection ends. */
     val held: AutoCloseable? = null,
+    /** Waits for the process and ends it. */
+    val trees: ProcessTrees = ProcessTrees.system,
 )
 
 /** A server run as a child process that speaks newline-delimited JSON-RPC on its standard streams. */
@@ -49,6 +50,7 @@ internal class McpStdioConnection private constructor(
     private val onInvalid: (String) -> Unit,
     private val stopGrace: Duration,
     private val held: AutoCloseable?,
+    private val trees: ProcessTrees,
 ) : McpConnection {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val stdin: OutputStream = process.outputStream
@@ -73,7 +75,8 @@ internal class McpStdioConnection private constructor(
     override val listensLegacy: Boolean = false
 
     private fun startReaders() {
-        thread(isDaemon = true, name = "mcp stdout ${process.pid()}") {
+        val named = ProcessIds.of(process)?.let { " $it" }.orEmpty()
+        thread(isDaemon = true, name = "mcp stdout$named") {
             readLines(process.inputStream, MESSAGE_LIMIT, onLong = { onInvalid("A message of more than $it bytes.") }) {
                 receive(it)
             }
@@ -93,7 +96,7 @@ internal class McpStdioConnection private constructor(
                 },
             )
         }
-        thread(isDaemon = true, name = "mcp stderr ${process.pid()}") {
+        thread(isDaemon = true, name = "mcp stderr$named") {
             readLines(process.errorStream, STDERR_LINE, onLong = {}) { onStderr(it.take(STDERR_LINE)) }
         }
     }
@@ -148,15 +151,15 @@ internal class McpStdioConnection private constructor(
             return
         }
         withContext(NonCancellable + Dispatchers.IO) {
-            val family = process.descendants().toList()
+            val family = trees.descendants(process)
             try {
                 stdin.close()
             } catch (e: IOException) {
                 // Already closed.
             }
-            val exited = withTimeoutOrNull(stopGrace) { process.onExit().await() } != null
-            if (!exited) destroyTree(process, stopGrace)
-            stopAll(family, stopGrace)
+            val exited = withTimeoutOrNull(stopGrace) { trees.awaitExit(process) } != null
+            if (!exited) trees.destroy(process, stopGrace)
+            family.stop(stopGrace)
             finish(McpConnectionException("The connection was closed."))
             scope.cancel()
         }
@@ -247,7 +250,8 @@ internal class McpStdioConnection private constructor(
                 launch.held?.close()
                 throw McpConnectionException("Cannot start ${launch.command}: ${e.message}", e)
             }
-            return McpStdioConnection(process, onStderr, onInvalid, stopGrace, launch.held).also { it.startReaders() }
+            return McpStdioConnection(process, onStderr, onInvalid, stopGrace, launch.held, launch.trees)
+                .also { it.startReaders() }
         }
     }
 }

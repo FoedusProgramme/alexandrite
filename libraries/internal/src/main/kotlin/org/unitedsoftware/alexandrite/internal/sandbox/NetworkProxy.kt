@@ -1,6 +1,7 @@
 package org.unitedsoftware.alexandrite.internal.sandbox
 
 import org.slf4j.LoggerFactory
+import org.unitedsoftware.alexandrite.internal.portable.Threads
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -11,7 +12,6 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.URI
 import java.net.URISyntaxException
-import java.time.Duration
 import java.util.Collections
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -49,14 +49,14 @@ public class ProxyLease internal constructor(
     /** The hosts it refused, each once, in order. */
     public val refused: List<String> get() = refusals.distinct()
 
-    private val acceptor = Thread.ofVirtual().name("sandbox proxy $port").start {
+    private val acceptor = Threads.start("sandbox proxy $port") {
         while (!closed) {
             val client = try {
                 server.accept()
             } catch (e: IOException) {
                 break
             }
-            Thread.ofVirtual().name("sandbox proxy $port connection").start { serve(client) }
+            Threads.start("sandbox proxy $port connection") { serve(client) }
         }
     }
 
@@ -66,7 +66,7 @@ public class ProxyLease internal constructor(
         server.close()
         synchronized(sockets) { sockets.toList() }.forEach { it.closeQuietly() }
         // The port keeps accepting until the thread blocked in accept has left it.
-        acceptor.join(CLOSE_WAIT)
+        acceptor.join(CLOSE_WAIT_MILLIS)
     }
 
     private fun serve(client: Socket) {
@@ -119,7 +119,7 @@ public class ProxyLease internal constructor(
                     flush()
                 }
             }
-            Thread.ofVirtual().start { pump(input, connected) }
+            Threads.start("sandbox proxy $port upload") { pump(input, connected) }
             pump(connected.getInputStream(), client)
         } catch (e: IOException) {
             logger.debug("A sandbox proxy connection ended: {}", e.toString())
@@ -190,10 +190,11 @@ public class ProxyLease internal constructor(
 
     private companion object {
         const val BACKLOG = 50
-        val CLOSE_WAIT: Duration = Duration.ofSeconds(5)
+        const val CLOSE_WAIT_MILLIS = 5_000L
         const val HEAD_TIMEOUT_MILLIS = 30_000
         const val CONNECT_TIMEOUT_MILLIS = 10_000
         const val MAX_HEAD_BYTES = 64 * 1024
+        const val PUMP_BUFFER = 16 * 1024
         const val HTTP_PORT = 80
         const val HTTPS_PORT = 443
         const val NOT_ALLOWED = "it is not among the hosts the call may reach"
@@ -232,7 +233,7 @@ public class ProxyLease internal constructor(
                 } else {
                     0
                 }
-                if (matched == END.length) return bytes.toString(Charsets.ISO_8859_1).removeSuffix(END)
+                if (matched == END.length) return String(bytes.toByteArray(), Charsets.ISO_8859_1).removeSuffix(END)
             }
             return null
         }
@@ -262,7 +263,13 @@ public class ProxyLease internal constructor(
         /** Copies [from] to [to] until it ends, then ends [to]'s output. */
         fun pump(from: InputStream, to: Socket) {
             try {
-                from.transferTo(to.getOutputStream())
+                val output = to.getOutputStream()
+                val buffer = ByteArray(PUMP_BUFFER)
+                while (true) {
+                    val count = from.read(buffer)
+                    if (count < 0) break
+                    output.write(buffer, 0, count)
+                }
             } catch (e: IOException) {
                 logger.debug("A sandbox proxy stream ended: {}", e.toString())
             } finally {

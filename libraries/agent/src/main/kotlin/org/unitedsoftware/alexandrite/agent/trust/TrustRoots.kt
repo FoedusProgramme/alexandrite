@@ -12,6 +12,7 @@ import org.unitedsoftware.alexandrite.sdk.tool.FloorCheck
 import org.unitedsoftware.alexandrite.sdk.tool.HardFloor
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import java.nio.file.Paths
 
 /** What a person may trust so that a source no longer taints. */
 internal sealed interface Root {
@@ -89,7 +90,7 @@ internal class FolderRoots(private val floor: HardFloor, private val home: Path?
 }
 
 private fun pathOf(text: String): Path? = try {
-    Path.of(text).toAbsolutePath().normalize()
+    Paths.get(text).toAbsolutePath().normalize()
 } catch (e: InvalidPathException) {
     null
 }
@@ -104,4 +105,4 @@ private val TOP_LEVEL = setOf(
 private val SYSTEM = listOf(
     "/bin", "/sbin", "/usr", "/etc", "/lib", "/lib32", "/lib64", "/boot", "/dev", "/proc", "/sys", "/run", "/System",
     "/Library", "/Applications", "/private/etc", "/var/lib", "/var/log", "/var/run", "/private/var/log", "/cores",
-).map { Path.of(it) }
+).map { Paths.get(it) }

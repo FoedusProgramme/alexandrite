@@ -196,7 +196,7 @@ internal class LinkCommands(
     /** The whole minutes from now until [instant], at least 1. */
     private fun minutesUntil(instant: Instant): Long {
         val millis = Duration.between(clock.instant(), instant).toMillis()
-        return maxOf(1, Math.ceilDiv(millis, MILLIS_PER_MINUTE))
+        return maxOf(1, -Math.floorDiv(-millis, MILLIS_PER_MINUTE))
     }
 
     private companion object {

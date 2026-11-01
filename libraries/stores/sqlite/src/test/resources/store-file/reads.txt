@@ -1,0 +1,74 @@
+current main@test:main:chat: NAfRVIoKirPntXaDVBWVYw
+chats main: [test:main:chat]
+current coder@test:main:dev#7: RzJyZFkR2YBYKr3Ta-OS8g
+chats coder: [test:main:dev#7]
+heartbeat base main@test:main:chat: qWdb_Gqz3JWmVbtlzccwFQ
+conversation lx6_4J6WmZwpwnWTHVwRIQ: ConversationInfo(id=lx6_4J6WmZwpwnWTHVwRIQ, kind=user_lane, key=main@test:main:chat, state=sealed, createdAt=2026-01-01T00:00:00.007Z, sealedAt=2026-01-01T00:05:03.007Z, successor=NAfRVIoKirPntXaDVBWVYw, lineage=null, fork=null)
+taint lx6_4J6WmZwpwnWTHVwRIQ: ConversationTaint(at=2026-01-01T00:00:01.234Z, reason=a forwarded message)
+entries lx6_4J6WmZwpwnWTHVwRIQ: [1, 2, 3, 4, 5, 6, 7, 9, 10, 11]
+tail lx6_4J6WmZwpwnWTHVwRIQ: [10, 11]
+entries after 3 lx6_4J6WmZwpwnWTHVwRIQ: [4, 5, 6, 7, 9, 10, 11]
+conversation TlqKC-d62Ab-hvEp5VBA8g: ConversationInfo(id=TlqKC-d62Ab-hvEp5VBA8g, kind=delegated, key=main@test:main:chat, state=sealed, createdAt=2026-01-01T00:00:03.007Z, sealedAt=2026-01-01T00:00:03.007Z, successor=null, lineage=TurnLineage(run=run-1, parentTurn=turn-2, parentConversation=lx6_4J6WmZwpwnWTHVwRIQ, parentCall=call-1, rootTurn=turn-2, rootConversation=lx6_4J6WmZwpwnWTHVwRIQ, depth=1), fork=ForkPoint(conversation=lx6_4J6WmZwpwnWTHVwRIQ, through=3))
+taint TlqKC-d62Ab-hvEp5VBA8g: null
+entries TlqKC-d62Ab-hvEp5VBA8g: [12]
+tail TlqKC-d62Ab-hvEp5VBA8g: [12]
+entries after 3 TlqKC-d62Ab-hvEp5VBA8g: [12]
+conversation qWdb_Gqz3JWmVbtlzccwFQ: ConversationInfo(id=qWdb_Gqz3JWmVbtlzccwFQ, kind=heartbeat_base, key=main@test:main:chat, state=active, createdAt=2026-01-01T00:05:03.007Z, sealedAt=null, successor=null, lineage=null, fork=null)
+taint qWdb_Gqz3JWmVbtlzccwFQ: null
+entries qWdb_Gqz3JWmVbtlzccwFQ: [13]
+tail qWdb_Gqz3JWmVbtlzccwFQ: [13]
+entries after 3 qWdb_Gqz3JWmVbtlzccwFQ: [13]
+conversation NAfRVIoKirPntXaDVBWVYw: ConversationInfo(id=NAfRVIoKirPntXaDVBWVYw, kind=user_lane, key=main@test:main:chat, state=active, createdAt=2026-01-01T00:05:03.007Z, sealedAt=null, successor=null, lineage=null, fork=null)
+taint NAfRVIoKirPntXaDVBWVYw: null
+entries NAfRVIoKirPntXaDVBWVYw: [14]
+tail NAfRVIoKirPntXaDVBWVYw: [14]
+entries after 3 NAfRVIoKirPntXaDVBWVYw: [14]
+conversation RzJyZFkR2YBYKr3Ta-OS8g: ConversationInfo(id=RzJyZFkR2YBYKr3Ta-OS8g, kind=user_lane, key=coder@test:main:dev#7, state=active, createdAt=2026-01-01T00:05:03.007Z, sealedAt=null, successor=null, lineage=null, fork=null)
+taint RzJyZFkR2YBYKr3Ta-OS8g: null
+entries RzJyZFkR2YBYKr3Ta-OS8g: [15]
+tail RzJyZFkR2YBYKr3Ta-OS8g: [15]
+entries after 3 RzJyZFkR2YBYKr3Ta-OS8g: [15]
+turn turn-1: TurnRecord(id=turn-1, conversation=lx6_4J6WmZwpwnWTHVwRIQ, key=main@test:main:chat, chat=test:main:chat, kind=message, actor=test:main@guest, lineage=null, startedAt=2026-01-01T00:00:00.007Z, endedAt=2026-01-01T00:00:00.007Z, end=completed)
+turn entries turn-1: [1, 2, 3, 4, 5, 6, 7]
+turn turn-2: TurnRecord(id=turn-2, conversation=lx6_4J6WmZwpwnWTHVwRIQ, key=main@test:main:chat, chat=test:main:chat, kind=message, actor=test:main@guest, lineage=null, startedAt=2026-01-01T00:00:03.007Z, endedAt=null, end=null)
+turn entries turn-2: [9, 10, 11]
+turn turn-3: TurnRecord(id=turn-3, conversation=TlqKC-d62Ab-hvEp5VBA8g, key=main@test:main:chat, chat=test:main:chat, kind=delegated, actor=null, lineage=null, startedAt=2026-01-01T00:00:03.007Z, endedAt=2026-01-01T00:00:03.007Z, end=failed)
+turn entries turn-3: [12]
+turn turn-4: TurnRecord(id=turn-4, conversation=qWdb_Gqz3JWmVbtlzccwFQ, key=main@test:main:chat, chat=test:main:chat, kind=heartbeat, actor=null, lineage=null, startedAt=2026-01-01T00:05:03.007Z, endedAt=2026-01-01T00:05:03.007Z, end=paused)
+turn entries turn-4: [13]
+turn turn-5: TurnRecord(id=turn-5, conversation=NAfRVIoKirPntXaDVBWVYw, key=main@test:main:chat, chat=test:main:chat, kind=message, actor=test:main@guest, lineage=null, startedAt=2026-01-01T00:05:03.007Z, endedAt=null, end=null)
+turn entries turn-5: [14]
+turn turn-6: TurnRecord(id=turn-6, conversation=RzJyZFkR2YBYKr3Ta-OS8g, key=coder@test:main:dev#7, chat=test:main:dev#7, kind=message, actor=test:main@guest, lineage=null, startedAt=2026-01-01T00:05:03.007Z, endedAt=null, end=null)
+turn entries turn-6: [15]
+unended: [turn-2, turn-5, turn-6]
+entry 1: UserEntry(record=EntryRecord(id=1, conversation=lx6_4J6WmZwpwnWTHVwRIQ, turn=turn-1, createdAt=2026-01-01T00:00:00.007Z), parts=[ContextPart(source=message-context, text=Sender: Guest), TextPart(text=Hello rocket)], origin=FromChat(sender=ChatUser(address=test:main@guest, displayName=Guest, username=null, isBot=false, isOperator=false, isTrusted=false), message=ChannelMessageRef(chat=test:main:chat, id=m-hello), receivedAt=2026-01-01T00:00:00Z, forwarded=null, quote=null))
+entry 2: UserEntry(record=EntryRecord(id=2, conversation=lx6_4J6WmZwpwnWTHVwRIQ, turn=turn-1, createdAt=2026-01-01T00:00:00.007Z), parts=[TextPart(text=What is on this photo?), MediaPart(kind=image, mediaType=image/png, source=StoredMedia(id=eBjBScKIlbdQqyIPcSNg6Q), name=photo.png, width=640, height=480)], origin=FromChat(sender=ChatUser(address=test:main@guest, displayName=Guest, username=null, isBot=false, isOperator=false, isTrusted=false), message=ChannelMessageRef(chat=test:main:chat, id=m-x), receivedAt=2026-01-01T00:00:00Z, forwarded=null, quote=null))
+entry 3: AssistantEntry(record=EntryRecord(id=3, conversation=lx6_4J6WmZwpwnWTHVwRIQ, turn=turn-1, createdAt=2026-01-01T00:00:00.007Z), parts=[ReasoningPart(text=Thinking., summary=null, seal=ReasoningSeal(origin=anthropic/claude-opus, dialect=anthropic, kind=signature, data=<4 chars>)), TextPart(text=A rocket, I think.), ToolCallPart(id=toolu_01, name=notes.add, arguments={"text":"rocket"}, providerData=ProviderData(entries={})), OpaquePart(dialect=anthropic, kind=server_tool_use, json={"id":"srvtoolu_01"})], producedBy=anthropic/claude-opus, providerData=ProviderData(entries={anthropic={"id":"msg_01"}}))
+entry 4: ToolResultEntry(record=EntryRecord(id=4, conversation=lx6_4J6WmZwpwnWTHVwRIQ, turn=turn-1, createdAt=2026-01-01T00:00:00.007Z), callId=toolu_01, toolName=notes.add, content=[TextPart(text=Saved the rocket.), MediaPart(kind=document, mediaType=image/png, source=StoredMedia(id=CNpL6mKHM5dWRAZhXVWhmg), name=photo.png, width=640, height=480)], outcome=Succeeded)
+entry 5: SummaryEntry(record=EntryRecord(id=5, conversation=lx6_4J6WmZwpwnWTHVwRIQ, turn=turn-1, createdAt=2026-01-01T00:00:00.007Z), text=The guest asked about a rocket., through=2, kept=[])
+entry 6: NoticeEntry(record=EntryRecord(id=6, conversation=lx6_4J6WmZwpwnWTHVwRIQ, turn=turn-1, createdAt=2026-01-01T00:00:00.007Z), text=The model answered with nothing., kind=blank_reply)
+entry 7: UnknownEntry(record=EntryRecord(id=7, conversation=lx6_4J6WmZwpwnWTHVwRIQ, turn=turn-1, createdAt=2026-01-01T00:00:00.007Z), type=poll, json={"type":"poll","question":"Lunch?","options":["a",null,1]})
+entry 9: UserEntry(record=EntryRecord(id=9, conversation=lx6_4J6WmZwpwnWTHVwRIQ, turn=turn-2, createdAt=2026-01-01T00:00:03.007Z), parts=[ContextPart(source=message-context, text=Sender: Guest), TextPart(text=A second rocket, ünïcode and emoji 🚀)], origin=FromChat(sender=ChatUser(address=test:main@guest, displayName=Guest, username=null, isBot=false, isOperator=false, isTrusted=false), message=ChannelMessageRef(chat=test:main:chat, id=m-second), receivedAt=2026-01-01T00:00:00Z, forwarded=null, quote=null))
+entry 10: UnknownEntry(record=EntryRecord(id=10, conversation=lx6_4J6WmZwpwnWTHVwRIQ, turn=turn-2, createdAt=2026-01-01T00:00:03.007Z), type=user, json={"type":"user","v2":true})
+entry 11: UnknownEntry(record=EntryRecord(id=11, conversation=lx6_4J6WmZwpwnWTHVwRIQ, turn=turn-2, createdAt=2026-01-01T00:00:03.007Z), type=notice, json={"type":"notice","body":"[\"type\", \"notice\"]"})
+entry 12: NoticeEntry(record=EntryRecord(id=12, conversation=TlqKC-d62Ab-hvEp5VBA8g, turn=turn-3, createdAt=2026-01-01T00:00:03.007Z), text=Sub-agent done., kind=failed)
+entry 13: UserEntry(record=EntryRecord(id=13, conversation=qWdb_Gqz3JWmVbtlzccwFQ, turn=turn-4, createdAt=2026-01-01T00:05:03.007Z), parts=[ContextPart(source=heartbeat, text=Nobody has written for two hours.)], origin=Initiated(plugin=alexandrite-heartbeat, kind=heartbeat))
+entry 14: UserEntry(record=EntryRecord(id=14, conversation=NAfRVIoKirPntXaDVBWVYw, turn=turn-5, createdAt=2026-01-01T00:05:03.007Z), parts=[ContextPart(source=message-context, text=Sender: Guest), TextPart(text=A new rocket conversation)], origin=FromChat(sender=ChatUser(address=test:main@guest, displayName=Guest, username=null, isBot=false, isOperator=false, isTrusted=false), message=ChannelMessageRef(chat=test:main:chat, id=m-new), receivedAt=2026-01-01T00:00:00Z, forwarded=null, quote=null))
+entry 15: UserEntry(record=EntryRecord(id=15, conversation=RzJyZFkR2YBYKr3Ta-OS8g, turn=turn-6, createdAt=2026-01-01T00:05:03.007Z), parts=[TextPart(text=Please fix the build)], origin=FromChat(sender=ChatUser(address=test:main@ada, displayName=Ada, username=null, isBot=false, isOperator=false, isTrusted=false), message=ChannelMessageRef(chat=test:main:dev#7, id=m-fix), receivedAt=2026-01-01T00:00:00Z, forwarded=null, quote=null))
+message ChannelMessageRef(chat=test:main:chat, id=m-hello): [1]
+message ChannelMessageRef(chat=test:main:dev#7, id=m-fix): [15]
+search 'rocket': [1 main@test:main:chat Hello rocket, 4 main@test:main:chat Saved the rocket., 3 main@test:main:chat A rocket, I think., 14 main@test:main:chat A new rocket conversation, 9 main@test:main:chat A second rocket, ünïcode and emoji 🚀]
+search 'ro': [14 main@test:main:chat A new rocket conversation, 9 main@test:main:chat A second rocket, ünïcode and emoji 🚀, 4 main@test:main:chat Saved the rocket., 3 main@test:main:chat A rocket, I think., 1 main@test:main:chat Hello rocket]
+search 'fix the build': [15 coder@test:main:dev#7 Please fix the build]
+media eBjBScKIlbdQqyIPcSNg6Q: MediaInfo(id=eBjBScKIlbdQqyIPcSNg6Q, kind=image, mediaType=image/png, size=8, sha256=4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6, createdAt=2026-01-01T00:00:00Z)
+media bytes eBjBScKIlbdQqyIPcSNg6Q: 4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6
+media CNpL6mKHM5dWRAZhXVWhmg: MediaInfo(id=CNpL6mKHM5dWRAZhXVWhmg, kind=document, mediaType=application/pdf, size=4, sha256=9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a, createdAt=2026-01-01T00:00:00Z)
+media bytes CNpL6mKHM5dWRAZhXVWhmg: 9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a
+chat state null test:main:chat: "rich"
+chat state null test:main:dev#7: null
+chat state main test:main:chat: {"level":2}
+chat state main test:main:dev#7: null
+chat state coder test:main:chat: null
+chat state coder test:main:dev#7: true
+records: [StoredRecord(key=a, value={"x":2}, createdAt=2026-01-01T00:05:03.007Z, createdBy=test:main@guest, updatedAt=2026-01-01T00:05:03.009Z, updatedBy=test:main@ada), StoredRecord(key=b, value=[], createdAt=2026-01-01T00:05:03.008Z, createdBy=null, updatedAt=2026-01-01T00:05:03.008Z, updatedBy=null)]
+record: StoredRecord(key=b, value=[], createdAt=2026-01-01T00:05:03.008Z, createdBy=null, updatedAt=2026-01-01T00:05:03.008Z, updatedBy=null)

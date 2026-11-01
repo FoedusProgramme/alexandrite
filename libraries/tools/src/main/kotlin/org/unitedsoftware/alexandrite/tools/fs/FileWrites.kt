@@ -3,6 +3,7 @@ package org.unitedsoftware.alexandrite.tools.fs
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import org.unitedsoftware.alexandrite.internal.hash.sha256Hex
+import org.unitedsoftware.alexandrite.internal.io.readAtMost
 import org.unitedsoftware.alexandrite.internal.path.PathCanonicalizer
 import org.unitedsoftware.alexandrite.internal.path.openRegularFile
 import org.unitedsoftware.alexandrite.internal.path.writeAtomically
@@ -99,7 +100,7 @@ private fun load(file: Path, shown: Path, exempt: Boolean, person: String?, oneL
     }
     if (attributes.isDirectory) throw ToolRefusal("$shown is a directory.")
     checkRegular(file, shown, attributes, "written", oneLink)
-    val bytes = openRegularFile(file, oneLink).use { it.readNBytes(MAX_WRITE_BYTES.toInt() + 1) }
+    val bytes = openRegularFile(file, oneLink).use { it.readAtMost(MAX_WRITE_BYTES.toInt() + 1) }
     if (bytes.size > MAX_WRITE_BYTES) {
         throw ToolRefusal("$shown is over ${MAX_WRITE_BYTES / MIB} MiB, more than the write tools change.")
     }

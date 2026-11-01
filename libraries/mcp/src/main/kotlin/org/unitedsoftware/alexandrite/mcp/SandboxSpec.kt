@@ -14,6 +14,7 @@ import org.unitedsoftware.alexandrite.sdk.sandbox.ExecutionEnvironment
 import org.unitedsoftware.alexandrite.sdk.sandbox.NetworkAccess
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import java.nio.file.Paths
 
 /** The sandbox a server runs in: its [environment], its [boundary] while it has no network, and the hosts it may reach. */
 internal class SandboxSpec(
@@ -77,7 +78,7 @@ private fun environment(key: String, type: String, environments: List<ExecutionE
 /** [entry] as an absolute path: itself, under the home directory for `~/`, or relative to the config file. */
 private fun resolved(paths: HostPaths, key: String, entry: String): Path {
     val path = try {
-        Path.of(expandHome(entry))
+        Paths.get(expandHome(entry))
     } catch (e: InvalidPathException) {
         throw ConfigException(key, "'$entry' is no valid path", e)
     }

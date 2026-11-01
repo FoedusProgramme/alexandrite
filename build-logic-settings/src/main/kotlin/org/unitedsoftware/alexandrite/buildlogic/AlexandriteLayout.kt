@@ -46,7 +46,7 @@ enum class Layer {
     /** OS sandboxes that commands run in. */
     SANDBOX,
 
-    /** Implementations of the SDK's engine ports (HTTP, HTML, SQLite) other than the JDK defaults the runtime binds. */
+    /** Engine back ends. */
     ENGINE,
 
     /** Finding and bringing in another tool's skills and MCP servers. */
@@ -111,6 +111,10 @@ data class AlexandriteModule(
 
     val published: Boolean
         get() = layer in AlexandriteLayout.PUBLISHED_LAYERS
+
+    /** Whether `alexandrite.portable` checks its main classes */
+    val portable: Boolean
+        get() = layer in AlexandriteLayout.PORTABLE_LAYERS && path !in AlexandriteLayout.JDK_ONLY_MODULES
 }
 
 data class Discovery(
@@ -286,7 +290,7 @@ object AlexandriteLayout {
         Layer.CHANNEL_COMMON to setOf(Layer.TESTKIT),
         Layer.PROVIDER to setOf(Layer.TESTKIT),
         Layer.PROVIDER_COMMON to setOf(Layer.TESTKIT),
-        Layer.STORE to setOf(Layer.TESTKIT),
+        Layer.STORE to setOf(Layer.TESTKIT, Layer.ENGINE),
         Layer.ACCOUNT to setOf(Layer.TESTKIT),
         Layer.AUTOMATION to setOf(Layer.TESTKIT),
         Layer.SANDBOX to setOf(Layer.TESTKIT),
@@ -300,11 +304,7 @@ object AlexandriteLayout {
     /** Layers compiled without the SDK's internal API, as third-party plugins are */
     val THIRD_PARTY_LAYERS: Set<Layer> = setOf(Layer.CHANNEL_COMMON, Layer.PROVIDER_COMMON, Layer.EXAMPLE)
 
-    /**
-     * Layers whose main code runs wherever a host may embed the runtime, Android included: they use only the JDK API
-     * that Android's API level 26 has, which `alexandrite.portable` checks. A capability only the JDK has comes through
-     * an SDK port with a JDK default the runtime binds, or is probed for where it is used.
-     */
+    /** Layers whose main code uses only the JDK API of Android's API level 26 */
     val PORTABLE_LAYERS: Set<Layer> = setOf(
         Layer.SDK,
         Layer.INTERNAL,
@@ -314,8 +314,12 @@ object AlexandriteLayout {
         Layer.COMMANDS,
         Layer.PROVIDER_COMMON,
         Layer.PROVIDER,
+        Layer.STORE,
         Layer.ENGINE,
     )
+
+    /** Modules of [PORTABLE_LAYERS] made for the desktop JVM alone */
+    val JDK_ONLY_MODULES: Set<String> = setOf(":libraries:engines:sqlite-xerial")
 
     /** Layers whose modules are published to Maven Central */
     val PUBLISHED_LAYERS: Set<Layer> = Layer.entries.toSet() - setOf(Layer.EXAMPLE, Layer.APP)

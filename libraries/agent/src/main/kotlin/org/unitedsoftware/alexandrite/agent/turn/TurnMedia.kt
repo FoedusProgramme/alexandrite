@@ -15,11 +15,16 @@ import org.unitedsoftware.alexandrite.agent.prompt.NotedMedia
 import org.unitedsoftware.alexandrite.agent.prompt.mediaNote
 import org.unitedsoftware.alexandrite.agent.prompt.oneLine
 import org.unitedsoftware.alexandrite.agent.prompt.shortened
-import org.unitedsoftware.alexandrite.internal.media.normalizedImage
+import org.unitedsoftware.alexandrite.internal.media.MAX_IMAGE_BYTES
+import org.unitedsoftware.alexandrite.internal.media.MAX_IMAGE_SIDE
+import org.unitedsoftware.alexandrite.internal.media.NormalizedImage
+import org.unitedsoftware.alexandrite.internal.media.imageType
+import org.unitedsoftware.alexandrite.internal.media.unchangedImage
 import org.unitedsoftware.alexandrite.sdk.channel.IncomingMessage
 import org.unitedsoftware.alexandrite.sdk.channel.MediaAttachment
 import org.unitedsoftware.alexandrite.sdk.chat.TurnId
 import org.unitedsoftware.alexandrite.sdk.chat.TurnInfo
+import org.unitedsoftware.alexandrite.sdk.media.ImageCodec
 import org.unitedsoftware.alexandrite.sdk.store.MediaStore
 import org.unitedsoftware.alexandrite.sdk.store.storeInline
 import org.unitedsoftware.alexandrite.sdk.transcript.InlineMedia
@@ -39,7 +44,7 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The media of the turn [turn]: its messages' attachments saved into the [inbox], put into [store] for a model that
- * takes them natively or [reader] for one that does not, and the bytes its requests carry.
+ * takes them natively or [reader] for one that does not, and the bytes its requests carry, images fit by [codec].
  */
 internal class TurnMedia(
     private val turn: TurnId,
@@ -47,7 +52,11 @@ internal class TurnMedia(
     private val maxBytes: Long,
     private val inbox: Inbox,
     private val reader: MediaReader,
+    private val codec: ImageCodec?,
 ) {
+    /** Why an image is not shown when it cannot be fit. */
+    private val unfit = if (codec == null) "this host cannot process images" else "the image could not be decoded"
+
     /** The bytes of the media the turn put or read, null where the store has none. */
     private val loaded = HashMap<MediaId, InlineMedia?>()
 
@@ -73,7 +82,7 @@ internal class TurnMedia(
             val image = (part as? MediaPart)?.takeIf { it.kind == MediaKind.IMAGE && it.source is InlineMedia }
             when {
                 (part.inlineBytes()?.size ?: 0) > maxBytes -> leftOut(part, "larger than $maxBytes bytes")
-                image != null -> normalized(image) ?: leftOut(part, "the image could not be decoded")
+                image != null -> normalized(image) ?: leftOut(part, unfit)
                 else -> part
             }
         }
@@ -183,7 +192,7 @@ internal class TurnMedia(
     ): NotedMedia.View {
         val part = with(attachment) { MediaPart(kind, mediaType, InlineMedia(bytes), name, width, height) }
         val shown = if (part.kind == MediaKind.IMAGE) normalized(part) else part
-        if (shown == null) return NotedMedia.View.Saved("the image could not be decoded")
+        if (shown == null) return NotedMedia.View.Saved(unfit)
         val carried = (shown.source as InlineMedia).bytes()
         val stored = try {
             store.put(carried, shown.kind, shown.mediaType)
@@ -247,6 +256,28 @@ internal class TurnMedia(
     private fun missing(part: MediaPart): TextPart =
         TextPart("(${part.kind} of type ${part.mediaType}, no longer stored)")
 
+    /** The inline image [part] fit to a type and size every model that views images takes, null if it cannot be. */
+    private fun normalized(part: MediaPart): MediaPart? {
+        val bytes = (part.source as InlineMedia).bytes()
+        val image = fitted(bytes) ?: return null
+        val width = image.width.takeIf { it > 0 }
+        val height = image.height.takeIf { it > 0 }
+        return MediaPart(MediaKind.IMAGE, image.mediaType, InlineMedia(image.bytes), part.name, width, height)
+    }
+
+    /** [bytes] fit by the [codec], or as they are where none is bound. */
+    private fun fitted(bytes: ByteArray): NormalizedImage? {
+        val type = imageType(bytes) ?: return null
+        if (codec == null) return unchangedImage(bytes, type)
+        val image = codec.fitted(bytes, type, MAX_IMAGE_SIDE, MAX_IMAGE_BYTES) ?: return null
+        return NormalizedImage(
+            image.bytes,
+            image.mediaType,
+            image.dimensions?.width ?: 0,
+            image.dimensions?.height ?: 0,
+        )
+    }
+
     private suspend fun read(id: MediaId): InlineMedia? {
         val bytes = store.read(id)?.let(::InlineMedia)
         if (bytes == null) logger.warn("Turn {} finds no media {} in the store", turn, id)
@@ -280,11 +311,3 @@ private fun ToolResultEntry.withContent(part: (ToolOutputPart) -> ToolOutputPart
     ToolResultEntry(record, callId, toolName, content.map(part), outcome)
 
 private val logger = LoggerFactory.getLogger(TurnMedia::class.java)
-
-/** The inline image [part] normalized to a type and size every model that views images takes, null if undecodable. */
-private fun normalized(part: MediaPart): MediaPart? {
-    val image = normalizedImage((part.source as InlineMedia).bytes()) ?: return null
-    val width = image.width.takeIf { it > 0 }
-    val height = image.height.takeIf { it > 0 }
-    return MediaPart(MediaKind.IMAGE, image.mediaType, InlineMedia(image.bytes), part.name, width, height)
-}

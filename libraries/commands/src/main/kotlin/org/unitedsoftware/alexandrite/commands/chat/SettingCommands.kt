@@ -36,7 +36,6 @@ import org.unitedsoftware.alexandrite.sdk.turn.CommandInvocation
 import org.unitedsoftware.alexandrite.sdk.turn.CommandSpec
 import org.unitedsoftware.alexandrite.sdk.turn.TrustControl
 import java.time.Clock
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -399,7 +398,7 @@ internal class SettingCommands(
             logger.warn("The taint of {} could not be read for /settings: {}", chat, e.toString())
             return replies.text(TextKeys.SETTINGS_TAINT_UNREAD)
         } ?: return replies.text(TextKeys.SETTINGS_CLEAN)
-        val date = LocalDate.ofInstant(taint.at, zone ?: clock.zone)
+        val date = taint.at.atZone(zone ?: clock.zone).toLocalDate()
         return replies.text(TextKeys.SETTINGS_TAINTED, "date" to date, "reason" to taint.reason)
     }
 

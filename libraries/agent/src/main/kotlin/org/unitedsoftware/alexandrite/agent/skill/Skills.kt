@@ -15,6 +15,7 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.attribute.FileTime
+import java.util.stream.Collectors
 
 /** Where a skill comes from. */
 internal enum class SkillScope {
@@ -162,7 +163,7 @@ internal fun skillFiles(directory: Path): List<Path> = try {
                 .map { it.resolve(SKILL_FILE) }
                 .filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
                 .sorted()
-                .toList()
+                .collect(Collectors.toList())
         }
     }
 } catch (e: IOException) {

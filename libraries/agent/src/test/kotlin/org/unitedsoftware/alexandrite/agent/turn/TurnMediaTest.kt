@@ -10,12 +10,16 @@ import org.unitedsoftware.alexandrite.agent.media.MediaReading
 import org.unitedsoftware.alexandrite.agent.media.MediaRoute
 import org.unitedsoftware.alexandrite.agent.tinyGif
 import org.unitedsoftware.alexandrite.agent.tinyPng
+import org.unitedsoftware.alexandrite.internal.media.AwtImages
 import org.unitedsoftware.alexandrite.sdk.channel.IncomingMessage
 import org.unitedsoftware.alexandrite.sdk.channel.MediaAttachment
 import org.unitedsoftware.alexandrite.sdk.channel.MediaContent
 import org.unitedsoftware.alexandrite.sdk.chat.ToolCallId
 import org.unitedsoftware.alexandrite.sdk.chat.TurnId
 import org.unitedsoftware.alexandrite.sdk.chat.TurnInfo
+import org.unitedsoftware.alexandrite.sdk.media.FittedImage
+import org.unitedsoftware.alexandrite.sdk.media.ImageCodec
+import org.unitedsoftware.alexandrite.sdk.media.ImageDimensions
 import org.unitedsoftware.alexandrite.sdk.store.MediaStore
 import org.unitedsoftware.alexandrite.sdk.transcript.ContextPart
 import org.unitedsoftware.alexandrite.sdk.transcript.InlineMedia
@@ -33,14 +37,18 @@ import org.unitedsoftware.alexandrite.testkit.MemoryStore
 import org.unitedsoftware.alexandrite.testkit.testMessage
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import org.unitedsoftware.alexandrite.testkit.testUserEntry
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import javax.imageio.ImageIO
 import kotlin.io.path.readBytes
 import kotlin.io.path.writeBytes
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 
 class TurnMediaTest {
@@ -55,8 +63,8 @@ class TurnMediaTest {
     private val readerModel = ModelRef.parse("scripted/reader")
     private val png = "png!".encodeToByteArray()
 
-    private fun media(maxBytes: Long = 8, config: String = "{}") =
-        TurnMedia(TurnId("t-1"), store, maxBytes, inbox(data, config), reader)
+    private fun media(maxBytes: Long = 8, config: String = "{}", codec: ImageCodec? = AwtCodec) =
+        TurnMedia(TurnId("t-1"), store, maxBytes, inbox(data, config), reader, codec)
 
     private fun attachment(
         kind: MediaKind = MediaKind.IMAGE,
@@ -149,6 +157,35 @@ class TurnMediaTest {
             parts.single(),
         )
         assertEquals(emptyList(), reader.reads)
+    }
+
+    @Test
+    fun `without an image codec, an image a model takes as it is is carried unchanged, another only saved`() {
+        val png = tinyPng(2, 3)
+        val bmp = ByteArrayOutputStream().also {
+            ImageIO.write(BufferedImage(2, 3, BufferedImage.TYPE_INT_RGB), "bmp", it)
+        }
+            .toByteArray()
+        val media = media(maxBytes = 200, codec = null)
+
+        val parts = put(
+            media,
+            plan(MediaKind.IMAGE to MediaRoute.Native),
+            MediaAttachment.builder(MediaKind.IMAGE, "image/png") { png }.name("a.png").build(),
+            MediaAttachment.builder(MediaKind.IMAGE, "image/bmp") { bmp }.name("b.bmp").build(),
+        )
+
+        val shown = parts.first() as MediaPart
+        assertEquals("image/png" to (2 to 3), shown.mediaType to (shown.width to shown.height))
+        assertContentEquals(png, blocking { memory.media.read((shown.source as StoredMedia).id) })
+        assertEquals(
+            note(
+                "Saved to ${inbox.resolve("a.png")}: image \"a.png\" (image/png, ${png.size} bytes); shown to you\n" +
+                    "Saved to ${inbox.resolve("b.bmp")}: image \"b.bmp\" (image/bmp, ${bmp.size} bytes); not " +
+                    "shown: this host cannot process images",
+            ),
+            parts.last(),
+        )
     }
 
     @Test
@@ -373,4 +410,15 @@ private class Media(private val store: MediaStore) : MediaStore by store {
     }
 
     override suspend fun read(id: MediaId): ByteArray? = store.read(id).also { reads += id }
+}
+
+/** The codec the runtime binds on the JDK. */
+private object AwtCodec : ImageCodec {
+    override fun dimensions(bytes: ByteArray, mediaType: String): ImageDimensions? =
+        AwtImages.dimensions(bytes)?.let { ImageDimensions(it.first, it.second) }
+
+    override fun fitted(bytes: ByteArray, mediaType: String, maxSide: Int, maxBytes: Int): FittedImage? =
+        AwtImages.normalized(bytes, maxSide, maxBytes)?.let {
+            FittedImage(it.bytes, it.mediaType, ImageDimensions(it.width, it.height).takeIf { _ -> it.width > 0 })
+        }
 }

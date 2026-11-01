@@ -128,6 +128,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.TurnKind
 import org.unitedsoftware.alexandrite.sdk.chat.UserAddress
 import org.unitedsoftware.alexandrite.sdk.di.Binds
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
+import org.unitedsoftware.alexandrite.sdk.media.ImageCodec
 import org.unitedsoftware.alexandrite.sdk.model.FinishKind
 import org.unitedsoftware.alexandrite.sdk.model.FinishReason
 import org.unitedsoftware.alexandrite.sdk.model.ModelError
@@ -191,6 +192,7 @@ internal class AgentTurnRunner(
     private val transcripts: TranscriptStore,
     private val mediaStore: MediaStore,
     private val mediaReader: MediaReader,
+    private val imageCodec: ImageCodec?,
     private val routing: MediaRouting,
     private val inbox: Inbox,
     private val channels: ChannelDirectory,
@@ -271,7 +273,7 @@ internal class AgentTurnRunner(
 
         /** Whether [runReply] ended. */
         private var runClosed = false
-        private val media = TurnMedia(plan.id, mediaStore, agentSettings.maxMediaBytes, inbox, mediaReader)
+        private val media = TurnMedia(plan.id, mediaStore, agentSettings.maxMediaBytes, inbox, mediaReader, imageCodec)
 
         /** How the turn's model takes each kind of media. */
         private var mediaPlan = MediaPlan(emptyMap())

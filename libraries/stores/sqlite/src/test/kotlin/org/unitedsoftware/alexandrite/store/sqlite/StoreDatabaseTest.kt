@@ -10,6 +10,7 @@ import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.sdk.chat.ConversationId
 import org.unitedsoftware.alexandrite.sdk.chat.TurnId
 import org.unitedsoftware.alexandrite.sdk.store.ConversationTaint
+import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteConnection
 import org.unitedsoftware.alexandrite.sdk.transcript.NoticeEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.NoticeKind
 import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptCodec
@@ -45,7 +46,7 @@ class StoreDatabaseTest {
         },
     )
 
-    private fun database(): StoreDatabase = StoreDatabase(TestFiles(directory), MutableClock())
+    private fun database(): StoreDatabase = StoreDatabase(TestFiles(directory), MutableClock(), driver)
 
     // Migrations.
 
@@ -129,7 +130,7 @@ class StoreDatabaseTest {
             TranscriptCodec.FORMAT_VERSION + 1 to TranscriptCodec.encode(message("rocket of the future")),
             TranscriptCodec.FORMAT_VERSION to TranscriptCodec.encode(message("The rocket is back")),
         )
-        openStore(file, STORE_MIGRATIONS.take(5), now).use { connection ->
+        openStore(driver, file, STORE_MIGRATIONS.take(5), now).use { connection ->
             connection.inTransaction(now) {
                 for ((format, body) in bodies) {
                     execute(
@@ -163,10 +164,10 @@ class StoreDatabaseTest {
 
     @Test
     fun `opening a store again runs no step`() {
-        openStore(file, steps, MutableClock().instant).close()
+        openStore(driver, file, steps, MutableClock().instant).close()
         val schema = connect(file).use { it.schema() }
 
-        openStore(file, steps, MutableClock().instant).close()
+        openStore(driver, file, steps, MutableClock().instant).close()
 
         assertEquals(listOf("a", "b"), runs)
         assertEquals(schema, connect(file).use { it.schema() })
@@ -175,8 +176,8 @@ class StoreDatabaseTest {
 
     @Test
     fun `a store goes on from the version it has`() {
-        openStore(file, steps.take(1), MutableClock().instant).close()
-        openStore(file, steps, MutableClock().instant).close()
+        openStore(driver, file, steps.take(1), MutableClock().instant).close()
+        openStore(driver, file, steps, MutableClock().instant).close()
 
         assertEquals(listOf("a", "b"), runs)
         assertEquals(setOf("a", "b"), connect(file).use { it.tables() })
@@ -189,7 +190,7 @@ class StoreDatabaseTest {
             execute("INSERT INTO missing VALUES (1)")
         }
 
-        val error = assertFailsWith<IllegalStateException> { openStore(file, failing, MutableClock().instant) }
+        val error = assertFailsWith<IllegalStateException> { openStore(driver, file, failing, MutableClock().instant) }
 
         assertContains(error.message!!, "to schema version 2 (c)")
         connect(file).use {
@@ -231,7 +232,7 @@ class StoreDatabaseTest {
             listOf("journal_mode", "synchronous", "foreign_keys", "busy_timeout").map { rows("PRAGMA $it").single() }
         }
 
-        assertEquals(listOf(listOf("wal"), listOf(1), listOf(1), listOf(5000)), pragmas)
+        assertEquals(listOf(listOf("wal"), listOf(1L), listOf(1L), listOf(5000L)), pragmas)
     }
 
     @Test
@@ -323,7 +324,7 @@ class StoreDatabaseTest {
     /** A store of schema [version] that holds the unended turn `t1` of [main]. */
     private fun storeWithTurn(version: Int) {
         val now = MutableClock().instant
-        openStore(file, STORE_MIGRATIONS.take(version), now).use { connection ->
+        openStore(driver, file, STORE_MIGRATIONS.take(version), now).use { connection ->
             connection.inTransaction(now) {
                 val chatId = chatId(chat)
                 execute(
@@ -340,23 +341,18 @@ class StoreDatabaseTest {
         }
     }
 
-    private fun java.sql.Connection.indexes(table: String): List<String> = createStatement().use { statement ->
-        statement.executeQuery("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = '$table'").use {
-            buildList { while (it.next()) add(it.getString(1)) }
-        }
-    }
+    private fun SqliteConnection.indexes(table: String): List<String> =
+        texts("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = '$table'")
 
     private fun golden(name: String): String =
         checkNotNull(javaClass.getResource("/golden/$name")) { "No golden file $name." }.readText()
 
     /** The store's version and objects as SQL. */
-    private fun java.sql.Connection.sql(): String {
-        val objects = createStatement().use { statement ->
-            statement.executeQuery(
-                "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' " +
-                    "ORDER BY tbl_name, type = 'index', name",
-            ).use { buildList { while (it.next()) add(it.getString(1)) } }
-        }
+    private fun SqliteConnection.sql(): String {
+        val objects = texts(
+            "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' " +
+                "ORDER BY tbl_name, type = 'index', name",
+        )
         val statements = objects.map { sql ->
             sql.lines().map { it.trim() }.filter { it.isNotEmpty() }.mapIndexed { index, line ->
                 if (index == 0 || line.startsWith(")")) line else "    $line"
@@ -365,9 +361,5 @@ class StoreDatabaseTest {
         return (listOf("PRAGMA user_version = ${userVersion()}") + statements).joinToString(";\n\n", postfix = ";\n")
     }
 
-    private fun java.sql.Connection.schema(): List<String> = createStatement().use { statement ->
-        statement.executeQuery("SELECT sql FROM sqlite_master ORDER BY name").use {
-            buildList { while (it.next()) add(it.getString(1).orEmpty()) }
-        }
-    }
+    private fun SqliteConnection.schema(): List<String> = texts("SELECT sql FROM sqlite_master ORDER BY name")
 }

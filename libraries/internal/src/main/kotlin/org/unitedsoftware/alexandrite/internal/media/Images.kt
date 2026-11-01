@@ -1,17 +1,10 @@
 package org.unitedsoftware.alexandrite.internal.media
 
-import java.awt.Color
-import java.awt.RenderingHints
-import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.IOException
-import javax.imageio.IIOImage
-import javax.imageio.ImageIO
-import javax.imageio.ImageReader
-import javax.imageio.ImageWriteParam
-import javax.imageio.stream.MemoryCacheImageInputStream
-import kotlin.math.roundToInt
+/** The longest side, in pixels, of an image sent to a model. */
+public const val MAX_IMAGE_SIDE: Int = 1568
+
+/** The most bytes of an image sent to a model. */
+public const val MAX_IMAGE_BYTES: Int = 5_000_000
 
 /** The IANA media type that [bytes]' magic bytes declare, null when none of them match. */
 public fun imageType(bytes: ByteArray): String? = when {
@@ -25,7 +18,7 @@ public fun imageType(bytes: ByteArray): String? = when {
     else -> null
 }
 
-/** An image ready to send a model: [bytes] of [mediaType], [width] by [height] pixels. */
+/** An image ready to send a model: [bytes] of [mediaType], [width] by [height] pixels, 0 by 0 when unknown. */
 public class NormalizedImage(
     public val bytes: ByteArray,
     public val mediaType: String,
@@ -33,88 +26,41 @@ public class NormalizedImage(
     public val height: Int,
 )
 
-/** The width and height [bytes] declare as decoded, without scaling, null when they cannot be read that cheaply. */
-public fun imageDimensions(bytes: ByteArray): Pair<Int, Int>? {
-    val sniffed = imageType(bytes) ?: return null
-    if (sniffed == "image/webp") return webpDimensions(bytes)
-    val opened = opened(bytes) ?: return null
-    return (opened.width to opened.height).also {
-        opened.reader.dispose()
-        opened.stream.close()
-    }
+/**
+ * The width and height that the header of [bytes], a png, jpeg, gif or webp of [mediaType], declares; null for another
+ * type or a header that does not tell.
+ */
+public fun headerDimensions(bytes: ByteArray, mediaType: String): Pair<Int, Int>? = when (mediaType) {
+    "image/png" -> if (bytes.size >= 24 && bytes.matches(12, IHDR)) readBe32(bytes, 16) to readBe32(bytes, 20) else null
+    "image/gif" -> if (bytes.size >= 10) readLe16(bytes, 6) to readLe16(bytes, 8) else null
+    "image/jpeg" -> jpegDimensions(bytes)
+    "image/webp" -> webpDimensions(bytes)
+    else -> null
 }
 
 /**
- * [bytes] fit to send a model: at most [maxSide] pixels on the longer side and [maxBytes] in size, null when
- * [bytes] cannot be decoded as an image.
- *
- * An already-fitting png, jpeg or (non-animated) gif passes through unchanged. A webp passes through unchanged when
- * it already fits [maxBytes], else null: ImageIO has no built-in decoder to shrink it. Everything else is scaled and
- * re-encoded, PNG when it has an alpha channel and fits, else JPEG at a falling quality, the pixel size halved up to
- * four times if it still does not fit. An oversized animated gif becomes its first frame as PNG. Refuses (null)
- * images above 50 megapixels before decoding their raster.
+ * [bytes], an image of [mediaType], unchanged where a model takes them so: a png, jpeg or gif at most [maxSide] pixels
+ * on its longer side, or a webp, within [maxBytes]; null otherwise.
  */
-public fun normalizedImage(bytes: ByteArray, maxSide: Int = 1568, maxBytes: Int = 5_000_000): NormalizedImage? {
-    val sniffed = imageType(bytes) ?: return null
-    if (sniffed == "image/webp") return webpImage(bytes, maxBytes)
-    val opened = opened(bytes) ?: return null
-    val reader = opened.reader
-    try {
-        val width = opened.width
-        val height = opened.height
-        if (width.toLong() * height.toLong() > BOMB_PIXELS) return null
-        val withinLimits = bytes.size <= maxBytes && maxOf(width, height) <= maxSide
-        if (withinLimits && sniffed in PASSTHROUGH_TYPES) return NormalizedImage(bytes, sniffed, width, height)
-        val decoded = try {
-            reader.read(0)
-        } catch (e: IOException) {
-            return null
-        }
-        if (sniffed == "image/gif") {
-            val target = scaledTo(decoded, maxSide)
-            return NormalizedImage(encodePng(target), "image/png", target.width, target.height)
-        }
-        return encoded(decoded, maxSide, maxBytes)
-    } finally {
-        reader.dispose()
-        opened.stream.close()
-    }
-}
-
-/** An [ImageReader] set up to decode [bytes], with the [width] and [height] it already reports. */
-private class OpenedReader(
-    val reader: ImageReader,
-    val stream: MemoryCacheImageInputStream,
-    val width: Int,
-    val height: Int,
-)
-
-/** [bytes] opened by the first [ImageReader] that claims them, null when none does or its header is unreadable. */
-private fun opened(bytes: ByteArray): OpenedReader? {
-    val stream = MemoryCacheImageInputStream(ByteArrayInputStream(bytes))
-    val reader = ImageIO.getImageReaders(stream).asSequence().firstOrNull() ?: run {
-        stream.close()
-        return null
-    }
-    reader.input = stream
-    return try {
-        OpenedReader(reader, stream, reader.getWidth(0), reader.getHeight(0))
-    } catch (e: IOException) {
-        reader.dispose()
-        stream.close()
-        null
-    }
-}
-
-/** [bytes] unchanged when within [maxBytes], else null: ImageIO cannot re-encode a webp it did not decode. */
-private fun webpImage(bytes: ByteArray, maxBytes: Int): NormalizedImage? {
+public fun unchangedImage(
+    bytes: ByteArray,
+    mediaType: String,
+    maxSide: Int = MAX_IMAGE_SIDE,
+    maxBytes: Int = MAX_IMAGE_BYTES,
+): NormalizedImage? {
     if (bytes.size > maxBytes) return null
-    val (width, height) = webpDimensions(bytes) ?: (0 to 0)
-    return NormalizedImage(bytes, "image/webp", width, height)
+    if (mediaType == "image/webp") {
+        val (width, height) = webpDimensions(bytes) ?: (0 to 0)
+        return NormalizedImage(bytes, mediaType, width, height)
+    }
+    if (mediaType !in PASSTHROUGH_TYPES) return null
+    val (width, height) = headerDimensions(bytes, mediaType) ?: return null
+    if (width <= 0 || height <= 0 || maxOf(width, height) > maxSide) return null
+    return NormalizedImage(bytes, mediaType, width, height)
 }
 
 /** The canvas size a webp's `VP8X`, `VP8L` or `VP8 ` chunk declares, null when it cannot be read that cheaply. */
-private fun webpDimensions(bytes: ByteArray): Pair<Int, Int>? {
+internal fun webpDimensions(bytes: ByteArray): Pair<Int, Int>? {
     if (bytes.size < 30) return null
     return when (String(bytes, 12, 4, Charsets.US_ASCII)) {
         "VP8X" -> (readLe24(bytes, 24) + 1) to (readLe24(bytes, 27) + 1)
@@ -124,86 +70,28 @@ private fun webpDimensions(bytes: ByteArray): Pair<Int, Int>? {
     }
 }
 
-/** [decoded] scaled to [maxSide], then PNG when it has alpha and fits [maxBytes], else JPEG at a falling quality. */
-private fun encoded(decoded: BufferedImage, maxSide: Int, maxBytes: Int): NormalizedImage {
-    val hasAlpha = decoded.colorModel.hasAlpha()
-    val target = scaledTo(decoded, maxSide)
-    if (hasAlpha) {
-        val png = encodePng(target)
-        if (png.size <= maxBytes) return NormalizedImage(png, "image/png", target.width, target.height)
-    }
-    var current = target
-    var halvings = 0
-    while (true) {
-        for ((index, quality) in JPEG_QUALITY_LADDER.withIndex()) {
-            val jpeg = encodeJpeg(current, quality)
-            val lastTry = halvings == MAX_HALVINGS && index == JPEG_QUALITY_LADDER.lastIndex
-            if (jpeg.size <= maxBytes || lastTry) {
-                return NormalizedImage(jpeg, "image/jpeg", current.width, current.height)
+/** The size the first start-of-frame marker of a jpeg declares, null when none comes before its scan. */
+private fun jpegDimensions(bytes: ByteArray): Pair<Int, Int>? {
+    var at = 2
+    while (at + 3 < bytes.size) {
+        if (bytes[at] != 0xFF.toByte()) return null
+        val marker = bytes[at + 1].toInt() and 0xFF
+        when {
+            marker == 0xFF -> at++
+
+            marker == 0x01 || marker in 0xD0..0xD8 -> at += 2
+
+            marker == 0xD9 || marker == 0xDA -> return null
+
+            marker in 0xC0..0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC -> {
+                if (at + 8 >= bytes.size) return null
+                return readBe16(bytes, at + 7) to readBe16(bytes, at + 5)
             }
+
+            else -> at += 2 + readBe16(bytes, at + 2)
         }
-        current = halved(current)
-        halvings++
     }
-}
-
-private fun encodePng(image: BufferedImage): ByteArray {
-    val output = ByteArrayOutputStream()
-    ImageIO.write(image, "png", output)
-    return output.toByteArray()
-}
-
-private fun encodeJpeg(image: BufferedImage, quality: Float): ByteArray {
-    val writer = ImageIO.getImageWritersByFormatName("jpg").next()
-    val params = writer.defaultWriteParam.apply {
-        compressionMode = ImageWriteParam.MODE_EXPLICIT
-        compressionQuality = quality
-    }
-    val output = ByteArrayOutputStream()
-    try {
-        ImageIO.createImageOutputStream(output).use { target ->
-            writer.output = target
-            writer.write(null, IIOImage(toOpaque(image), null, null), params)
-        }
-    } finally {
-        writer.dispose()
-    }
-    return output.toByteArray()
-}
-
-/** [image] over a white background, its alpha channel dropped: a JPEG writer refuses one. */
-private fun toOpaque(image: BufferedImage): BufferedImage {
-    if (!image.colorModel.hasAlpha()) return image
-    val opaque = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_RGB)
-    val g = opaque.createGraphics()
-    g.color = Color.WHITE
-    g.fillRect(0, 0, image.width, image.height)
-    g.drawImage(image, 0, 0, null)
-    g.dispose()
-    return opaque
-}
-
-/** [image] unchanged when its longer side is at most [maxSide], else scaled proportionally down to it. */
-private fun scaledTo(image: BufferedImage, maxSide: Int): BufferedImage {
-    val longest = maxOf(image.width, image.height)
-    if (longest <= maxSide) return image
-    val scale = maxSide.toDouble() / longest
-    return resized(image, maxOf(1, (image.width * scale).roundToInt()), maxOf(1, (image.height * scale).roundToInt()))
-}
-
-private fun halved(image: BufferedImage): BufferedImage =
-    resized(image, maxOf(1, image.width / 2), maxOf(1, image.height / 2))
-
-private fun resized(image: BufferedImage, width: Int, height: Int): BufferedImage {
-    val type = if (image.colorModel.hasAlpha()) BufferedImage.TYPE_INT_ARGB else BufferedImage.TYPE_INT_RGB
-    val scaled = BufferedImage(width, height, type)
-    val g = scaled.createGraphics()
-    g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
-    g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
-    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-    g.drawImage(image, 0, 0, width, height, null)
-    g.dispose()
-    return scaled
+    return null
 }
 
 private fun heicType(bytes: ByteArray): String? {
@@ -227,7 +115,14 @@ private fun readLe24(bytes: ByteArray, offset: Int): Int =
 private fun readLe32(bytes: ByteArray, offset: Int): Int =
     readLe24(bytes, offset) or ((bytes[offset + 3].toInt() and 0xFF) shl 24)
 
+private fun readBe16(bytes: ByteArray, offset: Int): Int =
+    ((bytes[offset].toInt() and 0xFF) shl 8) or (bytes[offset + 1].toInt() and 0xFF)
+
+private fun readBe32(bytes: ByteArray, offset: Int): Int =
+    (readBe16(bytes, offset) shl 16) or readBe16(bytes, offset + 2)
+
 private val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+private val IHDR = "IHDR".toByteArray(Charsets.US_ASCII)
 private val JPEG_SIGNATURE = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte())
 private val GIF87A = "GIF87a".toByteArray(Charsets.US_ASCII)
 private val GIF89A = "GIF89a".toByteArray(Charsets.US_ASCII)
@@ -239,7 +134,6 @@ private val TIFF_BE = byteArrayOf(0x4D, 0x4D, 0x00, 0x2A)
 private val FTYP = "ftyp".toByteArray(Charsets.US_ASCII)
 private val HEIC_BRANDS = setOf("heic", "heix", "heim", "heis", "hevc", "hevx", "hevm", "hevs")
 private val HEIF_BRANDS = setOf("mif1", "msf1")
-private val PASSTHROUGH_TYPES = setOf("image/png", "image/jpeg", "image/gif")
-private val JPEG_QUALITY_LADDER = floatArrayOf(0.85f, 0.7f, 0.5f)
-private const val MAX_HALVINGS = 4
-private const val BOMB_PIXELS = 50_000_000L
+
+/** The types that pass unchanged when they fit. */
+internal val PASSTHROUGH_TYPES: Set<String> = setOf("image/png", "image/jpeg", "image/gif")

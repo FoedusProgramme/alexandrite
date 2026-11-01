@@ -15,6 +15,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.unitedsoftware.alexandrite.internal.path.hasPosixPermissions
 import org.unitedsoftware.alexandrite.internal.path.syncDirectory
 import org.unitedsoftware.alexandrite.internal.path.writeNewFile
 import org.unitedsoftware.alexandrite.runtime.AlexandriteRuntime
@@ -282,11 +283,7 @@ private fun isReference(value: JsonElement): Boolean =
 
 /** Puts [next] in the place of [target] through its backup, which then keeps [previous]. */
 private fun replace(target: Path, previous: ByteArray, next: ByteArray) {
-    val permissions = try {
-        Files.getPosixFilePermissions(target)
-    } catch (e: UnsupportedOperationException) {
-        null
-    }
+    val permissions = if (hasPosixPermissions(target)) Files.getPosixFilePermissions(target) else null
     val backup = configBackup(target)
     try {
         create(backup, next, permissions)

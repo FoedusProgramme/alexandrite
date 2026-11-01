@@ -27,6 +27,7 @@ import java.nio.file.InvalidPathException
 import java.nio.file.LinkOption
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.nio.file.attribute.BasicFileAttributes
 
 /** What [block] returns, or the failed result that a [ToolRefusal] or an I/O error makes. */
@@ -59,7 +60,7 @@ internal suspend fun ToolContext.absolute(argument: String): Path {
 
 /** The path [argument] names, a leading `~` as the home directory, null when it is no valid path. */
 private fun pathOf(argument: String): Path? = try {
-    Path.of(expandHome(argument))
+    Paths.get(expandHome(argument))
 } catch (e: InvalidPathException) {
     null
 }

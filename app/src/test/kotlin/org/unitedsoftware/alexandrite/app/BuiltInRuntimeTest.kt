@@ -72,7 +72,12 @@ class BuiltInRuntimeTest {
     private companion object {
         const val NOTES_INDEX = "com.example.notes.NotesIndex"
 
-        /** The built-in engines the app leaves out, keeping the JDK defaults. */
-        val LEFT_OUT = setOf("alexandrite-engine-okhttp")
+        /** The built-in plugins that the distribution leaves out, for hosts that embed the runtime elsewhere. */
+        val LEFT_OUT = setOf(
+            "alexandrite-store-memory",
+            "alexandrite-engine-okhttp",
+            "alexandrite-engine-jsoup",
+            "alexandrite-engine-sqlite-bundled",
+        )
     }
 }

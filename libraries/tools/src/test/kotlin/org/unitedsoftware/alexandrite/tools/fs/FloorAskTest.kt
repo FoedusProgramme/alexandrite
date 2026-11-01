@@ -7,6 +7,7 @@ import org.unitedsoftware.alexandrite.sdk.permission.ClearanceKind
 import org.unitedsoftware.alexandrite.sdk.tool.ReviewPreview
 import org.unitedsoftware.alexandrite.testkit.testHardFloor
 import org.unitedsoftware.alexandrite.testkit.testUser
+import org.unitedsoftware.alexandrite.tools.media.AWT_CODEC
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -30,7 +31,7 @@ class FloorAskTest {
     @Test
     fun `a read of a place the floor asks about names it for a person`() {
         val notes = fs.write("asked/notes.txt", "hello\n")
-        val read = ReadTool(floor, ReadLedger())
+        val read = ReadTool(floor, ReadLedger(), AWT_CODEC)
 
         val review = runBlocking { read.review(arguments("path" to notes), fs.context()) }
 
@@ -42,7 +43,7 @@ class FloorAskTest {
 
     @Test
     fun `a place both refused and asked about is refused`() {
-        val read = ReadTool(floor, ReadLedger())
+        val read = ReadTool(floor, ReadLedger(), AWT_CODEC)
         val key = fs.secret.resolve("key.txt")
 
         assertNull(runBlocking { read.review(arguments("path" to key), fs.context()) }.person)

@@ -32,6 +32,7 @@ import org.unitedsoftware.alexandrite.testkit.testToolContext
 import org.unitedsoftware.alexandrite.tools.browse.FakeBackend
 import org.unitedsoftware.alexandrite.tools.browse.PIXEL
 import org.unitedsoftware.alexandrite.tools.browse.args
+import org.unitedsoftware.alexandrite.tools.media.AWT_CODEC
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
@@ -46,7 +47,7 @@ import kotlin.test.assertTrue
 class BrowserToolTest {
     private fun tool(backend: FakeBackend = FakeBackend()): Pair<ReviewedTool, FakeBackend> {
         val config = WebConfig(browserBackend = "fake")
-        val source = BrowserTools(config, listOf(backend))
+        val source = BrowserTools(config, listOf(backend), AWT_CODEC)
         return source.tools.value.single() as ReviewedTool to backend
     }
 
@@ -191,13 +192,13 @@ class BrowserToolTest {
     @Test
     fun `no browser backend configured, no tool offered`() {
         val config = WebConfig()
-        assertTrue(BrowserTools(config, listOf(FakeBackend())).tools.value.isEmpty())
+        assertTrue(BrowserTools(config, listOf(FakeBackend()), AWT_CODEC).tools.value.isEmpty())
         assertFailsWith<IllegalArgumentException> {
-            BrowserTools(WebConfig(browserBackend = "other"), listOf(FakeBackend()))
+            BrowserTools(WebConfig(browserBackend = "other"), listOf(FakeBackend()), AWT_CODEC)
         }
         assertFailsWith<IllegalArgumentException> {
             val desktop = FakeBackend(surface = BrowseSurface.DESKTOP)
-            BrowserTools(WebConfig(browserBackend = "fake"), listOf(desktop))
+            BrowserTools(WebConfig(browserBackend = "fake"), listOf(desktop), AWT_CODEC)
         }
     }
 
@@ -236,7 +237,7 @@ class BrowserToolTest {
     fun `Pleochroic's limits shape the schema, and a step it does not know is refused`() = runBlocking {
         val config = WebConfig(browserBackend = PLEOCHROIC_WEB_ID)
         val browser = PleochroicBrowser(config, testHttpEngine())
-        val tool = BrowserTools(config, listOf(browser)).tools.value.single() as ReviewedTool
+        val tool = BrowserTools(config, listOf(browser), AWT_CODEC).tools.value.single() as ReviewedTool
         val properties = tool.definition.parameters["properties"]!!.jsonObject
 
         assertFalse("button" in properties || "count" in properties || "x" in properties)

@@ -1,6 +1,7 @@
 package org.unitedsoftware.alexandrite.agent.skill
 
 import org.unitedsoftware.alexandrite.internal.hash.sha256Hex
+import org.unitedsoftware.alexandrite.internal.io.readAtMost
 import org.unitedsoftware.alexandrite.internal.path.hardLinks
 import org.unitedsoftware.alexandrite.internal.path.openRegularFile
 import org.unitedsoftware.alexandrite.internal.text.Utf8Text
@@ -28,7 +29,7 @@ internal fun readSkill(file: Path, oneLink: Boolean): SkillText? = try {
     if (!attributes.isRegularFile || (oneLink && hardLinks(file) > 1) || attributes.size() > MAX_SKILL_BYTES) {
         null
     } else {
-        parseSkill(openRegularFile(file, oneLink).use { it.readNBytes(MAX_SKILL_BYTES + 1) })
+        parseSkill(openRegularFile(file, oneLink).use { it.readAtMost(MAX_SKILL_BYTES + 1) })
     }
 } catch (e: IOException) {
     null

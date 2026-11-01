@@ -94,7 +94,7 @@ internal class AllowCommands(
     }
 
     private fun dateOf(instant: Instant, replies: Replies): LocalDate =
-        LocalDate.ofInstant(instant, replies.zone ?: clock.zone)
+        instant.atZone(replies.zone ?: clock.zone).toLocalDate()
 
     private companion object {
         const val ALLOW = "allow"

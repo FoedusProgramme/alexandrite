@@ -46,7 +46,7 @@ class SandboxesTest {
     private val asked: Path by lazy { root.resolve("asked") }
     private val turn = testTurn { agent(AgentId("coder")).actor(testUser("operator", isOperator = true)) }
 
-    private fun harness(sandbox: String, environment: RecordingEnvironment = RecordingEnvironment("seatbelt")) =
+    private fun harness(sandbox: String, environment: RecordingEnvironment? = RecordingEnvironment("seatbelt")) =
         agentHarness(
             """
             {
@@ -60,7 +60,7 @@ class SandboxesTest {
         ) {
             dataRoot(data)
             configFile(configFile)
-            executionEnvironment(environment)
+            environment?.let { executionEnvironment(it) }
         }
 
     private fun PluginHarness.Running.sandboxes(): Sandboxes = get<Sandboxes>()
@@ -97,6 +97,16 @@ class SandboxesTest {
         harness("""{"type": "seatbelt"}""", RecordingEnvironment("seatbelt", available = false)).assertStartFails(
             StartStage.GRAPH,
             "Invalid config at 'agent.agents.coder.sandbox.type': the sandbox 'seatbelt' is not available on this host",
+        )
+    }
+
+    @Test
+    fun `without any sandbox contributed, auto runs on the host and a named sandbox fails the start`() {
+        harness("""{"type": "auto"}""", environment = null).execute { assertNull(sandboxes().sandbox(turn, null)) }
+        harness("""{"type": "seatbelt"}""", environment = null).assertStartFails(
+            StartStage.GRAPH,
+            "Invalid config at 'agent.agents.coder.sandbox.type': no plugin contributes the sandbox 'seatbelt'. " +
+                "Sandboxes: none.",
         )
     }
 

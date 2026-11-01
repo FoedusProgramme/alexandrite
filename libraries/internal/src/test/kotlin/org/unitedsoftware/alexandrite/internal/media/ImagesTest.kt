@@ -45,7 +45,7 @@ class ImagesTest {
     fun `a png within the limits passes through unchanged`() {
         val png = encode(image(100, 60, alpha = false), "png")
 
-        val normalized = assertNotNullReport(normalizedImage(png))
+        val normalized = assertNotNullReport(AwtImages.normalized(png))
 
         assertContentEquals(png, normalized.bytes)
         assertEquals("image/png" to (100 to 60), normalized.mediaType to (normalized.width to normalized.height))
@@ -55,7 +55,7 @@ class ImagesTest {
     fun `a jpeg wider than the longer side is scaled down proportionally`() {
         val jpeg = encode(image(2000, 500, alpha = false), "jpg")
 
-        val normalized = assertNotNullReport(normalizedImage(jpeg, maxSide = 1568, maxBytes = 5_000_000))
+        val normalized = assertNotNullReport(AwtImages.normalized(jpeg, maxSide = 1568, maxBytes = 5_000_000))
 
         assertEquals("image/jpeg", normalized.mediaType)
         assertEquals(1568 to 392, normalized.width to normalized.height)
@@ -65,7 +65,7 @@ class ImagesTest {
     fun `a wide image with alpha is scaled and re-encoded as png`() {
         val png = encode(image(2000, 500, alpha = true), "png")
 
-        val normalized = assertNotNullReport(normalizedImage(png, maxSide = 1568, maxBytes = 5_000_000))
+        val normalized = assertNotNullReport(AwtImages.normalized(png, maxSide = 1568, maxBytes = 5_000_000))
 
         assertEquals("image/png", normalized.mediaType)
         assertEquals(1568 to 392, normalized.width to normalized.height)
@@ -77,7 +77,7 @@ class ImagesTest {
     fun `a bmp is converted away from its own format`() {
         val bmp = encode(image(300, 150, alpha = false), "bmp")
 
-        val normalized = assertNotNullReport(normalizedImage(bmp))
+        val normalized = assertNotNullReport(AwtImages.normalized(bmp))
 
         assertNotEquals("image/bmp", normalized.mediaType)
         assertEquals(300 to 150, normalized.width to normalized.height)
@@ -87,7 +87,7 @@ class ImagesTest {
     fun `the jpeg ladder gives up after four halvings when the budget can never be met`() {
         val png = encode(image(1568, 1568, alpha = false), "png")
 
-        val normalized = assertNotNullReport(normalizedImage(png, maxSide = 1568, maxBytes = 1))
+        val normalized = assertNotNullReport(AwtImages.normalized(png, maxSide = 1568, maxBytes = 1))
 
         assertEquals("image/jpeg", normalized.mediaType)
         assertEquals(98 to 98, normalized.width to normalized.height)
@@ -97,7 +97,7 @@ class ImagesTest {
     fun `a webp passes through within its budget, its canvas size read from its header`() {
         val webp = fakeWebp(width = 300, height = 200, totalSize = 1000)
 
-        val normalized = assertNotNullReport(normalizedImage(webp, maxBytes = 2000))
+        val normalized = assertNotNullReport(AwtImages.normalized(webp, maxBytes = 2000))
 
         assertContentEquals(webp, normalized.bytes)
         assertEquals("image/webp" to (300 to 200), normalized.mediaType to (normalized.width to normalized.height))
@@ -107,18 +107,18 @@ class ImagesTest {
     fun `a webp over its budget cannot be shrunk`() {
         val webp = fakeWebp(width = 300, height = 200, totalSize = 2000)
 
-        assertNull(normalizedImage(webp, maxBytes = 1000))
+        assertNull(AwtImages.normalized(webp, maxBytes = 1000))
     }
 
     @Test
     fun `an image this version has no decoder for is refused`() {
-        assertNull(normalizedImage(fakeHeic("heic")))
-        assertNull(normalizedImage("not an image at all".toByteArray()))
+        assertNull(AwtImages.normalized(fakeHeic("heic")))
+        assertNull(AwtImages.normalized("not an image at all".toByteArray()))
     }
 
     @Test
     fun `an image above 50 megapixels is refused`() {
-        assertNull(normalizedImage(fakeBombBmp(width = 10_000, height = 10_000)))
+        assertNull(AwtImages.normalized(fakeBombBmp(width = 10_000, height = 10_000)))
     }
 
     private fun <T> assertNotNullReport(value: T?): T = value ?: error("expected a normalized image, got null")

@@ -11,6 +11,7 @@ import org.unitedsoftware.alexandrite.agent.skill.Skill
 import org.unitedsoftware.alexandrite.agent.skill.SkillScope
 import org.unitedsoftware.alexandrite.agent.skill.Skills
 import org.unitedsoftware.alexandrite.agent.trust.FolderTrust
+import org.unitedsoftware.alexandrite.internal.io.readAtMost
 import org.unitedsoftware.alexandrite.internal.path.openRegularFile
 import org.unitedsoftware.alexandrite.sdk.chat.ChatUser
 import org.unitedsoftware.alexandrite.sdk.chat.ConversationId
@@ -240,7 +241,7 @@ internal class Instructions(val text: String, val cutFrom: Long?)
  */
 internal fun read(file: Path, oneLink: Boolean): Instructions? {
     val bytes = try {
-        openRegularFile(file, oneLink).use { it.readNBytes(MAX_INSTRUCTION_BYTES + 1) }
+        openRegularFile(file, oneLink).use { it.readAtMost(MAX_INSTRUCTION_BYTES + 1) }
     } catch (e: IOException) {
         logger.warn("Cannot read the project instructions {}: {}", file, e.toString())
         return null

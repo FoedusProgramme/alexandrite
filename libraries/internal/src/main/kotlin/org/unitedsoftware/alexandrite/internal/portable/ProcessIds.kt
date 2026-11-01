@@ -3,7 +3,7 @@ package org.unitedsoftware.alexandrite.internal.portable
 import java.nio.file.Files
 import java.nio.file.Paths
 
-/** Process ids, where the platform tells them: through `ProcessHandle` on the JDK, through `/proc` on Linux without it. */
+/** Process ids, where `ProcessHandle` or `/proc` tells them. */
 public object ProcessIds {
     /** This process's id, null where neither tells it. */
     public val current: Long? by lazy {
@@ -11,7 +11,7 @@ public object ProcessIds {
             ?: currentFromProc()
     }
 
-    /** [process]'s id, null where `Process.pid` is missing (as on Android). */
+    /** [process]'s id, null where `Process.pid` is missing. */
     public fun of(process: Process): Long? = if (JdkFeatures.processHandles) pidOf(process) else null
 
     @JdkOnly

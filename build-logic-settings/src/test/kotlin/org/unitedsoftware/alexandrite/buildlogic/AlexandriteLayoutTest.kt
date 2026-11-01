@@ -361,6 +361,17 @@ class AlexandriteLayoutTest {
     }
 
     @Test
+    fun `the modules of the portable layers are checked, except the ones made for the desktop JVM alone`() {
+        val bundled = ":libraries:engines:sqlite-bundled"
+        val xerial = ":libraries:engines:sqlite-xerial"
+
+        val portable = listOf(sdk, internals, runtime, agent, tools, commands, openAi, providerCommon, bundled)
+
+        assertEquals(portable, (portable + listOf(xerial, telegram, app)).filter { module(it).portable })
+        assertTrue(AlexandriteLayout.JDK_ONLY_MODULES.all { module(it).layer in AlexandriteLayout.PORTABLE_LAYERS })
+    }
+
+    @Test
     fun `no two locations share a directory and every layer has one`() {
         val directories = AlexandriteLayout.LOCATIONS.map { it.directory }
         assertEquals(directories.distinct(), directories)
@@ -762,6 +773,16 @@ class AlexandriteLayoutTest {
         assertAllowed(providerCommon, testkit, "testImplementation")
         assertAllowed(providerCommon, testkit, "testFixturesApi")
         assertForbidden(providerCommon, testkit, "api")
+    }
+
+    @Test
+    fun `a store tests over the engines but runs on none of them`() {
+        val engine = ":libraries:engines:sqlite-bundled"
+
+        assertAllowed(sqlite, engine, "testImplementation")
+        assertForbidden(sqlite, engine)
+        assertForbidden(sqlite, engine, "runtimeOnly")
+        assertForbidden(engine, sqlite, "testImplementation")
     }
 
     @Test
