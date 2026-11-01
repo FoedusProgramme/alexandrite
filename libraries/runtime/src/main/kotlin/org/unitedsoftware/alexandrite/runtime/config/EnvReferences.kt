@@ -12,7 +12,7 @@ public object EnvReferences {
     public const val HOW_TO_WRITE: String =
         "Write \${env:NAME} to insert an environment variable, or \$\${ for a literal \${."
 
-    private val REFERENCE = Regex("\\$\\{env:(${NAME.pattern})}")
+    private val REFERENCE = Regex("\\$\\{env:(${NAME.pattern})\\}")
 
     /** The reference to the variable [name]. */
     public fun of(name: String): String = "\${env:$name}"

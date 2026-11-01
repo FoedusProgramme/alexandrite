@@ -42,7 +42,7 @@ public fun discoverOpenClaw(home: Path): DiscoveredSource? {
 private fun JsonObject.obj(name: String): JsonObject? = this[name] as? JsonObject
 private fun JsonObject.array(name: String): JsonArray? = this[name] as? JsonArray
 
-private val SHELL_STYLE_VARIABLE = Regex("\\$\\{([A-Za-z_][A-Za-z0-9_]*)}")
+private val SHELL_STYLE_VARIABLE = Regex("\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}")
 
 private fun resolveShellStyleReferences(server: DiscoveredMcpServer): DiscoveredMcpServer = DiscoveredMcpServer(
     name = server.name,

@@ -20,8 +20,8 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /** A bare variable name, as `${env:NAME}` and `${secret:NAME}` both spell it locally and on the wire. */
 private val VARIABLE_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
-private val ENV_REF = Regex("^\\$\\{env:(${VARIABLE_NAME.pattern})}$")
-private val SECRET_REF = Regex("^\\$\\{secret:(${VARIABLE_NAME.pattern})}$")
+private val ENV_REF = Regex("^\\$\\{env:(${VARIABLE_NAME.pattern})\\}$")
+private val SECRET_REF = Regex("^\\$\\{secret:(${VARIABLE_NAME.pattern})\\}$")
 
 /** The `NAME` of [text] when it is a whole local `${'$'}{env:NAME}` reference, null otherwise. */
 public fun envReferenceName(text: String): String? = ENV_REF.matchEntire(text)?.groupValues?.get(1)

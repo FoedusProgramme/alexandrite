@@ -368,7 +368,7 @@ private val RUBRIC = """
 """.trimIndent()
 
 private val FENCED =
-    Regex("```(?:json)?\\s*(\\{.*})\\s*```", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+    Regex("```(?:json)?\\s*(\\{.*\\})\\s*```", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
 
 /** Runs of white space and of invisible or reordering characters. */
 private val BLANKS = Regex("[\\s\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]+")
