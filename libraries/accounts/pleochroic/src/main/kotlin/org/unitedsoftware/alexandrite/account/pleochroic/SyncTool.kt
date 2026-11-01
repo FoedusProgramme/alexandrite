@@ -16,12 +16,13 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.slf4j.LoggerFactory
-import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import org.unitedsoftware.alexandrite.sdk.config.ConfigEditException
 import org.unitedsoftware.alexandrite.sdk.config.HostConfig
 import org.unitedsoftware.alexandrite.sdk.di.Contribute
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import org.unitedsoftware.alexandrite.sdk.permission.ClearanceKind
 import org.unitedsoftware.alexandrite.sdk.runtime.HostPaths
 import org.unitedsoftware.alexandrite.sdk.tool.CallReview
@@ -46,7 +47,7 @@ import kotlin.time.Duration.Companion.seconds
  */
 @Singleton
 @Contribute(ToolSource::class)
-internal class PleochroicTools(hostConfig: HostConfig, paths: HostPaths) : ToolSource {
+internal class PleochroicTools(hostConfig: HostConfig, paths: HostPaths, engine: HttpEngine) : ToolSource {
     override val namespace: String = "pleochroic"
 
     private val offered = MutableStateFlow(
@@ -55,7 +56,7 @@ internal class PleochroicTools(hostConfig: HostConfig, paths: HostPaths) : ToolS
             val tool = SyncTool(
                 HostConfigSyncLocal(hostConfig, configFile, secrets),
                 SyncStateFile.inDataDirectory(paths.dataRoot),
-                AccountTransports(hostConfig, secrets),
+                AccountTransports(hostConfig, secrets, engine),
             )
             listOf(tool.asTool())
         }.orEmpty(),
@@ -70,13 +71,17 @@ internal interface SyncTransports {
 }
 
 /**
- * Reaches the account that the config's [SIGNED_IN_PATH] names now, its key's `${'$'}{env:NAME}` read from the
- * environment, then [secrets], as the CLI reads it.
+ * Reaches the account that the config's [SIGNED_IN_PATH] names now through [engine], its key's `${'$'}{env:NAME}` read
+ * from the environment, then [secrets], as the CLI reads it.
  */
-private class AccountTransports(private val hostConfig: HostConfig, private val secrets: Path) : SyncTransports {
+private class AccountTransports(
+    private val hostConfig: HostConfig,
+    private val secrets: Path,
+    private val engine: HttpEngine,
+) : SyncTransports {
     override suspend fun <T> using(block: suspend (SyncTransport) -> T): T {
         val (apiBase, key) = signedIn() ?: throw Refused(NOT_SIGNED_IN)
-        return HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds)).use {
+        return HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds), engine).use {
             block(HttpSyncTransport(it, apiBase, key))
         }
     }

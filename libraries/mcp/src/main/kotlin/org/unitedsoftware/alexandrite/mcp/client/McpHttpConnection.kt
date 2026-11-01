@@ -14,13 +14,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import org.unitedsoftware.alexandrite.internal.http.HttpCall
-import org.unitedsoftware.alexandrite.internal.http.HttpException
-import org.unitedsoftware.alexandrite.internal.http.HttpFailureKind
-import org.unitedsoftware.alexandrite.internal.http.HttpResponseStream
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
-import org.unitedsoftware.alexandrite.internal.http.SseEvent
-import org.unitedsoftware.alexandrite.internal.http.SseParser
+import org.unitedsoftware.alexandrite.http.common.HttpCall
+import org.unitedsoftware.alexandrite.http.common.HttpException
+import org.unitedsoftware.alexandrite.http.common.HttpFailureKind
+import org.unitedsoftware.alexandrite.http.common.HttpResponseStream
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.SseEvent
+import org.unitedsoftware.alexandrite.http.common.SseParser
 import java.net.URI
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -91,7 +91,7 @@ internal class McpHttpConnection(
             val response = try {
                 transport.open(post.call) { stream ->
                     if (method == INITIALIZE) {
-                        sessionId = stream.headers.firstValue(McpHeaders.SESSION_ID).orElse(null)
+                        sessionId = stream.headers[McpHeaders.SESSION_ID]
                     }
                     answer(stream, id, method)
                 }
@@ -295,7 +295,7 @@ internal class McpHttpConnection(
         authorized: Boolean,
     ): McpException {
         val status = e.status
-        val challenge = e.headers?.allValues(WWW_AUTHENTICATE)?.joinToString(", ")?.ifEmpty { null }
+        val challenge = e.headers?.all(WWW_AUTHENTICATE)?.joinToString(", ")?.ifEmpty { null }
         return when {
             status == UNAUTHORIZED || (status == FORBIDDEN && challenge != null) ->
                 McpUnauthorized(challenge, "The server refused $what with HTTP $status.", status, authorized)

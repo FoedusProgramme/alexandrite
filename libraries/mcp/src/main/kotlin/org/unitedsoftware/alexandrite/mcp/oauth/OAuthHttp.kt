@@ -3,10 +3,10 @@ package org.unitedsoftware.alexandrite.mcp.oauth
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import org.unitedsoftware.alexandrite.internal.http.HttpCall
-import org.unitedsoftware.alexandrite.internal.http.HttpException
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
-import org.unitedsoftware.alexandrite.internal.http.printable
+import org.unitedsoftware.alexandrite.http.common.HttpCall
+import org.unitedsoftware.alexandrite.http.common.HttpException
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.printable
 import org.unitedsoftware.alexandrite.mcp.client.string
 import org.unitedsoftware.alexandrite.mcp.isLoopback
 import java.net.URI
@@ -97,7 +97,7 @@ internal class OAuthHttp(private val transport: HttpTransport) {
     }
 }
 
-internal fun encode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8)
+internal fun encode(value: String): String = URLEncoder.encode(value, "UTF-8")
 
 /** [text] as an https URI, or an http one on the loopback interface, else the failure that names it [what]. */
 internal fun secureUri(text: String, what: String): URI {

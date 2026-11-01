@@ -8,7 +8,7 @@ description = "Alexandrite's schedule automation: tasks that run turns at set ti
 
 dependencies {
     api(project(":libraries:plugin-sdk"))
-    api(project(":libraries:automation-common"))
+    api(project(":libraries:common:automation"))
     implementation(project(":libraries:internal"))
 
     testImplementation(project(":libraries:testkit"))

@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.read
 import org.unitedsoftware.alexandrite.provider.common.responses.ResponsesEndpoint
 import org.unitedsoftware.alexandrite.provider.common.responses.ResponsesFlavor
@@ -28,7 +29,13 @@ class NativeSearchTest {
             EndpointSerializer.read(
                 """{"baseUrl": "${server.baseUrl}/v1", "discover": false, "nativeSearch": $enabled}""",
             )
-        return ResponsesEndpoint(ref.endpoint, config.settings, ResponsesFlavor.STANDARD, config.options)
+        return ResponsesEndpoint(
+            ref.endpoint,
+            config.settings,
+            JdkHttpEngine(),
+            ResponsesFlavor.STANDARD,
+            config.options,
+        )
     }
 
     @Test

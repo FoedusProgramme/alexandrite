@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.chat.ChatEndpoint
 import org.unitedsoftware.alexandrite.provider.common.chat.events
 import org.unitedsoftware.alexandrite.provider.common.read
@@ -37,7 +38,7 @@ class PleochroicLiveTest {
                 put("baseUrl", baseUrl)
             },
         )
-        return ChatEndpoint(EndpointId("live"), config.settings, PLEOCHROIC_FLAVOR)
+        return ChatEndpoint(EndpointId("live"), config.settings, JdkHttpEngine(), PLEOCHROIC_FLAVOR)
     }
 
     @Test

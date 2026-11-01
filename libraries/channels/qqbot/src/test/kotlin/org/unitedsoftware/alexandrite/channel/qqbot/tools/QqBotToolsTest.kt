@@ -10,6 +10,7 @@ import org.unitedsoftware.alexandrite.channel.qqbot.net.QqBotHttp
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.FakeApiServer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.MutableClock
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.testConfig
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelMessageRef
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
@@ -167,7 +168,7 @@ class QqBotToolsTest {
         init {
             server.on("/app/getAppAccessToken", """{"access_token":"access","expires_in":"7200"}""")
             val config = testConfig(server.base)
-            http = QqBotHttp(config)
+            http = QqBotHttp(config, JdkHttpEngine())
             val tokens = QqBotTokens(config, http, MutableClock(Instant.parse("2026-07-21T00:00:00Z")))
             apis.register(instance, QqBotApi(http, tokens))
             read = QqBotReadTool(apis)

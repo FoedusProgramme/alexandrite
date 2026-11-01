@@ -14,6 +14,7 @@ import org.unitedsoftware.alexandrite.channel.telegram.TelegramHarness.Companion
 import org.unitedsoftware.alexandrite.channel.telegram.TelegramHarness.Companion.GROUP
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeChat
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeUser
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.runtime.AlexandriteRuntime
 import org.unitedsoftware.alexandrite.runtime.RuntimeConfig
 import org.unitedsoftware.alexandrite.runtime.RuntimeSpec
@@ -325,7 +326,8 @@ class TelegramPairingTest {
                 """"allowedChats": ["${'$'}{env:BOB_CHAT}", $ADA], "polling": {"timeoutSeconds": 1}}}}}}"""
         Files.writeString(file, written)
         val config = RuntimeConfig.builder(directory.resolve("data")).build()
-        val plugins = PluginSet.of(AlexandriteChannelTelegramIndex()) + SubmitterIndex(submitter)
+        val plugins =
+            PluginSet.of(AlexandriteChannelTelegramIndex(), AlexandriteEngineJdkHttpIndex()) + SubmitterIndex(submitter)
         val spec = RuntimeSpec.builder(config, plugins).configFile(file, environment).build()
 
         runBlocking {

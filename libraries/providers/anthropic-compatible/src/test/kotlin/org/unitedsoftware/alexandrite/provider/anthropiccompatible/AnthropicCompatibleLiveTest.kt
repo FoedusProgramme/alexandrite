@@ -9,6 +9,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.ModelConfig
 import org.unitedsoftware.alexandrite.provider.common.messages.MessagesEndpoint
 import org.unitedsoftware.alexandrite.provider.common.messages.MessagesFlavor
@@ -65,7 +66,13 @@ class AnthropicCompatibleLiveTest {
                 }
             },
         )
-        return MessagesEndpoint(EndpointId("live"), config.settings, MessagesFlavor.STANDARD, config.options)
+        return MessagesEndpoint(
+            EndpointId("live"),
+            config.settings,
+            JdkHttpEngine(),
+            MessagesFlavor.STANDARD,
+            config.options,
+        )
     }
 
     private fun request(

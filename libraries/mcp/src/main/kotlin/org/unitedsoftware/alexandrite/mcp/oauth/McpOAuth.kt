@@ -11,7 +11,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.slf4j.LoggerFactory
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import org.unitedsoftware.alexandrite.internal.text.cutWithEllipsis
 import org.unitedsoftware.alexandrite.mcp.McpSettings
 import org.unitedsoftware.alexandrite.mcp.OAuthSpec
@@ -40,6 +40,8 @@ internal class McpOAuth(
     transport: HttpTransport,
     private val scope: CoroutineScope,
     private val clock: Clock,
+    /** Whether this host can listen for the browser's return from a login. */
+    val callbacks: Boolean,
     private val reconnect: (String) -> Unit,
 ) {
     private val http = OAuthHttp(transport)
@@ -62,6 +64,10 @@ internal class McpOAuth(
     /** Opens the public callback when the config names one. */
     fun open() {
         if (settings.callback.publicOrigin == null) return
+        if (!callbacks) {
+            logger.warn("MCP servers cannot log in: {}", NO_CALLBACK)
+            return
+        }
         try {
             publicListener()
         } catch (e: OAuthException) {
@@ -131,6 +137,7 @@ internal class McpOAuth(
     /** Starts a login to [server], whose authorization link the operator opens. */
     suspend fun start(server: String): LoginStart {
         val transport = loginTransport(server)
+        if (!callbacks) throw OAuthException("MCP server $server cannot log in: $NO_CALLBACK")
         val resourceMetadata = discovery.resource(transport.url, challenges[server])
         val resource = resource(transport.url, resourceMetadata)
         val metadata = discovery.authorizationServer(resourceMetadata.authorizationServers.first())
@@ -499,6 +506,7 @@ internal class McpOAuth(
         const val CLIENT_NAME: String = "Alexandrite"
         const val CALLBACK: String = "callback"
         const val DOCUMENT: String = "client.json"
+        const val NO_CALLBACK: String = "this host has no HTTP server for the OAuth callback."
         val LOGIN_TTL: kotlin.time.Duration = 10.minutes
         private val REFRESH_AHEAD = 1.minutes
         private const val TOKENS = "oauth.tokens"
@@ -530,7 +538,7 @@ internal class McpOAuth(
         }
 
         private fun decode(text: String): String = try {
-            URLDecoder.decode(text, Charsets.UTF_8)
+            URLDecoder.decode(text, "UTF-8")
         } catch (e: IllegalArgumentException) {
             throw OAuthException("The address is not encoded properly: copy the whole address.")
         }

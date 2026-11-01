@@ -8,6 +8,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.ModelConfig
 import org.unitedsoftware.alexandrite.provider.common.read
 import org.unitedsoftware.alexandrite.provider.common.responses.ResponsesEndpoint
@@ -60,7 +61,13 @@ class OpenAiResponsesLiveTest {
                 putJsonObject("models") { put(model, Json.encodeToJsonElement(ModelConfig.serializer(), reasoning)) }
             },
         )
-        return ResponsesEndpoint(EndpointId("live"), config.settings, ResponsesFlavor.STANDARD, config.options)
+        return ResponsesEndpoint(
+            EndpointId("live"),
+            config.settings,
+            JdkHttpEngine(),
+            ResponsesFlavor.STANDARD,
+            config.options,
+        )
     }
 
     private fun request(history: List<TranscriptEntry>, round: Int, block: ModelRequest.Builder.() -> Unit) =

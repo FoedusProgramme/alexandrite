@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.agent.AlexandriteAgentIndex
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
 import org.unitedsoftware.alexandrite.sdk.transcript.AssistantEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
@@ -68,7 +69,7 @@ class RepositoryQuestionTest {
             }
             .reply { text("greet(name) in Greeter.kt says hello to name.") }
         val store = MemoryStore()
-        val harness = PluginHarness.builder(AlexandriteAgentIndex())
+        val harness = PluginHarness.builder(AlexandriteAgentIndex()).plugin(AlexandriteEngineJdkHttpIndex())
             .plugin(AlexandriteToolsIndex())
             .config(config)
             .store(store)

@@ -25,7 +25,7 @@ import org.unitedsoftware.alexandrite.discovery.DiscoveredSkill
 import org.unitedsoftware.alexandrite.discovery.discoverAll
 import org.unitedsoftware.alexandrite.discovery.importSkill
 import org.unitedsoftware.alexandrite.discovery.secretArgs
-import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
+import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
 import org.unitedsoftware.alexandrite.internal.time.zoneOrNull
 import org.unitedsoftware.alexandrite.runtime.config.EnvReferences
 import org.unitedsoftware.alexandrite.sdk.chat.LanguageTag
@@ -828,8 +828,9 @@ private class Setup(override val cli: Cli, override val options: InitOptions) : 
 
     private fun syncLocal() = HostConfigSyncLocal(CliHostConfig(cli), cli.locations.configFile, cli.secrets)
 
-    private fun pleochroicHttp() = org.unitedsoftware.alexandrite.internal.http.HttpTransport(
+    private fun pleochroicHttp() = org.unitedsoftware.alexandrite.http.common.HttpTransport(
         HttpTimeouts(10.seconds, 30.seconds, 30.seconds),
+        cliEngine,
     )
 
     // Web search and fetch.

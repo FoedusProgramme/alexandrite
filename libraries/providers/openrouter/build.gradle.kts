@@ -7,9 +7,10 @@ description = "The OpenRouter model provider of Alexandrite"
 
 dependencies {
     api(project(":libraries:plugin-sdk"))
-    implementation(project(":libraries:provider-common"))
+    implementation(project(":libraries:common:provider"))
 
     testImplementation(project(":libraries:testkit"))
-    testImplementation(testFixtures(project(":libraries:provider-common")))
+    testImplementation(testFixtures(project(":libraries:common:provider")))
     testRuntimeOnly(libs.logback.classic)
+    testImplementation(project(":libraries:engines:jdk-http"))
 }

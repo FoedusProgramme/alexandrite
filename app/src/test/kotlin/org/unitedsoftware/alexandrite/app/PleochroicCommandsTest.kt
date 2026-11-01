@@ -24,7 +24,7 @@ private const val SECRET_NAME = "PROVIDERS_PLEOCHROIC_ENDPOINTS_DEFAULT_API_KEY"
 
 /**
  * The Pleochroic account commands, which now make their calls through the `libraries/accounts/pleochroic` library's
- * real [org.unitedsoftware.alexandrite.internal.http.HttpTransport] against a loopback [FakeModelServer] that
+ * real [org.unitedsoftware.alexandrite.http.common.HttpTransport] against a loopback [FakeModelServer] that
  * serves both the portal's device endpoints and the account's own `apiBase`, since nothing but a test overrides the
  * fixed portal URL.
  */

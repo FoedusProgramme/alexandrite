@@ -10,6 +10,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.mcp.client.McpClientOptions
 import org.unitedsoftware.alexandrite.mcp.client.McpImplementation
 import org.unitedsoftware.alexandrite.mcp.fake.FakeStdioServers
@@ -98,6 +99,7 @@ internal fun withHub(
     config: McpConfig,
     records: Records = testRecords(PLUGIN),
     clock: Clock = Clock.systemUTC(),
+    callbacks: Boolean = true,
     block: suspend Hub.() -> Unit,
 ) = realTime {
     val scope = CoroutineScope(SupervisorJob())
@@ -110,6 +112,8 @@ internal fun withHub(
         QUICK,
         records,
         clock,
+        JdkHttpEngine(),
+        callbacks,
     )
     try {
         hub.onOpen()

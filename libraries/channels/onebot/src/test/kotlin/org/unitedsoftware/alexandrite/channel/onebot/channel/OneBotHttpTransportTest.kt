@@ -11,6 +11,7 @@ import org.unitedsoftware.alexandrite.channel.onebot.auth.Value
 import org.unitedsoftware.alexandrite.channel.onebot.transport.OneBotHttpApi
 import org.unitedsoftware.alexandrite.channel.onebot.transport.OneBotWire
 import org.unitedsoftware.alexandrite.channel.onebot.transport.envelopeResult
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.sdk.config.Secret
 import java.io.BufferedInputStream
 import java.io.OutputStreamWriter
@@ -32,7 +33,7 @@ import kotlin.test.assertTrue
 class OneBotHttpTransportTest {
     private val peer = Peer()
     private val token = Value.of(Secret("s3cr3t-token"))
-    private val client = OneBotHttpApi("http://127.0.0.1:${peer.port}", token, 5_000, 5_000, 5_000)
+    private val client = OneBotHttpApi("http://127.0.0.1:${peer.port}", token, JdkHttpEngine(), 5_000, 5_000, 5_000)
 
     @AfterTest
     fun close() {
@@ -82,7 +83,7 @@ class OneBotHttpTransportTest {
 
     @Test
     fun `an implementation that is not there is unreachable, not a refusal`() {
-        val absent = OneBotHttpApi("http://127.0.0.1:1", token, 1_000, 1_000, 1_000)
+        val absent = OneBotHttpApi("http://127.0.0.1:1", token, JdkHttpEngine(), 1_000, 1_000, 1_000)
         try {
             val result = runBlocking { absent.call("get_status", JsonObject(emptyMap())) }
             assertIs<org.unitedsoftware.alexandrite.channel.onebot.protocol.result.OneBotResult.Unreachable>(result)

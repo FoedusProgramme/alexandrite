@@ -2,8 +2,9 @@ package org.unitedsoftware.alexandrite.account.pleochroic
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
-import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
+import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
 import kotlin.test.Test
@@ -13,7 +14,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
-private fun transport() = HttpTransport(HttpTimeouts(5.seconds, 5.seconds, 5.seconds))
+private fun transport() = HttpTransport(HttpTimeouts(5.seconds, 5.seconds, 5.seconds), JdkHttpEngine())
 
 class PleochroicAccountTest {
     @Test

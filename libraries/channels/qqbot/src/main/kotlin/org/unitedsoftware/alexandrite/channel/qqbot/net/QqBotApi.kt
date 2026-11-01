@@ -7,8 +7,8 @@ import org.unitedsoftware.alexandrite.channel.qqbot.auth.QqBotTokens
 import org.unitedsoftware.alexandrite.channel.qqbot.protocol.QqBotFailure
 import org.unitedsoftware.alexandrite.channel.qqbot.protocol.QqBotWire
 import org.unitedsoftware.alexandrite.channel.qqbot.protocol.failureOf
-import org.unitedsoftware.alexandrite.internal.http.HttpCall
-import org.unitedsoftware.alexandrite.internal.http.HttpException
+import org.unitedsoftware.alexandrite.http.common.HttpCall
+import org.unitedsoftware.alexandrite.http.common.HttpException
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -42,8 +42,8 @@ internal class QqBotApi(private val http: QqBotHttp, private val tokens: QqBotTo
     private fun withQuery(path: String, query: Map<String, String>): String {
         if (query.isEmpty()) return path
         val encoded = query.entries.joinToString("&") { (name, value) ->
-            "${java.net.URLEncoder.encode(name, Charsets.UTF_8)}=" +
-                java.net.URLEncoder.encode(value, Charsets.UTF_8)
+            "${java.net.URLEncoder.encode(name, "UTF-8")}=" +
+                java.net.URLEncoder.encode(value, "UTF-8")
         }
         return "$path?$encoded"
     }

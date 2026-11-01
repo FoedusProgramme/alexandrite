@@ -10,7 +10,7 @@ import org.unitedsoftware.alexandrite.agent.media.MediaReading
 import org.unitedsoftware.alexandrite.agent.media.MediaRoute
 import org.unitedsoftware.alexandrite.agent.tinyGif
 import org.unitedsoftware.alexandrite.agent.tinyPng
-import org.unitedsoftware.alexandrite.internal.media.AwtImages
+import org.unitedsoftware.alexandrite.engine.awtimages.AwtImageCodec
 import org.unitedsoftware.alexandrite.sdk.channel.IncomingMessage
 import org.unitedsoftware.alexandrite.sdk.channel.MediaAttachment
 import org.unitedsoftware.alexandrite.sdk.channel.MediaContent
@@ -412,13 +412,5 @@ private class Media(private val store: MediaStore) : MediaStore by store {
     override suspend fun read(id: MediaId): ByteArray? = store.read(id).also { reads += id }
 }
 
-/** The codec the runtime binds on the JDK. */
-private object AwtCodec : ImageCodec {
-    override fun dimensions(bytes: ByteArray, mediaType: String): ImageDimensions? =
-        AwtImages.dimensions(bytes)?.let { ImageDimensions(it.first, it.second) }
-
-    override fun fitted(bytes: ByteArray, mediaType: String, maxSide: Int, maxBytes: Int): FittedImage? =
-        AwtImages.normalized(bytes, maxSide, maxBytes)?.let {
-            FittedImage(it.bytes, it.mediaType, ImageDimensions(it.width, it.height).takeIf { _ -> it.width > 0 })
-        }
-}
+/** The codec the desktop host binds. */
+private val AwtCodec: ImageCodec = AwtImageCodec()

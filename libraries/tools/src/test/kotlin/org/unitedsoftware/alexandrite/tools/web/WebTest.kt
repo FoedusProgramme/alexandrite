@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.internal.sandbox.isNonPublicAddress
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
 import org.unitedsoftware.alexandrite.sdk.transcript.ModelRef
@@ -385,7 +386,7 @@ class WebTest {
                     body("""{"results":[{"title":"Two","url":"https://example.com/b","content":"body"}]}""")
                 },
             )
-            val http = SearchHttp(WebConfig())
+            val http = SearchHttp(WebConfig(), JdkHttpEngine())
             val brave = braveResults(http.send(braveCall("a & b", 3, "fixture-key", server.baseUrl)), 3)
             val tavily = tavilyResults(http.send(tavilyCall("question", 2, "fixture-key", server.baseUrl)), 2)
             assertEquals("desc", brave.single().snippet)
@@ -441,7 +442,7 @@ class WebTest {
                     )
                 },
             )
-            val http = SearchHttp(WebConfig())
+            val http = SearchHttp(WebConfig(), JdkHttpEngine())
             val searxng = searxngResults(http.send(searxngCall("a & b", 5, server.baseUrl)), 5)
             val duckDuckGo = duckDuckGoResults(http.sendText(duckDuckGoCall("a & b", server.baseUrl)), 1)
             assertEquals(listOf("first", "second"), searxng.map { it.snippet })

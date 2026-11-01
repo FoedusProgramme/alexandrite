@@ -13,7 +13,7 @@ import org.unitedsoftware.alexandrite.channel.qqbot.protocol.QqBotWire
 import org.unitedsoftware.alexandrite.channel.qqbot.protocol.asTextOrNull
 import org.unitedsoftware.alexandrite.channel.qqbot.protocol.failureOf
 import org.unitedsoftware.alexandrite.channel.qqbot.protocol.number
-import org.unitedsoftware.alexandrite.internal.http.HttpCall
+import org.unitedsoftware.alexandrite.http.common.HttpCall
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import java.time.Clock
 import java.time.Instant

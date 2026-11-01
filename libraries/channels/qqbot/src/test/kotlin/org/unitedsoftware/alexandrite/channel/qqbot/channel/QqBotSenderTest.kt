@@ -8,6 +8,7 @@ import org.unitedsoftware.alexandrite.channel.qqbot.testing.FakeApiServer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.MutableClock
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.PlatformAnswer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.testConfig
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.sdk.channel.Delivery
 import org.unitedsoftware.alexandrite.sdk.channel.DeliveryFailure
 import org.unitedsoftware.alexandrite.sdk.channel.Markup
@@ -290,10 +291,10 @@ class QqBotSenderTest {
             server.on(SEND_GROUP, """{"id":"sent1","timestamp":"2026-07-21T10:00:00+08:00"}""")
             server.on(SEND_DIRECT, """{"id":"sent1","timestamp":"2026-07-21T10:00:00+08:00"}""")
             val config = testConfig(server.base)
-            http = QqBotHttp(config)
+            http = QqBotHttp(config, JdkHttpEngine())
             val tokens = QqBotTokens(config, http, clock)
             val api = QqBotApi(http, tokens)
-            sender = QqBotSender(api, QqBotUploads(api, config), QqBotSentMessages(), index)
+            sender = QqBotSender(api, QqBotUploads(api, config, JdkHttpEngine()), QqBotSentMessages(), index)
         }
 
         override fun close() {

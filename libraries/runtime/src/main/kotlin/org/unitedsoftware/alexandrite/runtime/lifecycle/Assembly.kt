@@ -18,7 +18,6 @@ import org.unitedsoftware.alexandrite.runtime.config.EnabledPlugin
 import org.unitedsoftware.alexandrite.runtime.config.HostConfigFile
 import org.unitedsoftware.alexandrite.runtime.config.resolveConfig
 import org.unitedsoftware.alexandrite.runtime.configFailure
-import org.unitedsoftware.alexandrite.runtime.engine.contentEngineBindings
 import org.unitedsoftware.alexandrite.runtime.hook.HookDecisionListener
 import org.unitedsoftware.alexandrite.runtime.hook.HookFailureListener
 import org.unitedsoftware.alexandrite.runtime.i18n.RuntimeTexts
@@ -208,7 +207,7 @@ internal class Assembly(
             context,
             spec.agentPlaces,
         )
-        Container.build(plugins + PluginBindings(runtime.id, runtime.bindings + contentEngineBindings(plugins)))
+        Container.build(plugins + runtime)
     } catch (e: Exception) {
         interruption(e)?.let { throw it }
         val problems = (e as? DiException)?.problems.orEmpty()

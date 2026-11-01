@@ -19,12 +19,13 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
-import org.unitedsoftware.alexandrite.internal.http.HttpCall
-import org.unitedsoftware.alexandrite.internal.http.HttpException
-import org.unitedsoftware.alexandrite.internal.http.HttpFailureKind
-import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
-import org.unitedsoftware.alexandrite.internal.http.SseEvent
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
+import org.unitedsoftware.alexandrite.http.common.HttpCall
+import org.unitedsoftware.alexandrite.http.common.HttpException
+import org.unitedsoftware.alexandrite.http.common.HttpFailureKind
+import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.SseEvent
 import org.unitedsoftware.alexandrite.sdk.chat.ToolCallId
 import org.unitedsoftware.alexandrite.sdk.model.FinishKind
 import org.unitedsoftware.alexandrite.sdk.model.FinishReason
@@ -176,7 +177,7 @@ internal class ReferenceEndpoint(private val base: String, private val flaw: Fla
     var closed: Boolean = false
         private set
 
-    private val transport = HttpTransport(HttpTimeouts(2.seconds, 20.seconds, 20.seconds))
+    private val transport = HttpTransport(HttpTimeouts(2.seconds, 20.seconds, 20.seconds), JdkHttpEngine())
 
     private val detached = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

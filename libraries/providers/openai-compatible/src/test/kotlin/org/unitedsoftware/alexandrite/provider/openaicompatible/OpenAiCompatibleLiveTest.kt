@@ -7,6 +7,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.EndpointSettings
 import org.unitedsoftware.alexandrite.provider.common.chat.ChatEndpoint
 import org.unitedsoftware.alexandrite.provider.common.chat.ChatFlavor
@@ -43,7 +44,7 @@ class OpenAiCompatibleLiveTest {
     private fun live(): ChatEndpoint {
         assumeTrue(baseUrl != null && model != null, "No live endpoint is configured.")
         val settings = EndpointSettings(baseUrl!!, apiKey?.let(::Secret))
-        return ChatEndpoint(EndpointId("live"), settings, ChatFlavor.STANDARD)
+        return ChatEndpoint(EndpointId("live"), settings, JdkHttpEngine(), ChatFlavor.STANDARD)
     }
 
     private fun request(history: List<TranscriptEntry>, round: Int, block: ModelRequest.Builder.() -> Unit) =

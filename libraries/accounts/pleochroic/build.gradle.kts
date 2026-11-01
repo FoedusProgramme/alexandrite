@@ -8,8 +8,10 @@ description = "A Pleochroic account: sign-in, status and two-way config/secret/s
 dependencies {
     api(project(":libraries:plugin-sdk"))
     implementation(project(":libraries:internal"))
+    implementation(project(":libraries:common:http"))
 
     testImplementation(project(":libraries:testkit"))
     testImplementation(libs.kotlinx.coroutines.test)
     testRuntimeOnly(libs.logback.classic)
+    testImplementation(project(":libraries:engines:jdk-http"))
 }

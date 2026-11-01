@@ -1,13 +1,12 @@
 package org.unitedsoftware.alexandrite.channel.qqbot.channel
 
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -21,13 +20,14 @@ import org.unitedsoftware.alexandrite.sdk.channel.OutboundFile
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 import org.unitedsoftware.alexandrite.sdk.chat.ChatKind
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngineRequest
+import org.unitedsoftware.alexandrite.sdk.net.HttpRequestBody
 import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
+import java.net.URISyntaxException
 import java.security.MessageDigest
-import java.time.Duration
 import java.util.Base64
+import kotlin.time.Duration.Companion.milliseconds
 
 /** The largest file the platform takes in a message, whatever its type. */
 internal const val QQ_BOT_MAX_FILE_BYTES: Long = 200L * 1024 * 1024
@@ -48,14 +48,11 @@ internal sealed class QqBotUpload {
  * file uploaded for one cannot be sent to the other.
  */
 @ChannelInstanceScoped
-internal class QqBotUploads(private val api: QqBotApi, private val config: QqBotInstanceConfig) : AutoCloseable {
-    private val client: HttpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofMillis(config.connectTimeoutMillis))
-        .followRedirects(HttpClient.Redirect.NORMAL)
-        .build()
-
-    override fun close() = client.close()
-
+internal class QqBotUploads(
+    private val api: QqBotApi,
+    private val config: QqBotInstanceConfig,
+    private val engine: HttpEngine,
+) {
     /** Uploads [file] for a message to [chat], or says why the platform did not take it. */
     suspend fun upload(chat: ChatAddress, file: OutboundFile): QqBotUpload {
         val kind = QqBotChats.kind(chat)
@@ -183,24 +180,31 @@ internal class QqBotUploads(private val api: QqBotApi, private val config: QqBot
         return QqBotUpload.Uploaded("")
     }
 
-    /** PUTs [block] to the presigned [url] of the platform's storage, apart from its API. */
-    private suspend fun put(url: String, block: ByteArray): QqBotUpload = withContext(Dispatchers.IO) {
-        try {
-            val request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofMillis(config.firstByteTimeoutMillis))
-                .PUT(HttpRequest.BodyPublishers.ofByteArray(block))
-                .build()
-            val response = client.send(request, HttpResponse.BodyHandlers.discarding())
-            if (response.statusCode() in 200..299) {
-                QqBotUpload.Uploaded("")
-            } else {
-                QqBotUpload.Failed("The platform's storage answered HTTP ${response.statusCode()} for a block.", null)
+    /** PUTs [block] to the presigned [url] of the platform's storage, apart from its API, following its redirects. */
+    private suspend fun put(url: String, block: ByteArray): QqBotUpload {
+        var target = url
+        repeat(MAX_REDIRECTS + 1) {
+            val (status, location) = try {
+                val request = HttpEngineRequest.builder("PUT", target)
+                    .body(HttpRequestBody.of(block))
+                    .connectTimeout(config.connectTimeoutMillis.milliseconds)
+                    .build()
+                withTimeoutOrNull(config.firstByteTimeoutMillis.milliseconds) {
+                    engine.open(request).use { it.status to it.headers["location"] }
+                } ?: return QqBotUpload.Failed("The platform's storage did not answer a block in time.", null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return QqBotUpload.Failed("The block could not be sent to the platform's storage: $e", null)
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            QqBotUpload.Failed("The block could not be sent to the platform's storage: $e", null)
+            val next = location?.takeIf { status in 300..399 }?.let { redirected(target, it) }
+            when {
+                status in 200..299 -> return QqBotUpload.Uploaded("")
+                next != null -> target = next
+                else -> return QqBotUpload.Failed("The platform's storage answered HTTP $status for a block.", null)
+            }
         }
+        return QqBotUpload.Failed("The platform's storage redirected a block more than $MAX_REDIRECTS times.", null)
     }
 
     /** What the platform answered to an upload call, as the file info it gave or the failure it named. */
@@ -285,6 +289,8 @@ internal class QqBotUploads(private val api: QqBotApi, private val config: QqBot
     private class Part(val index: Int, val url: String, val start: Long, val end: Long)
 
     private companion object {
+        const val MAX_REDIRECTS = 5
+
         const val IMAGE = 1
         const val VIDEO = 2
         const val VOICE = 3
@@ -311,4 +317,16 @@ internal class QqBotUploads(private val api: QqBotApi, private val config: QqBot
         val VIDEO_TYPES = setOf("video/mp4")
         val AUDIO_TYPES = setOf("audio/silk", "audio/mpeg", "audio/wav", "audio/ogg")
     }
+}
+
+/** Where [location] leads from [url], null when it is no address or leaves https for http. */
+private fun redirected(url: String, location: String): String? {
+    val next = try {
+        URI(url).resolve(location)
+    } catch (e: URISyntaxException) {
+        return null
+    } catch (e: IllegalArgumentException) {
+        return null
+    }
+    return next.toString().takeUnless { url.startsWith("https:") && next.scheme == "http" }
 }

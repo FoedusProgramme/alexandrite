@@ -1,6 +1,7 @@
 package org.unitedsoftware.alexandrite.provider.lmstudio
 
 import kotlinx.coroutines.runBlocking
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.runtime.RuntimeStartException
 import org.unitedsoftware.alexandrite.runtime.StartStage
 import org.unitedsoftware.alexandrite.sdk.model.ModelOptions
@@ -15,7 +16,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class LmStudioPluginTest {
-    private fun harness(config: String) = PluginHarness.builder(AlexandriteProviderLmstudioIndex()).config(config)
+    private fun harness(config: String) =
+        PluginHarness.builder(AlexandriteProviderLmstudioIndex()).plugin(AlexandriteEngineJdkHttpIndex()).config(config)
 
     @Test
     fun `an endpoint needs no settings and keeps turn context transient unless told otherwise`() = runBlocking {

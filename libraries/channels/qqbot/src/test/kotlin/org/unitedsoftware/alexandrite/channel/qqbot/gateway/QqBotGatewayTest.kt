@@ -11,6 +11,7 @@ import org.unitedsoftware.alexandrite.channel.qqbot.testing.FakeGatewayServer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.MutableClock
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.PlatformAnswer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.testConfig
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
@@ -29,7 +30,7 @@ class QqBotGatewayTest {
         api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
         val platform = FakeGatewayServer().startAndAwait()
         val config = testConfig(api.base, gatewayUrl = platform.url)
-        val http = QqBotHttp(config)
+        val http = QqBotHttp(config, JdkHttpEngine())
         try {
             val tokens = QqBotTokens(config, http, clock)
             val gateway = QqBotGateway(config, QqBotApi(http, tokens), tokens)
@@ -73,7 +74,7 @@ class QqBotGatewayTest {
         val platform = FakeGatewayServer().startAndAwait()
         api.on(GATEWAY_PATH, """{"url":"${platform.url}"}""")
         val config = testConfig(api.base)
-        val http = QqBotHttp(config)
+        val http = QqBotHttp(config, JdkHttpEngine())
         try {
             val tokens = QqBotTokens(config, http, clock)
             val gateway = QqBotGateway(config, QqBotApi(http, tokens), tokens)
@@ -102,7 +103,7 @@ class QqBotGatewayTest {
         }
         val platform = FakeGatewayServer().startAndAwait()
         val config = testConfig(api.base, gatewayUrl = platform.url)
-        val http = QqBotHttp(config)
+        val http = QqBotHttp(config, JdkHttpEngine())
         try {
             val tokens = QqBotTokens(config, http, clock)
             val gateway = QqBotGateway(config, QqBotApi(http, tokens), tokens)
@@ -129,7 +130,7 @@ class QqBotGatewayTest {
     @Test
     fun `the gateway's backoff grows and caps as failures repeat`() {
         val config = testConfig("http://127.0.0.1:1")
-        val http = QqBotHttp(config)
+        val http = QqBotHttp(config, JdkHttpEngine())
         try {
             val tokens = QqBotTokens(config, http, clock)
             val gateway = QqBotGateway(config, QqBotApi(http, tokens), tokens)
@@ -148,7 +149,7 @@ class QqBotGatewayTest {
         api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
         val platform = FakeGatewayServer().startAndAwait()
         val config = testConfig(api.base, gatewayUrl = platform.url)
-        val http = QqBotHttp(config)
+        val http = QqBotHttp(config, JdkHttpEngine())
         try {
             val tokens = QqBotTokens(config, http, clock)
             val gateway = QqBotGateway(config, QqBotApi(http, tokens), tokens)
@@ -175,7 +176,7 @@ class QqBotGatewayTest {
         api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
         val platform = FakeGatewayServer().startAndAwait()
         val config = testConfig(api.base, gatewayUrl = platform.url)
-        val http = QqBotHttp(config)
+        val http = QqBotHttp(config, JdkHttpEngine())
         try {
             val tokens = QqBotTokens(config, http, clock)
             val gateway = QqBotGateway(config, QqBotApi(http, tokens), tokens)
@@ -202,7 +203,7 @@ class QqBotGatewayTest {
         api.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
         val platform = FakeGatewayServer().startAndAwait()
         val config = testConfig(api.base, gatewayUrl = platform.url)
-        val http = QqBotHttp(config)
+        val http = QqBotHttp(config, JdkHttpEngine())
         try {
             val tokens = QqBotTokens(config, http, clock)
             val gateway = QqBotGateway(config, QqBotApi(http, tokens), tokens)

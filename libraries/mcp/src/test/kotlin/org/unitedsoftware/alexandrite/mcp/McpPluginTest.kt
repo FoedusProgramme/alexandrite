@@ -6,6 +6,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.mcp.fake.FakeStdioServers
 import org.unitedsoftware.alexandrite.runtime.RuntimeStartException
 import org.unitedsoftware.alexandrite.sdk.tool.ToolSource
@@ -20,8 +21,9 @@ import kotlin.time.Duration.Companion.seconds
 
 /** The plugin in a runtime: what it contributes, and the config problems that fail the start. */
 class McpPluginTest {
-    private fun harness(config: String): PluginHarness =
-        PluginHarness.builder(AlexandriteMcpIndex()).config(config).environment(mapOf("FAKE_TOKEN" to "tok-1")).build()
+    private fun harness(config: String): PluginHarness = PluginHarness.builder(
+        AlexandriteMcpIndex(),
+    ).plugin(AlexandriteEngineJdkHttpIndex()).config(config).environment(mapOf("FAKE_TOKEN" to "tok-1")).build()
 
     private val launch: String = """"command": ${quoted(FakeStdioServers.command)}, "args": ${
         JsonArray(FakeStdioServers.args("modern").map(::JsonPrimitive))

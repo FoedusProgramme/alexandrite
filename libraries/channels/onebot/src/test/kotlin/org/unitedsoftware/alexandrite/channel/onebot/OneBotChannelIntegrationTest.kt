@@ -8,6 +8,7 @@ import kotlinx.serialization.json.put
 import org.java_websocket.WebSocket
 import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.sdk.channel.Channel
 import org.unitedsoftware.alexandrite.sdk.channel.ChannelDirectory
 import org.unitedsoftware.alexandrite.sdk.channel.Delivery
@@ -58,7 +59,7 @@ class OneBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(submitter)
                     .build()
@@ -89,7 +90,7 @@ class OneBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(submitter)
                     .build()
@@ -114,7 +115,7 @@ class OneBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(submitter)
                     .build()
@@ -141,7 +142,7 @@ class OneBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(submitter)
                     .build()
@@ -168,7 +169,7 @@ class OneBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(submitter)
                     .build()
@@ -193,7 +194,7 @@ class OneBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(submitter)
                     .build()
@@ -216,7 +217,7 @@ class OneBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(submitter)
                     .build()
@@ -240,7 +241,7 @@ class OneBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(submitter)
                     .build()
@@ -270,7 +271,7 @@ class OneBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(submitter)
                     .build()
@@ -328,7 +329,7 @@ class OneBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(submitter)
                     .build()
@@ -383,7 +384,7 @@ class OneBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port, admins = setOf("12345678")))
                     .turnSubmitter(submitter)
                     .build()
@@ -409,7 +410,7 @@ class OneBotChannelIntegrationTest {
         try {
             val lines = runBlocking {
                 logged {
-                    PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                    PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                         .config(config(port))
                         .turnSubmitter(submitter)
                         .build()
@@ -440,7 +441,7 @@ class OneBotChannelIntegrationTest {
         val submitter = RecordingTurnSubmitter()
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(submitter)
                     .build()
@@ -481,7 +482,7 @@ class OneBotChannelIntegrationTest {
         val bytes = byteArrayOf(1, 2, 3)
         try {
             runBlocking {
-                PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                     .config(config(port))
                     .turnSubmitter(submitter)
                     .build()
@@ -521,7 +522,7 @@ class OneBotChannelIntegrationTest {
         try {
             val lines = runBlocking {
                 logged {
-                    PluginHarness.builder(AlexandriteChannelOnebotIndex())
+                    PluginHarness.builder(AlexandriteChannelOnebotIndex()).plugin(AlexandriteEngineJdkHttpIndex())
                         .config(config(port))
                         .turnSubmitter(submitter)
                         .build()

@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.messages.MessagesEndpoint
 import org.unitedsoftware.alexandrite.provider.common.messages.MessagesFlavor
 import org.unitedsoftware.alexandrite.provider.common.read
@@ -28,7 +29,13 @@ class NativeSearchTest {
             {"baseUrl": "${server.baseUrl}", "models": {"${ref.model}": {}}, "discover": false, "nativeSearch": $enabled}
             """.trimIndent(),
         )
-        return MessagesEndpoint(ref.endpoint, config.settings, MessagesFlavor.STANDARD, config.options)
+        return MessagesEndpoint(
+            ref.endpoint,
+            config.settings,
+            JdkHttpEngine(),
+            MessagesFlavor.STANDARD,
+            config.options,
+        )
     }
 
     @Test

@@ -7,6 +7,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.provider.common.chat.ChatEndpoint
 import org.unitedsoftware.alexandrite.provider.common.chat.events
 import org.unitedsoftware.alexandrite.provider.common.read
@@ -50,7 +51,7 @@ class DeepSeekLiveTest {
                 baseUrl?.let { put("baseUrl", it) }
             },
         )
-        return ChatEndpoint(EndpointId("live"), config.settings, DEEPSEEK_FLAVOR)
+        return ChatEndpoint(EndpointId("live"), config.settings, JdkHttpEngine(), DEEPSEEK_FLAVOR)
     }
 
     private fun request(history: List<TranscriptEntry>, round: Int, block: ModelRequest.Builder.() -> Unit) =

@@ -5,12 +5,13 @@ import org.unitedsoftware.alexandrite.provider.common.chat.ChatEndpoint
 import org.unitedsoftware.alexandrite.sdk.di.Contribute
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
 import org.unitedsoftware.alexandrite.sdk.model.ModelProvider
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 
 @Singleton
 @Contribute(ModelProvider::class)
-internal class PleochroicProvider(config: PleochroicConfig) :
+internal class PleochroicProvider(config: PleochroicConfig, engine: HttpEngine) :
     EndpointProvider<ChatEndpoint>(
         config.endpoints.map { (id, endpoint) ->
-            ChatEndpoint(id, endpoint.settings, PLEOCHROIC_FLAVOR)
+            ChatEndpoint(id, endpoint.settings, engine, PLEOCHROIC_FLAVOR)
         },
     )

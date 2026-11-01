@@ -9,6 +9,7 @@ description = "Alexandrite's MCP client, which offers the tools of MCP servers t
 dependencies {
     api(project(":libraries:plugin-sdk"))
     implementation(project(":libraries:internal"))
+    implementation(project(":libraries:common:http"))
 
     testFixturesImplementation(libs.kotlinx.serialization.json)
     testFixturesImplementation(project(":libraries:plugin-sdk"))
@@ -16,4 +17,5 @@ dependencies {
     testImplementation(project(":libraries:testkit"))
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.logback.classic)
+    testImplementation(project(":libraries:engines:jdk-http"))
 }

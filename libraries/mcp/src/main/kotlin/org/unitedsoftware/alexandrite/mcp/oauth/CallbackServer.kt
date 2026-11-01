@@ -3,6 +3,8 @@ package org.unitedsoftware.alexandrite.mcp.oauth
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
+import org.unitedsoftware.alexandrite.internal.portable.JdkFeatures
+import org.unitedsoftware.alexandrite.internal.portable.JdkOnly
 import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -14,8 +16,9 @@ internal class CallbackPage(val status: Int, val text: String)
 
 /**
  * A listener on 127.0.0.1:[port] that hands the query of each GET of [callbackPath] to [complete] and serves
- * [document], when given, at [documentPath].
+ * [document], when given, at [documentPath]. It needs [JdkFeatures.httpServer].
  */
+@JdkOnly
 internal class CallbackServer private constructor(
     private val server: HttpServer,
     private val executor: ExecutorService,
@@ -30,6 +33,7 @@ internal class CallbackServer private constructor(
         }, "mcp-oauth-callback-stop").apply { isDaemon = true }.start()
     }
 
+    @JdkOnly
     companion object {
         /** A listener on [port], any free one when 0, null when it cannot listen there. */
         fun open(

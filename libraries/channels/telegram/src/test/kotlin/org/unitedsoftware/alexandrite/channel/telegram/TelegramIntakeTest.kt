@@ -10,6 +10,7 @@ import org.unitedsoftware.alexandrite.channel.telegram.TelegramHarness.Companion
 import org.unitedsoftware.alexandrite.channel.telegram.api.HttpBotApi
 import org.unitedsoftware.alexandrite.channel.telegram.api.SendMessage
 import org.unitedsoftware.alexandrite.channel.telegram.fake.FakeUser
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.runtime.RuntimeProblemKind
 import org.unitedsoftware.alexandrite.runtime.RuntimeStartException
 import org.unitedsoftware.alexandrite.runtime.TextCatalog
@@ -83,7 +84,9 @@ class TelegramIntakeTest {
     @Test
     fun `a group message reaches the agent only when it names the bot`() {
         telegram.run {
-            val bot = HttpBotApi(configOf(fake)).use { it.sendMessage(SendMessage(GROUP, "The build is green.")) }
+            val bot = HttpBotApi(configOf(fake), JdkHttpEngine()).use {
+                it.sendMessage(SendMessage(GROUP, "The build is green."))
+            }
             fake.send(telegram.bob, telegram.group, "Lunch at noon?")
             fake.send(telegram.bob, telegram.group, "/start@other_bot")
             fake.send(telegram.bob, telegram.group, "@alexandrite_test_bot what is new?")

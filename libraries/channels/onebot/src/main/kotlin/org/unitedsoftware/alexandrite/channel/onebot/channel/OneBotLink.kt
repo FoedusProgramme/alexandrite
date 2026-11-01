@@ -19,6 +19,7 @@ import org.unitedsoftware.alexandrite.channel.onebot.transport.OneBotSettings
 import org.unitedsoftware.alexandrite.channel.onebot.transport.envelopeResult
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import org.unitedsoftware.alexandrite.sdk.di.Lifecycle
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 
 /**
  * The connection of one channel instance, whichever transport its config chose.
@@ -28,14 +29,18 @@ import org.unitedsoftware.alexandrite.sdk.di.Lifecycle
  * so the container starts it when the instance opens and closes it when the instance stops.
  */
 @ChannelInstanceScoped
-internal class OneBotLink(private val config: OneBotConfig, private val instanceConfig: OneBotInstanceConfig) :
-    Lifecycle {
+internal class OneBotLink(
+    private val config: OneBotConfig,
+    private val instanceConfig: OneBotInstanceConfig,
+    engine: HttpEngine,
+) : Lifecycle {
     private val settings = OneBotSettings.of(config, instanceConfig)
 
     private val http: OneBotHttpApi? = if (instanceConfig.kind == OneBotTransport.HTTP) {
         OneBotHttpApi(
             endpoint = settings.requireEndpoint().trimEnd('/'),
             token = settings.token,
+            engine = engine,
             connectTimeoutMillis = settings.connectTimeoutMillis,
             firstByteTimeoutMillis = settings.firstByteTimeoutMillis,
             idleTimeoutMillis = settings.idleTimeoutMillis,

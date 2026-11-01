@@ -8,10 +8,10 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
-import org.unitedsoftware.alexandrite.internal.http.HttpCall
-import org.unitedsoftware.alexandrite.internal.http.HttpException
-import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.HttpCall
+import org.unitedsoftware.alexandrite.http.common.HttpException
+import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
 import org.unitedsoftware.alexandrite.sdk.browse.BrowseAbilities
 import org.unitedsoftware.alexandrite.sdk.browse.BrowseBackend
 import org.unitedsoftware.alexandrite.sdk.browse.BrowseImage
@@ -29,6 +29,7 @@ import org.unitedsoftware.alexandrite.sdk.browse.WebStep
 import org.unitedsoftware.alexandrite.sdk.di.Contribute
 import org.unitedsoftware.alexandrite.sdk.di.Lifecycle
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import java.net.URI
 import java.net.URLEncoder
 import java.util.Base64
@@ -37,11 +38,11 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * The headless browser of a Pleochroic account or a self-hosted `standalone-service`, at the same `apiBase` and with
  * the same key as its search and fetch ([PleochroicSearch], [PleochroicFetch]): `POST /browser/sessions`, then
- * `POST /browser/sessions/{id}/actions` per step, and `DELETE /browser/sessions/{id}`.
+ * `POST /browser/sessions/{id}/actions` per step, and `DELETE /browser/sessions/{id}`, each sent through [engine].
  */
 @Singleton
 @Contribute(BrowseBackend::class)
-internal class PleochroicBrowser(private val config: WebConfig) :
+internal class PleochroicBrowser(private val config: WebConfig, engine: HttpEngine) :
     BrowseBackend,
     Lifecycle {
     override val id: String = PLEOCHROIC_WEB_ID
@@ -60,7 +61,7 @@ internal class PleochroicBrowser(private val config: WebConfig) :
     override val sessionNote: String = "Close the session when done: it is billed while open."
 
     // A step may take the service 45 s, and a screenshot's answer runs to megabytes
-    private val transport = HttpTransport(HttpTimeouts(10.seconds, STEP_TIMEOUT, 30.seconds))
+    private val transport = HttpTransport(HttpTimeouts(10.seconds, STEP_TIMEOUT, 30.seconds), engine)
 
     override suspend fun open(options: BrowseOpen): String {
         val body = buildJsonObject {
@@ -241,7 +242,7 @@ internal class PleochroicBrowser(private val config: WebConfig) :
         const val MAX_VALUES = 100
         val REF = Regex("e\\d+")
 
-        fun segment(session: String): String = URLEncoder.encode(session, Charsets.UTF_8).replace("+", "%20")
+        fun segment(session: String): String = URLEncoder.encode(session, "UTF-8").replace("+", "%20")
 
         /** The `message` of the service's `{error: {…}}` body, which never holds the key. */
         fun serviceMessage(e: HttpException): String? = e.body?.let {

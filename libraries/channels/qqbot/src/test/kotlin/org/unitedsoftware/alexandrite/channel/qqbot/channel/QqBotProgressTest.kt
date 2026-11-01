@@ -7,6 +7,7 @@ import org.unitedsoftware.alexandrite.channel.qqbot.net.QqBotHttp
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.FakeApiServer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.MutableClock
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.testConfig
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
@@ -56,9 +57,10 @@ class QqBotProgressTest {
             server.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
             server.on(STREAM_DIRECT, """{"id":"stream1"}""")
             val config = testConfig(server.base)
-            http = QqBotHttp(config)
+            http = QqBotHttp(config, JdkHttpEngine())
             val api = QqBotApi(http, QqBotTokens(config, http, clock))
-            sender = QqBotSender(api, QqBotUploads(api, config), QqBotSentMessages(), QqBotMessageIndex())
+            sender =
+                QqBotSender(api, QqBotUploads(api, config, JdkHttpEngine()), QqBotSentMessages(), QqBotMessageIndex())
         }
 
         override fun close() {

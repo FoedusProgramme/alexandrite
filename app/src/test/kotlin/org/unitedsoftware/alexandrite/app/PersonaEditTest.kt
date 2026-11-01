@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.agent.AlexandriteAgentIndex
+import org.unitedsoftware.alexandrite.engine.jdkhttp.AlexandriteEngineJdkHttpIndex
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
 import org.unitedsoftware.alexandrite.sdk.store.ConversationStore
 import org.unitedsoftware.alexandrite.sdk.store.TranscriptStore
@@ -63,7 +64,7 @@ class PersonaEditTest {
         persona.parent.createDirectories()
         persona.writeText("I like tea.\n")
         Files.setLastModifiedTime(persona, FileTime.from(Instant.parse("2026-01-01T00:00:00Z")))
-        val harness = PluginHarness.builder(AlexandriteAgentIndex())
+        val harness = PluginHarness.builder(AlexandriteAgentIndex()).plugin(AlexandriteEngineJdkHttpIndex())
             .plugin(AlexandriteToolsIndex())
             .config(config)
             .store(MemoryStore())

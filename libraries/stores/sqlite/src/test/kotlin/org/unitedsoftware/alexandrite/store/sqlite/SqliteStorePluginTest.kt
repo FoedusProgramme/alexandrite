@@ -113,10 +113,10 @@ class SqliteStorePluginTest {
         assertEquals(StartStage.CONFIG, error.stage)
         val problem = error.problems.single()
         assertEquals(
-            RuntimeProblemKind.MISSING_REQUIREMENT to "alexandrite-store-sqlite",
+            RuntimeProblemKind.MISSING_ENGINE to "alexandrite-store-sqlite",
             problem.kind to problem.plugin,
         )
-        assertContains(problem.message, "needs a SqliteDriver")
+        assertContains(problem.message, "needs SqliteDriver")
         assertContains(problem.message, "alexandrite-engine-sqlite-xerial")
         assertFalse(Files.exists(store))
     }

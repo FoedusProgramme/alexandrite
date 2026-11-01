@@ -8,6 +8,7 @@ import org.unitedsoftware.alexandrite.channel.qqbot.testing.FakeApiServer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.MutableClock
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.PlatformAnswer
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.testConfig
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
@@ -22,7 +23,7 @@ class QqBotTokensTest {
     fun `a token is bought once and used until it is close to expiring`() = runBlocking {
         val server = FakeApiServer()
         server.on(TOKEN_PATH, """{"access_token":"one","expires_in":"7200"}""")
-        val http = QqBotHttp(testConfig(server.base))
+        val http = QqBotHttp(testConfig(server.base), JdkHttpEngine())
         try {
             val tokens = QqBotTokens(testConfig(server.base), http, clock)
             assertEquals("one", tokens.token())
@@ -50,7 +51,7 @@ class QqBotTokensTest {
             Thread.sleep(50)
             PlatformAnswer(200, """{"access_token":"t${bought.incrementAndGet()}","expires_in":"7200"}""")
         }
-        val http = QqBotHttp(testConfig(server.base))
+        val http = QqBotHttp(testConfig(server.base), JdkHttpEngine())
         try {
             val tokens = QqBotTokens(testConfig(server.base), http, clock)
             val results = (1..20).map { async { tokens.token() } }.awaitAll()
@@ -66,7 +67,7 @@ class QqBotTokensTest {
     fun `a refusal of the platform names its code and message`() = runBlocking {
         val server = FakeApiServer()
         server.on(TOKEN_PATH, """{"code":100016,"message":"invalid appid or secret"}""")
-        val http = QqBotHttp(testConfig(server.base))
+        val http = QqBotHttp(testConfig(server.base), JdkHttpEngine())
         try {
             val tokens = QqBotTokens(testConfig(server.base), http, clock)
             val failure = assertFailsWith<IllegalStateException> { tokens.token() }

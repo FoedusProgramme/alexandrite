@@ -8,7 +8,7 @@ description = "Alexandrite's heartbeat automation: agent turns on a timer that b
 dependencies {
     api(project(":libraries:plugin-sdk"))
     implementation(project(":libraries:internal"))
-    implementation(project(":libraries:automation-common"))
+    implementation(project(":libraries:common:automation"))
 
     testImplementation(project(":libraries:testkit"))
     testImplementation(libs.kotlinx.coroutines.test)

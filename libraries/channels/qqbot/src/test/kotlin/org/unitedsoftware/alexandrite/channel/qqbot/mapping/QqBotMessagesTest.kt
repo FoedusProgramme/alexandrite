@@ -4,6 +4,7 @@ import org.unitedsoftware.alexandrite.channel.qqbot.channel.QqBotMessageIndex
 import org.unitedsoftware.alexandrite.channel.qqbot.net.QqBotHttp
 import org.unitedsoftware.alexandrite.channel.qqbot.protocol.QqBotWire
 import org.unitedsoftware.alexandrite.channel.qqbot.testing.testConfig
+import org.unitedsoftware.alexandrite.engine.jdkhttp.JdkHttpEngine
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
@@ -18,7 +19,7 @@ import kotlin.test.assertTrue
 class QqBotMessagesTest {
     private val instance = ChannelInstanceId(ChannelType("qqbot"), "main")
 
-    private val http = QqBotHttp(testConfig("http://127.0.0.1:1"))
+    private val http = QqBotHttp(testConfig("http://127.0.0.1:1"), JdkHttpEngine())
     private val media = QqBotMedia(http)
 
     @Test

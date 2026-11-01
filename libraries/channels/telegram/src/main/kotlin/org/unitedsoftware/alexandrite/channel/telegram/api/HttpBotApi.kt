@@ -22,32 +22,33 @@ import org.unitedsoftware.alexandrite.channel.telegram.api.BotApiFailure.RATE_LI
 import org.unitedsoftware.alexandrite.channel.telegram.api.BotApiFailure.TOO_LONG
 import org.unitedsoftware.alexandrite.channel.telegram.api.BotApiFailure.TRANSIENT
 import org.unitedsoftware.alexandrite.channel.telegram.api.BotApiFailure.UNAUTHORIZED
-import org.unitedsoftware.alexandrite.internal.http.HttpCall
-import org.unitedsoftware.alexandrite.internal.http.HttpException
-import org.unitedsoftware.alexandrite.internal.http.HttpFailureKind
-import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
-import org.unitedsoftware.alexandrite.internal.http.HttpTransport
-import org.unitedsoftware.alexandrite.internal.http.MultipartBody
+import org.unitedsoftware.alexandrite.http.common.HttpCall
+import org.unitedsoftware.alexandrite.http.common.HttpException
+import org.unitedsoftware.alexandrite.http.common.HttpFailureKind
+import org.unitedsoftware.alexandrite.http.common.HttpTimeouts
+import org.unitedsoftware.alexandrite.http.common.HttpTransport
+import org.unitedsoftware.alexandrite.http.common.MultipartBody
 import org.unitedsoftware.alexandrite.sdk.di.Binds
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import org.unitedsoftware.alexandrite.sdk.di.Inject
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import java.io.ByteArrayOutputStream
 import java.net.URI
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-/** The [BotApi] of the bot that [config] names, served over HTTP. */
+/** The [BotApi] of the bot that [config] names, served over HTTP through [engine]. */
 @ChannelInstanceScoped
 @Binds(BotApi::class)
-internal class HttpBotApi(config: TelegramInstanceConfig, timeouts: HttpTimeouts) :
+internal class HttpBotApi(config: TelegramInstanceConfig, engine: HttpEngine, timeouts: HttpTimeouts) :
     BotApi,
     AutoCloseable {
     @Inject
-    constructor(config: TelegramInstanceConfig) : this(config, TIMEOUTS)
+    constructor(config: TelegramInstanceConfig, engine: HttpEngine) : this(config, engine, TIMEOUTS)
 
     private val token = config.botToken
     private val base = config.apiBase
-    private val transport = HttpTransport(timeouts)
+    private val transport = HttpTransport(timeouts, engine)
 
     override suspend fun getMe(): User = call("getMe", NO_PARAMETERS, User.serializer())
 
