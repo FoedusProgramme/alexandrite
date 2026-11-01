@@ -61,8 +61,8 @@ class PublicApiTest {
             return listOf(result, tool.calls, context.trigger, testHardFloor())
         }
 
-        suspend fun engines(http: HttpEngine, html: HtmlParser, images: ImageCodec, driver: SqliteDriver) {
-            for (check in HTTP_ENGINE_CONTRACT) check.run(http)
+        suspend fun engines(http: PluginIndex, html: HtmlParser, images: ImageCodec, driver: SqliteDriver) {
+            for (check in HTTP_ENGINE_CONTRACT) check.run(boundBy<HttpEngine>(http))
             for (check in HTML_PARSER_CONTRACT) check.run(html)
             for (check in IMAGE_CODEC_CONTRACT) check.run(images)
             for (check in SQLITE_DRIVER_CONTRACT) check.run(driver)

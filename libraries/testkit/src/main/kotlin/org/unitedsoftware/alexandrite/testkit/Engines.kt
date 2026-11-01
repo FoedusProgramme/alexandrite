@@ -8,17 +8,22 @@ import org.unitedsoftware.alexandrite.sdk.plugin.PluginIndex
 /** What [index] binds to [T], created from the bindings of [index] alone. */
 public inline fun <reified T : Any> boundBy(index: PluginIndex): T = boundBy(index, key<T>())
 
-/** What [index] binds to [key], created from the bindings of [index] alone. */
-public fun <T : Any> boundBy(index: PluginIndex, key: Key<T>): T = IndexResolver(index).get(key)
+@PublishedApi
+internal fun <T : Any> boundBy(index: PluginIndex, key: Key<T>): T = IndexResolver(index).get(key)
 
 /** Creates what [index] binds, each time it is asked for, from the bindings of [index] alone. */
 private class IndexResolver(private val index: PluginIndex) : Resolver {
     @Suppress("UNCHECKED_CAST")
-    override fun <T : Any> get(key: Key<T>): T = index.bindings().single { it.key == key }.create(this) as T
+    override fun <T : Any> get(key: Key<T>): T =
+        index.bindings().single { it.key == key && !it.multi }.create(this) as T
 
-    override fun <T : Any> getOrNull(key: Key<T>): T? = null
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : Any> getOrNull(key: Key<T>): T? =
+        index.bindings().singleOrNull { it.key == key && !it.multi }?.create(this) as T?
 
-    override fun <T : Any> getAll(key: Key<T>): List<T> = emptyList()
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : Any> getAll(key: Key<T>): List<T> =
+        index.bindings().filter { it.key == key && it.multi }.map { it.create(this) as T }
 
     override fun <T : Any> lazy(key: Key<T>): Lazy<T> = lazy { get(key) }
 

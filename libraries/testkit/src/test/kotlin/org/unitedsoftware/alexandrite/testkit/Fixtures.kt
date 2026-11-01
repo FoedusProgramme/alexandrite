@@ -35,12 +35,6 @@ class TestIndex(
 
 fun <T> blocking(block: suspend () -> T): T = runBlocking { withTimeout(10.seconds) { block() } }
 
-inline fun <reified T : Any> boundBy(index: PluginIndex): T {
-    var bound: T? = null
-    runBlocking { PluginHarness.builder(index).build().run { bound = get<T>() } }
-    return checkNotNull(bound)
-}
-
 /** A request of round [round] of the test turn to [model]'s first model, offering the tool `notes.add`. */
 fun request(
     model: ScriptedModel,
