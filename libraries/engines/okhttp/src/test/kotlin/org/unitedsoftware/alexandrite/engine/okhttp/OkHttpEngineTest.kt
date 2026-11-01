@@ -5,7 +5,6 @@ import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.TestFactory
 import org.junit.jupiter.api.TestInstance
-import org.unitedsoftware.alexandrite.sdk.di.key
 import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import org.unitedsoftware.alexandrite.testkit.HTTP_ENGINE_CONTRACT
 import org.unitedsoftware.alexandrite.testkit.PluginHarness
@@ -22,18 +21,16 @@ class OkHttpEngineTest {
     }
 
     @TestFactory
-    fun `the OkHttp engine keeps the engine contract`(): List<DynamicTest> = HTTP_ENGINE_CONTRACT.map { check ->
+    fun `the OkHttp engine keeps the HTTP engine contract`(): List<DynamicTest> = HTTP_ENGINE_CONTRACT.map { check ->
         DynamicTest.dynamicTest(check.name) { runBlocking { check.run(engine) } }
     }
 
     @Test
     fun `the plugin binds its engine`() {
-        var bound: HttpEngine? = null
-
         runBlocking {
-            PluginHarness.builder(AlexandriteEngineOkhttpIndex()).build().run { bound = get(key<HttpEngine>()) }
+            PluginHarness.builder(AlexandriteEngineOkhttpIndex()).build().run {
+                assertIs<OkHttpEngine>(get<HttpEngine>())
+            }
         }
-
-        assertIs<OkHttpEngine>(bound)
     }
 }

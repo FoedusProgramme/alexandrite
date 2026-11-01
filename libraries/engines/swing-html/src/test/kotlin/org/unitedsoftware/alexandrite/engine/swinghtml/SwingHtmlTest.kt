@@ -3,7 +3,6 @@ package org.unitedsoftware.alexandrite.engine.swinghtml
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.TestFactory
-import org.unitedsoftware.alexandrite.sdk.di.key
 import org.unitedsoftware.alexandrite.sdk.text.HtmlParser
 import org.unitedsoftware.alexandrite.testkit.HTML_PARSER_CONTRACT
 import org.unitedsoftware.alexandrite.testkit.PluginHarness
@@ -13,21 +12,16 @@ import kotlin.test.assertIs
 
 class SwingHtmlTest {
     @TestFactory
-    fun `Swing keeps the HTML parser contract`(): List<DynamicTest> =
+    fun `the Swing parser keeps the HTML parser contract`(): List<DynamicTest> =
         HTML_PARSER_CONTRACT.map { check -> DynamicTest.dynamicTest(check.name) { check.run(SwingHtmlParser()) } }
 
     @Test
     fun `the plugin binds its parser`() {
-        var bound: HtmlParser? = null
-
         runBlocking {
             PluginHarness.builder(AlexandriteEngineSwingHtmlIndex()).build().run {
-                bound =
-                    get(key<HtmlParser>())
+                assertIs<SwingHtmlParser>(get<HtmlParser>())
             }
         }
-
-        assertIs<SwingHtmlParser>(bound)
     }
 
     @Test

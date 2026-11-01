@@ -75,8 +75,10 @@ internal class Row(private val statement: SqliteStatement) {
 
     fun getStringOrNull(column: String): String? = getStringOrNull(position(column))
 
-    fun getStringOrNull(position: Int): String? =
-        if (statement.isNull(position - 1)) null else statement.getText(position - 1)
+    fun getStringOrNull(position: Int): String? {
+        val text = statement.getText(position - 1)
+        return if (text.isEmpty() && statement.isNull(position - 1)) null else text
+    }
 
     /** The column's number, 0 when it is NULL. */
     fun getLong(column: String): Long = getLong(position(column))

@@ -44,7 +44,8 @@ public interface SqliteConnection : AutoCloseable {
 /**
  * A compiled statement, whose parameters are numbered from 1 and whose columns are numbered from 0.
  *
- * Its columns are read in the row that the last [step] returned true for.
+ * Its columns are counted and named from its prepare on, and their values are read in the row that the last [step]
+ * returned true for.
  */
 public interface SqliteStatement : AutoCloseable {
     public fun bindLong(index: Int, value: Long)

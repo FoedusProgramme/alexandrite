@@ -1,7 +1,6 @@
 package org.unitedsoftware.alexandrite.testkit.sql
 
 import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteConnection
-import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteDriver
 import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteException
 import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteStatement
 import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteType
@@ -10,17 +9,6 @@ import org.unitedsoftware.alexandrite.testkit.store.expect
 import org.unitedsoftware.alexandrite.testkit.store.expectEqual
 import org.unitedsoftware.alexandrite.testkit.store.expectThrows
 import java.nio.file.Files
-import java.nio.file.Path
-
-/** One run of a driver check, whose databases are files in [directory]. */
-internal class DriverRun(private val driver: SqliteDriver, private val directory: Path) {
-    /** The file of the database [name]. */
-    fun file(name: String = "test.db"): Path = directory.resolve(name)
-
-    /** Runs [block] on a new connection to the database [name], and closes it. */
-    fun <T> connect(name: String = "test.db", block: SqliteConnection.() -> T): T =
-        driver.open(file(name).toString()).use(block)
-}
 
 internal val SQLITE_DRIVER_CHECKS: List<SqliteDriverCheck> = listOf(
     SqliteDriverCheck("a value of each type reads back as it was bound, with its type") {
@@ -45,7 +33,14 @@ internal val SQLITE_DRIVER_CHECKS: List<SqliteDriverCheck> = listOf(
                 }
             }
             prepare("SELECT v, typeof(v) FROM t ORDER BY rowid").use { select ->
-                val read = buildList { while (select.step()) add(select.value(0) to select.getText(1)) }
+                val read = buildList {
+                    while (select.step()) {
+                        val value = select.value(0)
+                        val type = select.getText(1)
+                        expectEqual(value == null, select.isNull(0), "whether a value of type $type is null")
+                        add(value to type)
+                    }
+                }
                 expectEqual(
                     listOf(
                         Long.MIN_VALUE to "integer",
@@ -85,12 +80,26 @@ internal val SQLITE_DRIVER_CHECKS: List<SqliteDriverCheck> = listOf(
                 }
         }
     },
-    SqliteDriverCheck("the columns are counted and named as the statement names them") {
+    SqliteDriverCheck("the columns are counted and named as the statement names them, from its prepare on") {
         connect {
+            execute("CREATE TABLE t (v)")
             prepare("SELECT 1 AS one, 'x' AS \"Two words\", 2").use { select ->
+                val columns = { what: String ->
+                    expectEqual(3, select.columnCount(), "the column count $what")
+                    expectEqual(listOf("one", "Two words", "2"), List(3) { select.columnName(it) }, "the names $what")
+                }
+                columns("before the first step")
                 expect(select.step()) { "The statement yielded no row." }
-                expectEqual(3, select.columnCount(), "the column count")
-                expectEqual(listOf("one", "Two words", "2"), List(3) { select.columnName(it) }, "the column names")
+                columns("on its row")
+                expectEqual(false, select.step(), "a second row")
+                columns("at its end")
+                select.reset()
+                columns("after a reset")
+            }
+            prepare("INSERT INTO t (v) VALUES (1)").use { insert ->
+                expectEqual(0, insert.columnCount(), "the column count of an insert")
+                insert.step()
+                expectEqual(0, insert.columnCount(), "the column count of an insert that ran")
             }
         }
     },
