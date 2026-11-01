@@ -11,6 +11,7 @@ local.properties
 *.db
 *.db-wal
 *.db-shm
+!**/src/test/resources/**/*.db
 
 ### IntelliJ IDEA ###
 .idea/

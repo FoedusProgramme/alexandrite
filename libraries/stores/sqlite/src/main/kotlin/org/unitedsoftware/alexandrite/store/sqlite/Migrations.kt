@@ -1,9 +1,9 @@
 package org.unitedsoftware.alexandrite.store.sqlite
 
 import org.slf4j.LoggerFactory
+import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteConnection
+import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteDriver
 import java.nio.file.Path
-import java.sql.Connection
-import java.sql.DriverManager
 import java.time.Instant
 
 /** One step of the store's schema, run in a transaction of its own. */
@@ -48,10 +48,10 @@ internal val STORE_MIGRATIONS: List<Migration> = listOf(
     },
 )
 
-/** A connection to the store at [file], whose schema [steps] brought to their newest version. */
-internal fun openStore(file: Path, steps: List<Migration>, now: Instant): Connection {
+/** A connection through [driver] to the store at [file], whose schema [steps] brought to their newest version. */
+internal fun openStore(driver: SqliteDriver, file: Path, steps: List<Migration>, now: Instant): SqliteConnection {
     val connection = try {
-        DriverManager.getConnection("jdbc:sqlite:${file.toUri()}")
+        driver.open(file.toString())
     } catch (e: Exception) {
         throw IllegalStateException("Cannot open the store $file: ${e.message}", e)
     }
@@ -81,14 +81,12 @@ internal fun openStore(file: Path, steps: List<Migration>, now: Instant): Connec
     }
 }
 
-private fun Connection.userVersion(file: Path): Int = createStatement().use { statement ->
-    statement.executeQuery("PRAGMA user_version").use { rows ->
-        check(rows.next()) { "The store $file reports no schema version." }
-        rows.getInt(1)
-    }
+private fun SqliteConnection.userVersion(file: Path): Int = prepare("PRAGMA user_version").use { statement ->
+    check(statement.step()) { "The store $file reports no schema version." }
+    statement.getLong(0).toInt()
 }
 
-private fun Connection.migrate(file: Path, version: Int, step: Migration, now: Instant) {
+private fun SqliteConnection.migrate(file: Path, version: Int, step: Migration, now: Instant) {
     try {
         inTransaction(now) {
             step.apply(this)

@@ -26,6 +26,7 @@ dependencies {
     implementation(project(":libraries:providers:lmstudio"))
     implementation(project(":libraries:providers:anthropic-compatible"))
     implementation(project(":libraries:stores:sqlite"))
+    implementation(project(":libraries:engines:sqlite-xerial"))
     implementation(project(":libraries:automations:heartbeat"))
     implementation(project(":libraries:automations:schedule"))
     implementation(project(":libraries:sandboxes:seatbelt"))

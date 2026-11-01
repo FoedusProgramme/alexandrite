@@ -9,19 +9,24 @@ import kotlinx.coroutines.withContext
 import org.unitedsoftware.alexandrite.sdk.di.Lifecycle
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
 import org.unitedsoftware.alexandrite.sdk.plugin.PluginFiles
+import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteConnection
+import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteDriver
 import java.nio.file.Path
-import java.sql.Connection
 import java.time.Clock
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 /** The store's SQLite database, `store.db` in the plugin's data directory, which runs one block at a time. */
 @Singleton
-internal class StoreDatabase(private val files: PluginFiles, private val clock: Clock) : Lifecycle {
+internal class StoreDatabase(
+    private val files: PluginFiles,
+    private val clock: Clock,
+    private val driver: SqliteDriver,
+) : Lifecycle {
     private val dispatcher = Dispatchers.IO.limitedParallelism(1, "alexandrite-store-sqlite")
 
     @Volatile
-    private var connection: Connection? = null
+    private var connection: SqliteConnection? = null
 
     @Volatile
     private var closed = false
@@ -31,7 +36,7 @@ internal class StoreDatabase(private val files: PluginFiles, private val clock: 
     override suspend fun onStart() {
         withContext(dispatcher) {
             check(connection == null && !closed) { "The store was opened before." }
-            connection = openStore(file, STORE_MIGRATIONS, now())
+            connection = openStore(driver, file, STORE_MIGRATIONS, now())
         }
     }
 

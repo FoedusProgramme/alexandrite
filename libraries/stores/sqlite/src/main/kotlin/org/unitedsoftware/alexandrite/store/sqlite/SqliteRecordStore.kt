@@ -5,7 +5,6 @@ import org.unitedsoftware.alexandrite.sdk.di.Binds
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
 import org.unitedsoftware.alexandrite.sdk.store.RecordStore
 import org.unitedsoftware.alexandrite.sdk.store.StoredRecord
-import java.sql.ResultSet
 
 @Singleton
 @Binds(RecordStore::class)
@@ -63,11 +62,11 @@ internal class SqliteRecordStore(private val database: StoreDatabase) : RecordSt
 
 private const val COLUMNS = "record_key, value, created_at, created_by, updated_at, updated_by"
 
-private fun ResultSet.record(): StoredRecord<String> = StoredRecord(
+private fun Row.record(): StoredRecord<String> = StoredRecord(
     getString("record_key"),
     getString("value"),
     instant("created_at"),
-    getString("created_by")?.let(UserAddress::parseOrNull),
+    getStringOrNull("created_by")?.let(UserAddress::parseOrNull),
     instant("updated_at"),
-    getString("updated_by")?.let(UserAddress::parseOrNull),
+    getStringOrNull("updated_by")?.let(UserAddress::parseOrNull),
 )

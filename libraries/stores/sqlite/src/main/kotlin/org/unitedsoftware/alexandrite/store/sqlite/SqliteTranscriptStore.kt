@@ -28,7 +28,6 @@ import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.UnknownEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.UserEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.UserOrigin
-import java.sql.ResultSet
 
 @Singleton
 @Binds(TranscriptStore::class)
@@ -134,9 +133,9 @@ internal class SqliteTranscriptStore(private val database: StoreDatabase, privat
                 limit,
             ) {
                 val key = scopes.getValue(Scope(AgentId(getString("agent")), getLong("chat_id")))
-                Hit(row(), key, getString("text"))
+                Hit(stored(), key, getString("text"))
             }
-        }.map { TranscriptMatch(it.row.entry(), it.key, snippet(it.text, words, SNIPPET_CHARS)) }
+        }.map { TranscriptMatch(it.stored.entry(), it.key, snippet(it.text, words, SNIPPET_CHARS)) }
     }
 
     private fun Tx.insert(conversation: ConversationId, turn: TurnId, encoded: Encoded): TranscriptEntry {
@@ -163,12 +162,12 @@ internal class SqliteTranscriptStore(private val database: StoreDatabase, privat
         return encoded.entry.withRecord(EntryRecord(EntryId(id), conversation, turn, now))
     }
 
-    private fun Tx.rows(where: String, vararg arguments: Any?): List<Row> = query(
+    private fun Tx.rows(where: String, vararg arguments: Any?): List<Stored> = query(
         "SELECT id, conversation, turn, created_at, format, type, body FROM entries $where",
         *arguments,
-    ) { row() }
+    ) { stored() }
 
-    private fun ResultSet.row(): Row = Row(
+    private fun Row.stored(): Stored = Stored(
         EntryRecord(
             EntryId(getLong("id")),
             ConversationId(getString("conversation")),
@@ -182,13 +181,13 @@ internal class SqliteTranscriptStore(private val database: StoreDatabase, privat
 
     private data class Scope(val agent: AgentId, val chat: Long)
 
-    private class Hit(val row: Row, val key: AgentChatKey, val text: String)
+    private class Hit(val stored: Stored, val key: AgentChatKey, val text: String)
 
     private class Encoded(val entry: TranscriptEntry, val body: String) {
         val type: String = Json.parseToJsonElement(body).jsonObject.getValue("type").jsonPrimitive.content
     }
 
-    private class Row(val record: EntryRecord, val format: Int, val type: String, val body: String) {
+    private class Stored(val record: EntryRecord, val format: Int, val type: String, val body: String) {
         /** The stored entry, an [UnknownEntry] when its format or its content is not one this version reads. */
         fun entry(): TranscriptEntry {
             val entry = decodeStoredEntry(format, body) { e ->

@@ -1,41 +1,42 @@
 package org.unitedsoftware.alexandrite.store.sqlite
 
 import org.slf4j.LoggerFactory
-import java.sql.Connection
-import java.sql.PreparedStatement
-import java.sql.ResultSet
-import java.sql.Types
+import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteConnection
+import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteStatement
+import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteType
 import java.time.Instant
 
 /** A transaction of the store, valid only inside its block. */
 internal class Tx(
-    private val connection: Connection,
+    private val connection: SqliteConnection,
     /** When the transaction began, to the millisecond. */
     val now: Instant,
 ) {
     private val committedActions = mutableListOf<() -> Unit>()
 
     /** Runs [sql] with [arguments] and returns how many rows it changed. */
-    fun execute(sql: String, vararg arguments: Any?): Int = prepare(sql, arguments).use { it.executeUpdate() }
+    fun execute(sql: String, vararg arguments: Any?): Int {
+        prepare(sql, arguments).use { it.runToEnd() }
+        return connection.changes().toInt()
+    }
 
-    fun <T> query(sql: String, vararg arguments: Any?, row: ResultSet.() -> T): List<T> =
+    fun <T> query(sql: String, vararg arguments: Any?, row: Row.() -> T): List<T> =
         prepare(sql, arguments).use { statement ->
-            statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.row()) } }
+            val current = Row(statement)
+            buildList { while (statement.step()) add(current.row()) }
         }
 
     /** The first row [sql] yields, null when it yields none. */
-    fun <T> queryOne(sql: String, vararg arguments: Any?, row: ResultSet.() -> T): T? =
-        prepare(sql, arguments).use { statement ->
-            statement.executeQuery().use { rows -> if (rows.next()) rows.row() else null }
-        }
+    fun <T> queryOne(sql: String, vararg arguments: Any?, row: Row.() -> T): T? =
+        prepare(sql, arguments).use { statement -> if (statement.step()) Row(statement).row() else null }
 
     /** Runs [action] once the transaction has committed. */
     fun afterCommit(action: () -> Unit) {
         committedActions += action
     }
 
-    private fun prepare(sql: String, arguments: Array<out Any?>): PreparedStatement {
-        val statement = connection.prepareStatement(sql)
+    private fun prepare(sql: String, arguments: Array<out Any?>): SqliteStatement {
+        val statement = connection.prepare(sql)
         try {
             arguments.forEachIndexed { index, argument -> statement.bind(index + 1, argument) }
         } catch (e: Throwable) {
@@ -56,15 +57,63 @@ internal class Tx(
     }
 }
 
+/** The row a query is on, whose columns are read by name or by position from 1. */
+internal class Row(private val statement: SqliteStatement) {
+    /** The index of each column name, the first of the columns that share one. */
+    private val indexes: Map<String, Int> by lazy {
+        val names = HashMap<String, Int>()
+        for (index in 0 until statement.columnCount()) names.putIfAbsent(statement.columnName(index), index)
+        names
+    }
+
+    val columnCount: Int get() = statement.columnCount()
+
+    fun getString(column: String): String = getString(position(column))
+
+    fun getString(position: Int): String =
+        getStringOrNull(position) ?: throw IllegalStateException("Column $position of the row is NULL.")
+
+    fun getStringOrNull(column: String): String? = getStringOrNull(position(column))
+
+    fun getStringOrNull(position: Int): String? =
+        if (statement.isNull(position - 1)) null else statement.getText(position - 1)
+
+    /** The column's number, 0 when it is NULL. */
+    fun getLong(column: String): Long = getLong(position(column))
+
+    fun getLong(position: Int): Long = statement.getLong(position - 1)
+
+    fun getLongOrNull(column: String): Long? {
+        val position = position(column)
+        return if (statement.isNull(position - 1)) null else getLong(position)
+    }
+
+    fun getInt(column: String): Int = getLong(column).toInt()
+
+    fun getInt(position: Int): Int = getLong(position).toInt()
+
+    /** The column's value as a Long, a Double, a String or a ByteArray, null when it is NULL. */
+    fun getObject(position: Int): Any? = when (statement.columnType(position - 1)) {
+        SqliteType.INTEGER -> statement.getLong(position - 1)
+        SqliteType.FLOAT -> statement.getDouble(position - 1)
+        SqliteType.TEXT -> statement.getText(position - 1)
+        SqliteType.BLOB -> statement.getBlob(position - 1)
+        SqliteType.NULL -> null
+    }
+
+    private fun position(column: String): Int =
+        (indexes[column] ?: throw IllegalArgumentException("The row has no column $column.")) + 1
+}
+
 /** Runs [block] in a transaction of its own that it commits, or rolls back when [block] throws. */
-internal fun <T> Connection.inTransaction(now: Instant, block: Tx.() -> T): T {
+internal fun <T> SqliteConnection.inTransaction(now: Instant, block: Tx.() -> T): T {
     val tx = Tx(this, now)
-    runSql("BEGIN IMMEDIATE")
+    beginImmediate()
     val result = try {
-        tx.block().also { runSql("COMMIT") }
+        tx.block().also { commit() }
     } catch (e: Throwable) {
         try {
-            runSql("ROLLBACK")
+            rollback()
         } catch (rollback: Exception) {
             e.addSuppressed(rollback)
         }
@@ -74,22 +123,26 @@ internal fun <T> Connection.inTransaction(now: Instant, block: Tx.() -> T): T {
     return result
 }
 
-internal fun Connection.runSql(sql: String) {
-    createStatement().use { it.execute(sql) }
+internal fun SqliteConnection.runSql(sql: String) {
+    prepare(sql).use { it.runToEnd() }
 }
 
-internal fun ResultSet.instant(column: String): Instant = Instant.ofEpochMilli(getLong(column))
+internal fun Row.instant(column: String): Instant = Instant.ofEpochMilli(getLong(column))
 
-internal fun ResultSet.instantOrNull(column: String): Instant? =
-    getLong(column).takeUnless { wasNull() }?.let(Instant::ofEpochMilli)
+internal fun Row.instantOrNull(column: String): Instant? = getLongOrNull(column)?.let(Instant::ofEpochMilli)
 
-private fun PreparedStatement.bind(index: Int, argument: Any?) {
+private fun SqliteStatement.runToEnd() {
+    var more = step()
+    while (more) more = step()
+}
+
+private fun SqliteStatement.bind(index: Int, argument: Any?) {
     when (argument) {
-        null -> setNull(index, Types.NULL)
-        is String -> setString(index, argument)
-        is Long -> setLong(index, argument)
-        is Int -> setInt(index, argument)
-        is Instant -> setLong(index, argument.toEpochMilli())
+        null -> bindNull(index)
+        is String -> bindText(index, argument)
+        is Long -> bindLong(index, argument)
+        is Int -> bindLong(index, argument.toLong())
+        is Instant -> bindLong(index, argument.toEpochMilli())
         else -> throw IllegalArgumentException("The store cannot bind a ${argument::class.qualifiedName}.")
     }
 }

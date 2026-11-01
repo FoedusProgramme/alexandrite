@@ -30,6 +30,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -52,7 +53,7 @@ class SqliteStorePluginTest {
     }
 
     private fun harness(): PluginHarness.Builder =
-        PluginHarness.builder(AlexandriteStoreSqliteIndex()).plugin(Probe()).dataRoot(directory)
+        PluginHarness.builder(AlexandriteStoreSqliteIndex()).plugin(driverIndex).plugin(Probe()).dataRoot(directory)
 
     private fun run(block: suspend PluginHarness.Running.() -> Unit): Termination =
         runBlocking { harness().build().run(block) }
@@ -97,6 +98,27 @@ class SqliteStorePluginTest {
         assertEquals(listOf(RuntimeProblemKind.DUPLICATE_STORE), error.problems.map { it.kind })
         assertContains(error.problems.single().message, "plugin 'alexandrite-store-sqlite' (root 'stores.sqlite')")
         assertContains(error.problems.single().message, "plugin 'testkit' (root 'plugins.testkit')")
+    }
+
+    @Test
+    fun `a store without a driver fails the start at CONFIG, naming the engines that bind one`() {
+        val error = assertFailsWith<RuntimeStartException> {
+            runBlocking {
+                PluginHarness.builder(AlexandriteStoreSqliteIndex()).dataRoot(directory).build().run {
+                    fail("the block ran")
+                }
+            }
+        }
+
+        assertEquals(StartStage.CONFIG, error.stage)
+        val problem = error.problems.single()
+        assertEquals(
+            RuntimeProblemKind.MISSING_REQUIREMENT to "alexandrite-store-sqlite",
+            problem.kind to problem.plugin,
+        )
+        assertContains(problem.message, "needs a SqliteDriver")
+        assertContains(problem.message, "alexandrite-engine-sqlite-xerial")
+        assertFalse(Files.exists(store))
     }
 
     @Test

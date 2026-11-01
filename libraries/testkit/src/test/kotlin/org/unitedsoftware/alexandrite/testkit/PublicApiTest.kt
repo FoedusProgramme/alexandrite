@@ -23,6 +23,7 @@ class PublicApiTest {
         import org.unitedsoftware.alexandrite.sdk.chat.*
         import org.unitedsoftware.alexandrite.sdk.model.*
         import org.unitedsoftware.alexandrite.sdk.plugin.PluginIndex
+        import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteDriver
         import org.unitedsoftware.alexandrite.sdk.tool.ToolResult
         import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
         import org.unitedsoftware.alexandrite.sdk.transcript.*
@@ -57,7 +58,7 @@ class PublicApiTest {
             return listOf(result, tool.calls, context.trigger, testHardFloor())
         }
 
-        suspend fun harness(index: PluginIndex, backend: PluginIndex): List<Any?> {
+        suspend fun harness(index: PluginIndex, backend: PluginIndex, driver: SqliteDriver): List<Any?> {
             val store = MemoryStore()
             val seen = mutableListOf<Any?>()
             PluginHarness.builder(index)
@@ -73,6 +74,7 @@ class PublicApiTest {
                     stop()
                 }
             for (check in STORE_CONTRACT) check.run { PluginHarness.builder(backend) }
+            for (check in SQLITE_DRIVER_CONTRACT) check.run(driver)
             return seen + PROVIDER_CONTRACT.map { it.name } + FakeModelServer().baseUrl
         }
     """.trimIndent()

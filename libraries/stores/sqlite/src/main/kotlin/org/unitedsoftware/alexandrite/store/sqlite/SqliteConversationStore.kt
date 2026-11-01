@@ -24,7 +24,6 @@ import org.unitedsoftware.alexandrite.sdk.store.Rotation
 import org.unitedsoftware.alexandrite.sdk.store.TurnEndKind
 import org.unitedsoftware.alexandrite.sdk.store.TurnRecord
 import org.unitedsoftware.alexandrite.sdk.transcript.EntryId
-import java.sql.ResultSet
 import java.time.Instant
 
 @Singleton
@@ -176,7 +175,7 @@ internal class SqliteConversationStore(private val database: StoreDatabase) : Co
     private fun Tx.taintOf(conversation: ConversationId): ConversationTaint? = queryOne(
         "SELECT tainted_at, taint_reason FROM conversations WHERE id = ? AND tainted_at IS NOT NULL",
         conversation.value,
-    ) { ConversationTaint(instant("tainted_at"), getString("taint_reason").orEmpty()) }
+    ) { ConversationTaint(instant("tainted_at"), getStringOrNull("taint_reason").orEmpty()) }
 
     private fun Tx.currentOf(key: AgentChatKey, kind: ConversationKind): ConversationInfo {
         val chat = chatId(key.chat)
@@ -241,7 +240,7 @@ internal class SqliteConversationStore(private val database: StoreDatabase) : Co
         "SELECT c.*, chats.address FROM conversations c JOIN chats ON chats.id = c.chat_id WHERE c.id = ?",
         id.value,
     ) {
-        val forkedFrom = getString("forked_from")
+        val forkedFrom = getStringOrNull("forked_from")
         ConversationInfo.builder(
             ConversationId(getString("id")),
             ConversationKind.of(getString("kind")),
@@ -250,7 +249,7 @@ internal class SqliteConversationStore(private val database: StoreDatabase) : Co
             instant("created_at"),
         )
             .sealedAt(instantOrNull("sealed_at"))
-            .successor(getString("successor")?.let(::ConversationId))
+            .successor(getStringOrNull("successor")?.let(::ConversationId))
             .lineage(lineage())
             .fork(forkedFrom?.let { ForkPoint(ConversationId(it), EntryId(getLong("forked_through_entry"))) })
             .build()
@@ -264,7 +263,7 @@ private const val TURNS = "SELECT t.*, chats.address, origin.address AS origin_a
 
 internal const val UNENDED_TURNS = "$TURNS WHERE t.ended_at IS NULL ORDER BY t.started_at, t.rowid"
 
-private fun ResultSet.turnRecord(): TurnRecord = TurnRecord.builder(
+private fun Row.turnRecord(): TurnRecord = TurnRecord.builder(
     TurnId(getString("id")),
     ConversationId(getString("conversation")),
     key(),
@@ -272,22 +271,21 @@ private fun ResultSet.turnRecord(): TurnRecord = TurnRecord.builder(
     instant("started_at"),
 )
     .chat(ChatAddress.parse(getString("origin_address")))
-    .actor(getString("actor")?.let(UserAddress::parse))
+    .actor(getStringOrNull("actor")?.let(UserAddress::parse))
     .lineage(lineage())
     .endedAt(instantOrNull("ended_at"))
-    .end(getString("outcome")?.let { TurnEndKind.of(it) })
+    .end(getStringOrNull("outcome")?.let { TurnEndKind.of(it) })
     .build()
 
-private fun ResultSet.key(): AgentChatKey =
-    AgentChatKey(AgentId(getString("agent")), ChatAddress.parse(getString("address")))
+private fun Row.key(): AgentChatKey = AgentChatKey(AgentId(getString("agent")), ChatAddress.parse(getString("address")))
 
-private fun ResultSet.lineage(): TurnLineage? {
-    val run = getString("run_id") ?: return null
+private fun Row.lineage(): TurnLineage? {
+    val run = getStringOrNull("run_id") ?: return null
     return TurnLineage(
         run = RunId(run),
         parentTurn = TurnId(getString("parent_turn")),
         parentConversation = ConversationId(getString("parent_conversation")),
-        parentCall = getString("parent_call")?.let(::ToolCallId),
+        parentCall = getStringOrNull("parent_call")?.let(::ToolCallId),
         rootTurn = TurnId(getString("root_turn")),
         rootConversation = ConversationId(getString("root_conversation")),
         depth = getInt("depth"),
