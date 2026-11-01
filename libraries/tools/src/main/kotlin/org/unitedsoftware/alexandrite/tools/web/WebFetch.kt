@@ -2,13 +2,15 @@ package org.unitedsoftware.alexandrite.tools.web
 
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
+import org.unitedsoftware.alexandrite.internal.portable.Threads
 import org.unitedsoftware.alexandrite.internal.sandbox.isNonPublicAddress
 import org.unitedsoftware.alexandrite.sdk.di.Binds
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
+import org.unitedsoftware.alexandrite.sdk.text.HtmlDocument
+import org.unitedsoftware.alexandrite.sdk.text.HtmlParser
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
-import java.io.StringReader
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -18,10 +20,6 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
-import javax.swing.text.MutableAttributeSet
-import javax.swing.text.html.HTML
-import javax.swing.text.html.HTMLEditorKit
-import javax.swing.text.html.parser.ParserDelegator
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration.Companion.seconds
@@ -32,21 +30,39 @@ internal fun interface WebPages {
     suspend fun fetch(url: String): WebPage
 }
 
+/** Fetches pages over its own connections, reading HTML with [parser] and other text without one. */
 @Singleton
 @Binds(WebPages::class)
-internal class WebFetch(private val config: WebConfig) : WebPages {
+internal class WebFetch(private val config: WebConfig, private val parser: HtmlParser?) : WebPages {
     override suspend fun fetch(url: String): WebPage = withTimeout(config.timeoutSeconds.seconds) {
         webIo { track ->
-            fetchPage(
+            val fetched = fetchPage(
                 URI(url),
                 config.maxBytes,
                 config.timeoutSeconds * 1000,
                 allowedPrivateHosts = config.normalizedPrivateHosts,
                 exchange = { uri, address, max, timeout -> exchangePinned(uri, address, max, timeout, track) },
-            ).let { WebPage(it.first, it.second.take(config.maxTextChars)) }
+            )
+            WebPage(fetched.url, readable(fetched).take(config.maxTextChars))
         }
     }
+
+    /** [fetched] as one line of text: a page's title and text, other text as it came. */
+    private fun readable(fetched: FetchedText): String {
+        if (!fetched.html) return fetched.text
+        val parser = parser ?: throw IllegalArgumentException(
+            "This host cannot read HTML pages: no plugin provides an HTML parser (such as alexandrite-engine-jsoup).",
+        )
+        return oneLine(parser.parse(fetched.text, fetched.url.toString()))
+    }
 }
+
+/** [page]'s title and text on one line. */
+internal fun oneLine(page: HtmlDocument): String =
+    listOfNotNull(page.title, page.text).joinToString(" ").replace(WHITESPACE_RUN, " ").trim()
+
+/** The text of the response at [url], [html] when it is a page's markup. */
+internal class FetchedText(val url: URI, val text: String, val html: Boolean)
 
 internal fun fetchPage(
     start: URI,
@@ -55,7 +71,7 @@ internal fun fetchPage(
     resolve: (String) -> List<InetAddress> = { InetAddress.getAllByName(it).toList() },
     allowedPrivateHosts: Set<String> = emptySet(),
     exchange: (URI, InetAddress, Int, Int) -> WebResponse = ::exchange,
-): Pair<URI, String> {
+): FetchedText {
     val allowed = allowedPrivateHosts.map(::normalizeAllowedHost).toSet()
     val site = checkedHost(start, allowed)
     var uri = start
@@ -87,7 +103,7 @@ internal fun fetchPage(
             val text = response.body.toString(charsetOf(contentType))
             val html = type == "text/html" || type == "application/xhtml+xml" ||
                 (type == null && text.trimStart().startsWith('<'))
-            return uri to if (html) pageText(text) else text
+            return FetchedText(uri, text, html)
         }
     }
     error("Too many web redirects.")
@@ -127,7 +143,7 @@ internal class WebResponse(val status: Int, val headers: Map<String, String>, va
 
 internal suspend fun <T> webIo(block: ((Socket) -> Unit) -> T): T = suspendCancellableCoroutine { continuation ->
     val active = AtomicReference<Socket?>()
-    val worker = Thread.ofVirtual().unstarted {
+    val worker = Threads.unstarted("alexandrite-web-io") {
         if (!continuation.isActive) return@unstarted
         try {
             val result = block { socket ->
@@ -265,59 +281,7 @@ internal fun response(input: InputStream, maxBytes: Int, beforeRead: () -> Unit 
     return WebResponse(status, headers, out.toByteArray())
 }
 
-internal fun pageText(html: String): String {
-    val text = StringBuilder()
-    var hidden = 0
-    val hiddenTags = setOf("script", "style", "noscript")
-    val callback = object : HTMLEditorKit.ParserCallback() {
-        override fun handleStartTag(tag: HTML.Tag, attributes: MutableAttributeSet, position: Int) {
-            if (tag.toString() in hiddenTags) hidden++
-            if (hidden == 0) text.append(' ')
-        }
-
-        override fun handleEndTag(tag: HTML.Tag, position: Int) {
-            if (tag.toString() in hiddenTags) hidden = (hidden - 1).coerceAtLeast(0)
-            if (hidden == 0) text.append(' ')
-        }
-
-        override fun handleText(data: CharArray, position: Int) {
-            if (hidden == 0) text.append(data).append(' ')
-        }
-    }
-    ParserDelegator().parse(StringReader(withoutHiddenHtml(html)), callback, true)
-    return text.toString().replace(Regex("\\s+"), " ").trim()
-}
-
-private fun withoutHiddenHtml(html: String): String = buildString {
-    var index = 0
-    while (index < html.length) {
-        val start = html.indexOf('<', index)
-        if (start < 0) {
-            append(html, index, html.length)
-            break
-        }
-        append(html, index, start)
-        val end = html.indexOf('>', start + 1)
-        if (end < 0) break
-        val tag = html.substring(start + 1, end).trimStart().takeWhile { it.isLetterOrDigit() }.lowercase()
-        if (tag in setOf("script", "style", "noscript")) {
-            var close = html.indexOf("</$tag", end + 1, ignoreCase = true)
-            while (close >= 0) {
-                val after = close + tag.length + 2
-                if (after == html.length || html[after].isWhitespace() || html[after] == '>') break
-                close = html.indexOf("</$tag", after, ignoreCase = true)
-            }
-            if (close < 0) break
-            val closingEnd = html.indexOf('>', close)
-            if (closingEnd < 0) break
-            append(' ')
-            index = closingEnd + 1
-        } else {
-            append(html, start, end + 1)
-            index = end + 1
-        }
-    }
-}
-
 /** The headers whose repetition makes a response ambiguous. */
 private val SINGLE_HEADERS = setOf("content-length", "transfer-encoding", "content-encoding", "location")
+
+private val WHITESPACE_RUN = Regex("\\s+")

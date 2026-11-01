@@ -21,6 +21,7 @@ import org.unitedsoftware.alexandrite.sdk.web.WebSearchResult
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
 import org.unitedsoftware.alexandrite.testkit.testToolContext
+import org.unitedsoftware.alexandrite.tools.media.SWING_HTML
 import java.io.ByteArrayInputStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -78,8 +79,8 @@ class WebTest {
                 WebResponse(200, mapOf("content-type" to "text/html"), "<p>ok</p>".toByteArray())
             }
         }
-        assertEquals("/b", page.first.path)
-        assertEquals("ok", pageText(page.second))
+        assertEquals("/b", page.url.path)
+        assertEquals("<p>ok</p>" to true, page.text to page.html)
         assertFailsWith<IllegalArgumentException> {
             fetchPage(
                 URI("http://example.com"),
@@ -123,7 +124,7 @@ class WebTest {
         }
         for (location in listOf("https://docs.example.com/b", "https://elsewhere.test/b")) {
             requested.clear()
-            assertEquals(location, fetch("https://example.com/a", location).first.toString())
+            assertEquals(location, fetch("https://example.com/a", location).url.toString())
             assertEquals(listOf(URI("https://example.com/a"), URI(location)), requested)
         }
     }
@@ -140,7 +141,7 @@ class WebTest {
         fun fetched(type: String, body: ByteArray) =
             fetchPage(URI("https://example.com"), 100, 1000, { listOf(public) }) { _, _, _, _ ->
                 WebResponse(200, mapOf("content-type" to type), body)
-            }.second
+            }.text
         assertEquals("café", fetched("text/plain; charset=ISO-8859-1", "café".toByteArray(Charsets.ISO_8859_1)))
         assertEquals("café", fetched("text/plain; charset=\"utf-8\"", "café".toByteArray()))
         assertEquals("café", fetched("text/plain; charset=no-such-charset", "café".toByteArray()))
@@ -175,7 +176,7 @@ class WebTest {
             assertEquals(loopback, pinned)
             WebResponse(200, mapOf("content-type" to "text/plain"), "allowed".toByteArray())
         }
-        assertEquals("allowed", page.second)
+        assertEquals("allowed", page.text)
     }
 
     @Test
@@ -183,8 +184,8 @@ class WebTest {
         runBlocking {
             FakeModelServer().use { server ->
                 val url = server.baseUrl.replace("127.0.0.1", "localhost") + "/text"
-                assertFailsWith<IllegalArgumentException> { WebFetch(WebConfig()).fetch(url) }
-                assertFailsWith<IllegalArgumentException> { WebFetch(WebConfig()).fetch(server.baseUrl) }
+                assertFailsWith<IllegalArgumentException> { WebFetch(WebConfig(), SWING_HTML).fetch(url) }
+                assertFailsWith<IllegalArgumentException> { WebFetch(WebConfig(), SWING_HTML).fetch(server.baseUrl) }
                 assertTrue(server.requests.isEmpty())
                 val source = "<script>literal text</script>\nA < B and C > D"
                 server.enqueue(
@@ -193,7 +194,7 @@ class WebTest {
                         body(source)
                     },
                 )
-                val fetch = WebFetch(WebConfig(allowedPrivateHosts = setOf("LOCALHOST.")))
+                val fetch = WebFetch(WebConfig(allowedPrivateHosts = setOf("LOCALHOST.")), SWING_HTML)
                 assertEquals(source, fetch.fetch(url).text)
                 assertEquals("/text", server.awaitRequests(1).single().path)
                 server.assertFinished()
@@ -205,7 +206,7 @@ class WebTest {
         FakeModelServer().use { server ->
             val url = server.baseUrl.replace("127.0.0.1", "localhost") + "/redirect"
             server.enqueue(fakeResponse(302) { header("location", server.baseUrl + "/secret") })
-            val fetch = WebFetch(WebConfig(allowedPrivateHosts = setOf("localhost")))
+            val fetch = WebFetch(WebConfig(allowedPrivateHosts = setOf("localhost")), SWING_HTML)
             assertFailsWith<IllegalArgumentException> { fetch.fetch(url) }
             assertEquals("/redirect", server.awaitRequests(1).single().path)
             assertEquals(1, server.requests.size)
@@ -265,12 +266,6 @@ class WebTest {
                 assertEquals(-1, remote.getInputStream().read())
             }
         }
-    }
-
-    @Test
-    fun `HTML text drops active content`() {
-        val html = "<h1>Title</h1><script>steal()</script><style>hidden</style><p>A &amp; B</p>"
-        assertEquals("Title A & B", pageText(html))
     }
 
     @Test

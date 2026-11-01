@@ -13,8 +13,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.unitedsoftware.alexandrite.internal.media.NormalizedImage
-import org.unitedsoftware.alexandrite.internal.media.imageDimensions
-import org.unitedsoftware.alexandrite.internal.media.normalizedImage
+import org.unitedsoftware.alexandrite.internal.media.imageType
 import org.unitedsoftware.alexandrite.sdk.browse.BrowseBackend
 import org.unitedsoftware.alexandrite.sdk.browse.BrowseReport
 import org.unitedsoftware.alexandrite.sdk.browse.BrowseSessionGone
@@ -26,6 +25,7 @@ import org.unitedsoftware.alexandrite.sdk.browse.MouseButton
 import org.unitedsoftware.alexandrite.sdk.browse.PageLoad
 import org.unitedsoftware.alexandrite.sdk.browse.ScrollDirection
 import org.unitedsoftware.alexandrite.sdk.browse.WebStep
+import org.unitedsoftware.alexandrite.sdk.media.ImageCodec
 import org.unitedsoftware.alexandrite.sdk.tool.CallReview
 import org.unitedsoftware.alexandrite.sdk.tool.ReviewedTool
 import org.unitedsoftware.alexandrite.sdk.tool.Tool
@@ -39,6 +39,9 @@ import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaPart
 import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
 import org.unitedsoftware.alexandrite.sdk.transcript.ToolOutputPart
+import org.unitedsoftware.alexandrite.tools.media.NO_IMAGE_CODEC
+import org.unitedsoftware.alexandrite.tools.media.fittedImage
+import org.unitedsoftware.alexandrite.tools.media.imageDimensions
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.seconds
 
@@ -68,13 +71,15 @@ internal class BrowseProfile(
 
 /**
  * A tool driving the conversation's session in [backend] one step per call, offering only the steps, views and
- * targets the backend has. A [ToolSource][org.unitedsoftware.alexandrite.sdk.tool.ToolSource] offers it, so it is a
- * [Tool] only as [asTool] makes it one.
+ * targets the backend has, its screenshots fit by [codec]. A
+ * [ToolSource][org.unitedsoftware.alexandrite.sdk.tool.ToolSource] offers it, so it is a [Tool] only as [asTool] makes
+ * it one.
  */
 internal class BrowseTool(
     private val backend: BrowseBackend,
     private val sessions: BrowseSessions,
     private val profile: BrowseProfile,
+    private val codec: ImageCodec?,
 ) {
     fun asTool(): Tool = object : ReviewedTool {
         override val definition: ToolDefinition get() = this@BrowseTool.definition
@@ -148,9 +153,11 @@ internal class BrowseTool(
                     }
                     backend.act(session(backend).first, step)
                 }
-                val image = report.image?.let { normalizedImage(it.toByteArray()) }
+                val screenshot = report.image?.toByteArray()
+                val type = screenshot?.let(::imageType)
+                val image = type?.let { fittedImage(screenshot, it, codec) }
                 if (image != null && !(step is BrowseStep.Look && step.fullPage) && image.width > 0) {
-                    imageDimensions(report.image!!.toByteArray())?.let { (width, _) ->
+                    imageDimensions(screenshot, type, codec)?.let { (width, _) ->
                         scaled(width.toDouble() / image.width)
                     }
                 }
@@ -243,7 +250,8 @@ internal class BrowseTool(
         val parts = mutableListOf<ToolOutputPart>(TextPart(text.ifEmpty { "Done." }))
         if (report.image != null) {
             if (image == null) {
-                parts += TextPart("The screenshot could not be shown.")
+                val why = if (codec == null) ": $NO_IMAGE_CODEC" else ""
+                parts += TextPart("The screenshot could not be shown$why.")
             } else {
                 parts += MediaPart(
                     MediaKind.IMAGE,

@@ -21,7 +21,8 @@ class BuiltInRuntimeTest {
     @TempDir
     lateinit var dataDir: Path
 
-    private val builtIns = PluginSet.builtInPlugins.sortedBy { it.id }
+    /** The built-in plugins the app ships: the engines' alternatives to the JDK defaults are for other hosts. */
+    private val builtIns = PluginSet.builtInPlugins.filter { it.layer != BuiltInLayer.ENGINE }.sortedBy { it.id }
 
     @Test
     fun `the built-in plugin set loads every listed index on the class path and reports the example's`() {

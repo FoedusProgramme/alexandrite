@@ -3,9 +3,7 @@ package org.unitedsoftware.alexandrite.tools.fs
 import kotlinx.serialization.json.JsonObject
 import org.unitedsoftware.alexandrite.internal.hash.hex
 import org.unitedsoftware.alexandrite.internal.hash.sha256Digest
-import org.unitedsoftware.alexandrite.internal.media.imageDimensions
 import org.unitedsoftware.alexandrite.internal.media.imageType
-import org.unitedsoftware.alexandrite.internal.media.normalizedImage
 import org.unitedsoftware.alexandrite.internal.path.openRegularFile
 import org.unitedsoftware.alexandrite.internal.tool.ToolRefusal
 import org.unitedsoftware.alexandrite.internal.tool.countArgument
@@ -13,6 +11,7 @@ import org.unitedsoftware.alexandrite.internal.tool.requiredString
 import org.unitedsoftware.alexandrite.sdk.chat.ConversationId
 import org.unitedsoftware.alexandrite.sdk.di.Contribute
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
+import org.unitedsoftware.alexandrite.sdk.media.ImageCodec
 import org.unitedsoftware.alexandrite.sdk.tool.CallReview
 import org.unitedsoftware.alexandrite.sdk.tool.HardFloor
 import org.unitedsoftware.alexandrite.sdk.tool.ReviewedTool
@@ -26,6 +25,9 @@ import org.unitedsoftware.alexandrite.sdk.transcript.InlineMedia
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaPart
 import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
+import org.unitedsoftware.alexandrite.tools.media.NO_IMAGE_CODEC
+import org.unitedsoftware.alexandrite.tools.media.fittedImage
+import org.unitedsoftware.alexandrite.tools.media.imageDimensions
 import java.io.InputStream
 import java.io.SequenceInputStream
 import java.nio.file.Path
@@ -35,7 +37,8 @@ import java.security.MessageDigest
 
 @Singleton
 @Contribute(Tool::class)
-internal class ReadTool(private val floor: HardFloor, private val ledger: ReadLedger) : ReviewedTool {
+internal class ReadTool(private val floor: HardFloor, private val ledger: ReadLedger, private val codec: ImageCodec?) :
+    ReviewedTool {
     override val definition: ToolDefinition = ToolDefinition(
         name = "fs.read",
         description = "Reads a UTF-8 text file and returns its lines, each after its line number and a tab. " +
@@ -71,7 +74,7 @@ internal class ReadTool(private val floor: HardFloor, private val ledger: ReadLe
             context.touched(file)
             val digest = sha256Digest()
             DigestInputStream(openRegularFile(file, floor.protectsAnything), digest).use { input ->
-                val prefix = input.readNBytes(IMAGE_SNIFF_BYTES)
+                val prefix = input.readUpTo(IMAGE_SNIFF_BYTES)
                 val mediaType = imageType(prefix)
                 if (mediaType != null) {
                     imageResult(path, file, attributes, mediaType, prefix, input, digest, conversation)
@@ -112,10 +115,12 @@ internal class ReadTool(private val floor: HardFloor, private val ledger: ReadLe
             )
         }
         val bytes = prefix + input.readBytes()
-        val dimensions = imageDimensions(bytes)
+        val dimensions = imageDimensions(bytes, mediaType, codec)
         val shown = if (dimensions == null) "" else ", ${dimensions.first}x${dimensions.second}"
-        val normalized = normalizedImage(bytes)
-            ?: return ToolResult("$path is an image ($mediaType, ${bytes.size} bytes$shown) that fs.read cannot show.")
+        val why = if (codec == null) ": $NO_IMAGE_CODEC" else ""
+        val normalized = fittedImage(bytes, mediaType, codec) ?: return ToolResult(
+            "$path is an image ($mediaType, ${bytes.size} bytes$shown) that fs.read cannot show$why.",
+        )
         if (attributes.size() <= MAX_WRITE_BYTES) {
             ledger.record(conversation, file, HASH_PREFIX + hex(digest.digest()))
         }
@@ -132,6 +137,18 @@ internal class ReadTool(private val floor: HardFloor, private val ledger: ReadLe
                 ),
             ),
         )
+    }
+
+    /** The next [count] bytes of the stream, fewer where it ends first. */
+    private fun InputStream.readUpTo(count: Int): ByteArray {
+        val buffer = ByteArray(count)
+        var filled = 0
+        while (filled < count) {
+            val read = read(buffer, filled, count - filled)
+            if (read < 0) break
+            filled += read
+        }
+        return if (filled == count) buffer else buffer.copyOf(filled)
     }
 
     /** Whether [input] ends within [MAX_WRITE_BYTES] more bytes, which it reads. */

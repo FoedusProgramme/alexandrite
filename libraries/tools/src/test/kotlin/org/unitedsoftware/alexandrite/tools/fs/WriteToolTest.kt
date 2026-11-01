@@ -11,6 +11,7 @@ import org.unitedsoftware.alexandrite.sdk.permission.ClearanceKind
 import org.unitedsoftware.alexandrite.sdk.tool.CallReview
 import org.unitedsoftware.alexandrite.sdk.tool.ReviewPreview
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
+import org.unitedsoftware.alexandrite.tools.media.AWT_CODEC
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -36,7 +37,8 @@ class WriteToolTest {
     }
 
     private fun read(file: Path) {
-        val result = runBlocking { ReadTool(fs.floor, ledger).execute(arguments("path" to file), fs.context()) }
+        val result =
+            runBlocking { ReadTool(fs.floor, ledger, AWT_CODEC).execute(arguments("path" to file), fs.context()) }
         assertFalse(result.isError, result.text)
     }
 

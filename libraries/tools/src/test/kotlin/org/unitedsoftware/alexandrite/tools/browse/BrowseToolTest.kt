@@ -52,6 +52,26 @@ class BrowseToolTest {
     }
 
     @Test
+    fun `without an image codec, a screenshot a model takes as it is still comes back, a wider one says why not`() =
+        runBlocking {
+            val wide = ByteArrayOutputStream().also {
+                ImageIO.write(BufferedImage(3136, 20, BufferedImage.TYPE_INT_RGB), "png", it)
+            }
+            val small = browseTool(
+                FakeBackend(),
+                codec = null,
+            ).execute(args("action" to "screenshot"), testToolContext())
+            val large = browseTool(FakeBackend(screenshot = wide.toByteArray()), codec = null)
+                .execute(args("action" to "screenshot"), testToolContext())
+
+            assertEquals("image/png" to 1, assertIs<MediaPart>(small.content.last()).let { it.mediaType to it.width })
+            assertEquals(
+                "The screenshot could not be shown: this host cannot process images.",
+                assertIs<TextPart>(large.content.last()).text,
+            )
+        }
+
+    @Test
     fun `an unknown action or argument is refused before the backend is asked`() = runBlocking {
         val backend = FakeBackend()
         val tool = browseTool(backend)

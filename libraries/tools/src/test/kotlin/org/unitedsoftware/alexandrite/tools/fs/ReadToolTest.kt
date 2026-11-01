@@ -9,6 +9,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.InlineMedia
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaPart
 import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
+import org.unitedsoftware.alexandrite.tools.media.AWT_CODEC
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.nio.file.Files
@@ -34,7 +35,7 @@ class ReadToolTest {
     fun setUp() {
         fs = FsFixture(directory)
         ledger = ReadLedger()
-        tool = ReadTool(fs.floor, ledger)
+        tool = ReadTool(fs.floor, ledger, AWT_CODEC)
     }
 
     @Test
@@ -117,7 +118,10 @@ class ReadToolTest {
             "$file has more than one hard link, so it may be another name of a protected file: it is not read.",
             tool.call(fs.context(), "path" to file),
         )
-        assertEquals("1\tNotes.\n", ReadTool(fs.unprotected, ReadLedger()).call(fs.context(), "path" to file).text)
+        assertEquals(
+            "1\tNotes.\n",
+            ReadTool(fs.unprotected, ReadLedger(), AWT_CODEC).call(fs.context(), "path" to file).text,
+        )
     }
 
     @Test
@@ -232,6 +236,31 @@ class ReadToolTest {
         val text = assertIs<TextPart>(result.content.single())
         assertTrue("image/heic" in text.text && "cannot show" in text.text, text.text)
         assertNull(ledger.hash(ConversationId("test"), file))
+    }
+
+    @Test
+    fun `without an image codec, an image a model takes as it is still is shown unchanged`() {
+        val png = pngBytes(20, 10)
+        val file = fs.bytes("repo/photo.png", png)
+
+        val media = assertIs<MediaPart>(ReadTool(fs.floor, ledger, null).call(fs.context(), "path" to file).content[1])
+
+        assertContentEquals(png, (media.source as InlineMedia).bytes())
+        assertEquals("image/png" to (20 to 10), media.mediaType to (media.width to media.height))
+    }
+
+    @Test
+    fun `without an image codec, an image that needs one is shown as text that says so`() {
+        val file = fs.bytes("repo/photo.bmp", bmpBytes(10, 6))
+
+        val result = ReadTool(fs.floor, ledger, null).call(fs.context(), "path" to file)
+
+        assertFalse(result.isError)
+        assertEquals(
+            "$file is an image (image/bmp, ${Files.size(file)} bytes) that fs.read cannot show: this host cannot " +
+                "process images.",
+            assertIs<TextPart>(result.content.single()).text,
+        )
     }
 
     @Test
