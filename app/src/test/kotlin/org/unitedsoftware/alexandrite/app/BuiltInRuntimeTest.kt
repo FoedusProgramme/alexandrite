@@ -21,7 +21,7 @@ class BuiltInRuntimeTest {
     @TempDir
     lateinit var dataDir: Path
 
-    private val builtIns = PluginSet.builtInPlugins.sortedBy { it.id }
+    private val builtIns = PluginSet.builtInPlugins.filter { it.id !in LEFT_OUT }.sortedBy { it.id }
 
     @Test
     fun `the built-in plugin set loads every listed index on the class path and reports the example's`() {
@@ -71,5 +71,8 @@ class BuiltInRuntimeTest {
 
     private companion object {
         const val NOTES_INDEX = "com.example.notes.NotesIndex"
+
+        /** The built-in plugins that the distribution leaves out, for hosts that embed the runtime elsewhere. */
+        val LEFT_OUT = setOf("alexandrite-store-memory")
     }
 }
