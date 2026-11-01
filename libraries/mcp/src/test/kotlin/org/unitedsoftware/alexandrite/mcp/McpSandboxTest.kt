@@ -62,15 +62,15 @@ class McpSandboxTest {
         JsonArray(FakeStdioServers.args("sandboxed").map(::JsonPrimitive))
     }"""
 
-    private fun harness(server: String, environment: RecordingEnvironment = RecordingEnvironment("bubblewrap")) =
+    private fun harness(server: String, environment: RecordingEnvironment? = RecordingEnvironment("bubblewrap")) =
         PluginHarness.builder(AlexandriteMcpIndex())
-            .executionEnvironment(environment)
+            .apply { environment?.let { executionEnvironment(it) } }
             .config("""{"servers": {"files": {$launch, $server}}}""")
             .build()
 
     private fun problem(
         server: String,
-        environment: RecordingEnvironment = RecordingEnvironment("bubblewrap"),
+        environment: RecordingEnvironment? = RecordingEnvironment("bubblewrap"),
     ): String {
         val error = assertFailsWith<RuntimeStartException> { runBlocking { harness(server, environment).run {} } }
         return error.problems.single().message
@@ -147,6 +147,21 @@ class McpSandboxTest {
         val boundary = environment.launches.single().boundary
         assertEquals(NetworkAccess.None, boundary.network)
         assertEquals(emptyList(), boundary.writable)
+    }
+
+    @Test
+    fun `without any sandbox contributed, auto runs the server on the host and a named sandbox fails the start`() {
+        runBlocking {
+            harness(""""sandbox": {"type": "auto"}""", environment = null).run {
+                val source = getAll<ToolSource>().single()
+                withTimeout(20.seconds) { while (source.tools.value.isEmpty()) delay(20.milliseconds) }
+            }
+        }
+        assertEquals(
+            "Invalid config at 'mcp.servers.files.sandbox.type': no plugin contributes the sandbox 'bubblewrap'. " +
+                "Sandboxes: none.",
+            problem(""""sandbox": {"type": "bubblewrap"}""", environment = null),
+        )
     }
 
     @Test
