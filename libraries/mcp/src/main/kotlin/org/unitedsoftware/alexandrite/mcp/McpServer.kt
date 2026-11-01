@@ -417,8 +417,11 @@ internal class McpServer(
         shared.oauth.refused(spec.name, e.status, e.wwwAuthenticate, e.authorized)
     }
 
-    private fun loginHint(): String =
+    private fun loginHint(): String = if (shared.oauth.callbacks) {
         "An operator must send /mcp login ${spec.name} in a direct chat with the bot, then try again."
+    } else {
+        "It cannot log in: ${McpOAuth.NO_CALLBACK}"
+    }
 
     /** Why the call for [context] did not run, which the server's last error taints. */
     private fun unavailable(context: ToolContext): ToolResult {

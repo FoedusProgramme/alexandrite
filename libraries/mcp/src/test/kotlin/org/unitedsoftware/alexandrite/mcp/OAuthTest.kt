@@ -112,6 +112,20 @@ class OAuthTest {
     // Discovery, registration and completion.
 
     @Test
+    fun `on a host without an HTTP server a server that needs a login says it cannot log in and the others work`() =
+        FakeOAuthServer().use { fake ->
+            withHub(config(fake), clock = clock, callbacks = false) {
+                waitingForLogin()
+                until("files connected") { server("files").status.value.state == ServerState.CONNECTED }
+
+                val reply = text("login fake")
+
+                assertContains(reply, "MCP server fake cannot log in: ${McpOAuth.NO_CALLBACK}")
+                assertFalse(fake.events.any { it.startsWith("register") }, "${fake.events}")
+            }
+        }
+
+    @Test
     fun `a login found through the challenge registers a client and completes through the loopback callback`() =
         FakeOAuthServer().use { fake ->
             withHub(config(fake), clock = clock) {

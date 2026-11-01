@@ -99,6 +99,7 @@ internal fun withHub(
     config: McpConfig,
     records: Records = testRecords(PLUGIN),
     clock: Clock = Clock.systemUTC(),
+    callbacks: Boolean = true,
     block: suspend Hub.() -> Unit,
 ) = realTime {
     val scope = CoroutineScope(SupervisorJob())
@@ -112,6 +113,7 @@ internal fun withHub(
         records,
         clock,
         testHttpEngine(),
+        callbacks,
     )
     try {
         hub.onOpen()

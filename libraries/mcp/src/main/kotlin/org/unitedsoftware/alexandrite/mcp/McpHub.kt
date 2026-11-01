@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
 import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.internal.portable.JdkFeatures
 import org.unitedsoftware.alexandrite.mcp.client.McpClientOptions
 import org.unitedsoftware.alexandrite.mcp.client.McpImplementation
 import org.unitedsoftware.alexandrite.mcp.oauth.McpOAuth
@@ -40,6 +41,8 @@ internal class McpHub internal constructor(
     records: Records,
     clock: Clock,
     engine: HttpEngine,
+    /** Whether the host can listen for the OAuth callback. */
+    callbacks: Boolean,
 ) : ToolSource,
     Lifecycle {
     @Inject
@@ -59,12 +62,13 @@ internal class McpHub internal constructor(
         records,
         Clock.systemUTC(),
         engine,
+        JdkFeatures.httpServer,
     )
 
     private val transport =
         HttpTransport(HttpTimeouts(connect = 10.seconds, firstByte = 60.seconds, idle = 5.minutes), engine)
 
-    val oauth: McpOAuth = McpOAuth(settings, records, transport, scope, clock) {
+    val oauth: McpOAuth = McpOAuth(settings, records, transport, scope, clock, callbacks) {
         server(it)?.restart()
     }
 
