@@ -5,7 +5,6 @@ import org.unitedsoftware.alexandrite.internal.media.headerDimensions
 import org.unitedsoftware.alexandrite.internal.media.modelImage
 import org.unitedsoftware.alexandrite.sdk.media.ImageCodec
 
-/** [bytes], an image of [mediaType], fit to send a model by [codec] where one is bound, else as they are. */
 internal fun fittedImage(bytes: ByteArray, mediaType: String, codec: ImageCodec?): NormalizedImage? =
     modelImage(bytes, mediaType, codec?.let { it::normalized })
 

@@ -6,7 +6,7 @@ import org.unitedsoftware.alexandrite.sdk.di.BoundSpi
  * Opens SQLite databases.
  *
  * - The SQLite behind it is version 3.35 or newer and has FTS5 with the trigram tokenizer.
- * - Opening a database leaves its file unchanged.
+ * - Opening an existing database leaves its file unchanged.
  * - Every call blocks, and every failure of SQLite is a [SqliteException].
  */
 @BoundSpi

@@ -58,7 +58,7 @@ private class JdbcConnection(private val connection: Connection) : SqliteConnect
 
 /** A prepared statement, which its first [step] executes. */
 private class JdbcStatement(private val statement: PreparedStatement) : SqliteStatement {
-    /** The SQLite statement under [statement], which describes its columns from the prepare on. */
+    /** The SQLite statement under [statement]. */
     private val native: SafeStmtPtr = (statement as CoreStatement).pointer
 
     private var executed = false

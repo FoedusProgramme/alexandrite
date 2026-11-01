@@ -11,7 +11,7 @@ public object JdkFeatures {
     /** `com.sun.net.httpserver`. */
     public val httpServer: Boolean by lazy { has("com.sun.net.httpserver.HttpServer", "create") }
 
-    /** `sun.misc.Signal`, the JVM's signal handlers. */
+    /** `sun.misc.Signal`. */
     public val signals: Boolean by lazy { has("sun.misc.Signal", "handle") }
 
     private fun has(className: String, method: String): Boolean = try {

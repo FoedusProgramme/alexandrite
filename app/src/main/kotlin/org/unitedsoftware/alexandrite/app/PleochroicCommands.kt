@@ -43,7 +43,6 @@ private const val WEB_API_KEY = "tools.web.pleochroicApiKey"
 private const val PLEOCHROIC_ID = "pleochroic"
 private const val CLIENT = "alexandrite"
 
-/** The transport of every Pleochroic account HTTP call. */
 internal fun pleochroicHttp() = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds), cliEngine)
 
 /** The engine of the commands that send requests outside a runtime. */

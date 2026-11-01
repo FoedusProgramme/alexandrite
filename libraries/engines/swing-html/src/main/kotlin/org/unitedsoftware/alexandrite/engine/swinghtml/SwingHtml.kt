@@ -23,7 +23,7 @@ internal object SwingHtml {
 
 /**
  * Hands Swing's events to [reader], holding back the end of an element that Swing closes early by HTML 3.2's rules
- * until the end tag in [source] that closes it, and reading [lineFeed] as a line feed.
+ * until the end tag in [source] that closes it.
  */
 private class SwingEvents(private val source: String, private val reader: HtmlReader, private val lineFeed: Char) :
     HTMLEditorKit.ParserCallback() {

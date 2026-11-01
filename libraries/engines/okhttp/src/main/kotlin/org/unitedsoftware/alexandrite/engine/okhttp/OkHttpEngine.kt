@@ -36,10 +36,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration
 
-/**
- * The [HttpEngine] on OkHttp, with one connection pool and a client for each connect timeout its requests name. A read
- * of a body waits on a thread of the engine's own pool.
- */
+/** The [HttpEngine] on OkHttp, with one connection pool and a client for each connect timeout its requests name. */
 @Singleton
 @Binds(HttpEngine::class)
 public class OkHttpEngine :
@@ -148,7 +145,6 @@ public class OkHttpEngine :
     }
 }
 
-/** [body], which OkHttp writes once. */
 private class SourceBody(private val body: HttpRequestBody) : RequestBody() {
     override fun contentType(): MediaType? = null
 
@@ -168,10 +164,7 @@ private class SourceBody(private val body: HttpRequestBody) : RequestBody() {
     }
 }
 
-/**
- * The body of [response], each read run on [executor] and the [call] cancelled when the read is. The response is closed
- * only while no read runs, by the read itself when [close] came during it.
- */
+/** The body of [response], each read run on [executor] and the [call] cancelled when the read is. */
 private class OkBody(private val call: Call, private val response: Response, private val executor: Executor) :
     HttpResponseBody {
     private val source = response.body.source()
