@@ -46,7 +46,7 @@ enum class Layer {
     /** OS sandboxes that commands run in. */
     SANDBOX,
 
-    /** Implementations of the SDK's engine ports (HTTP, HTML, SQLite) other than the JDK defaults the runtime binds. */
+    /** Engine back ends. */
     ENGINE,
 
     /** Finding and bringing in another tool's skills and MCP servers. */
@@ -300,11 +300,7 @@ object AlexandriteLayout {
     /** Layers compiled without the SDK's internal API, as third-party plugins are */
     val THIRD_PARTY_LAYERS: Set<Layer> = setOf(Layer.CHANNEL_COMMON, Layer.PROVIDER_COMMON, Layer.EXAMPLE)
 
-    /**
-     * Layers whose main code runs wherever a host may embed the runtime, Android included: they use only the JDK API
-     * that Android's API level 26 has, which `alexandrite.portable` checks. A capability only the JDK has comes through
-     * an SDK port with a JDK default the runtime binds, or is probed for where it is used.
-     */
+    /** Layers whose main code uses only the JDK API of Android's API level 26 */
     val PORTABLE_LAYERS: Set<Layer> = setOf(
         Layer.SDK,
         Layer.INTERNAL,
