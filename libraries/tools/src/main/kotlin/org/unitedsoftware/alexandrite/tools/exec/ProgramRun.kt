@@ -8,7 +8,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import org.unitedsoftware.alexandrite.internal.portable.JdkOnly
 import org.unitedsoftware.alexandrite.internal.portable.ProcessIds
 import org.unitedsoftware.alexandrite.internal.process.ProcessTrees
 import org.unitedsoftware.alexandrite.internal.text.shellLine
@@ -50,16 +49,15 @@ internal suspend fun runPipeline(
     onLine: ((String) -> Unit)? = null,
     start: (ProcessBuilder) -> Process = ProcessBuilder::start,
     trees: ProcessTrees = ProcessTrees.system,
-    discard: ProcessBuilder.Redirect? = DISCARD,
 ): ProgramOutcome {
     val sinks = stages.mapIndexed { index, stage -> sinks(stage.redirects, last = index == stages.lastIndex) }
     val processes = mutableListOf<Process>()
     try {
         withContext(Dispatchers.IO + NonCancellable) {
-            for ((index, stage) in stages.withIndex()) processes += start(builder(stage, cwd, sinks[index], discard))
+            for ((index, stage) in stages.withIndex()) processes += start(builder(stage, cwd, sinks[index]))
         }
         val output = OutputCollector(maxChars)
-        val threads = connect(processes, stages, sinks, output, onLine, discard != null)
+        val threads = connect(processes, stages, sinks, output, onLine)
         val limited = BooleanArray(stages.size)
         val finished = withTimeoutOrNull(timeout) {
             coroutineScope {
@@ -123,23 +121,13 @@ private fun sinks(redirects: List<Redirect>, last: Boolean): Pair<Sink, Sink> {
     return output to errors
 }
 
-/**
- * What starts [stage] in [cwd], its output and errors joined where [sinks] sends both one way. A discarded stream goes
- * to [discard], or is left to [connect] to read without it.
- */
-private fun builder(
-    stage: Stage,
-    cwd: Path,
-    sinks: Pair<Sink, Sink>,
-    discard: ProcessBuilder.Redirect?,
-): ProcessBuilder {
+/** What starts [stage] in [cwd], its output and errors joined where [sinks] sends both one way. */
+private fun builder(stage: Stage, cwd: Path, sinks: Pair<Sink, Sink>): ProcessBuilder {
     val (output, errors) = sinks
     val builder = ProcessBuilder(stage.command).directory(cwd.toFile())
         .redirectErrorStream(output == errors && output != Sink.DISCARDED)
-    if (discard != null) {
-        if (output == Sink.DISCARDED) builder.redirectOutput(discard)
-        if (errors == Sink.DISCARDED) builder.redirectError(discard)
-    }
+    if (output == Sink.DISCARDED) builder.redirectOutput(DISCARD)
+    if (errors == Sink.DISCARDED) builder.redirectError(DISCARD)
     builder.environment().apply {
         clear()
         putAll(stage.environment)
@@ -149,7 +137,7 @@ private fun builder(
 
 /**
  * Starts the threads that pass the streams of [processes] on as [sinks] say, into [output] or into the next program,
- * whose input otherwise ends at once, and that read the discarded ones unless they were [redirected].
+ * whose input otherwise ends at once.
  */
 private fun connect(
     processes: List<Process>,
@@ -157,29 +145,21 @@ private fun connect(
     sinks: List<Pair<Sink, Sink>>,
     output: OutputCollector,
     onLine: ((String) -> Unit)?,
-    redirected: Boolean,
 ): List<Thread> {
     val threads = mutableListOf<Thread>()
     val feeds = arrayOfNulls<InputStream>(processes.size)
     for ((index, process) in processes.withIndex()) {
         val named = named(process)
         fun route(stream: InputStream, sink: Sink) {
-            when (sink) {
-                Sink.NEXT -> feeds[index + 1] = stream
-
-                Sink.SHOWN -> threads += thread(isDaemon = true, name = "command.exec output$named") {
-                    output.drain(stream, onLine)
-                }
-
-                Sink.DISCARDED -> threads += thread(isDaemon = true, name = "command.exec discard$named") {
-                    discard(stream)
-                }
+            if (sink == Sink.NEXT) {
+                feeds[index + 1] = stream
+            } else {
+                threads += thread(isDaemon = true, name = "command.exec output$named") { output.drain(stream, onLine) }
             }
         }
         val (out, errors) = sinks[index]
-        val joined = out == errors && out != Sink.DISCARDED
-        if (out != Sink.DISCARDED || !redirected) route(process.inputStream, out)
-        if (!joined && (errors != Sink.DISCARDED || !redirected)) route(process.errorStream, errors)
+        if (out != Sink.DISCARDED) route(process.inputStream, out)
+        if (errors != Sink.DISCARDED && errors != out) route(process.errorStream, errors)
     }
     for ((index, process) in processes.withIndex()) {
         val feed = feeds[index]
@@ -214,18 +194,6 @@ private fun pump(input: InputStream, output: OutputStream) {
     }
 }
 
-/** Reads [input] to its end, keeping nothing. */
-private fun discard(input: InputStream) {
-    try {
-        input.use {
-            val buffer = ByteArray(CHUNK)
-            while (it.read(buffer) >= 0) continue
-        }
-    } catch (e: IOException) {
-        // The stream closed under the reader.
-    }
-}
-
 /** ` <pid>` of [process] for a thread's name, empty where the JDK does not tell it. */
 private fun named(process: Process): String = ProcessIds.of(process)?.let { " $it" }.orEmpty()
 
@@ -234,15 +202,8 @@ private suspend fun stop(processes: List<Process>, trees: ProcessTrees) = withCo
     coroutineScope { for (process in processes) launch { trees.destroy(process, STOP_GRACE) } }
 }
 
-/** `Redirect.DISCARD`, null where the JDK lacks it. */
-private val DISCARD: ProcessBuilder.Redirect? = discardRedirect()
-
-@JdkOnly
-private fun discardRedirect(): ProcessBuilder.Redirect? = try {
-    ProcessBuilder.Redirect.DISCARD
-} catch (e: LinkageError) {
-    null
-}
+/** The null device, where a discarded stream goes. */
+private val DISCARD: ProcessBuilder.Redirect = ProcessBuilder.Redirect.to(File(if (POSIX_HOST) "/dev/null" else "NUL"))
 
 /**
  * The variables of [parent] that a program gets: the usual ones and those named in [extra]. They include `TERM` and

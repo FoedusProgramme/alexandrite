@@ -9,7 +9,7 @@ import org.unitedsoftware.alexandrite.sdk.text.HtmlParser
 /** The [HtmlParser] on Swing's HTML parser. */
 @Singleton
 @Binds(HtmlParser::class)
-public class SwingHtmlParser : HtmlParser {
+internal class SwingHtmlParser : HtmlParser {
     override fun parse(html: String, baseUrl: String?): HtmlDocument {
         val read = SwingHtml.read(html, baseUrl)
         return HtmlDocument(read.title, read.text, read.links.map { HtmlLink(it.href, it.text) })

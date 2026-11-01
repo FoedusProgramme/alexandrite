@@ -2,6 +2,7 @@ package org.unitedsoftware.alexandrite.runtime.lifecycle
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.unitedsoftware.alexandrite.internal.portable.JdkFeatures
 import org.unitedsoftware.alexandrite.internal.portable.JdkOnly
 import org.unitedsoftware.alexandrite.runtime.AlexandriteRuntime
 import org.unitedsoftware.alexandrite.runtime.RuntimeSpec
@@ -68,14 +69,17 @@ internal interface Signals {
 internal object JvmSignals : Signals {
     private val NAMES = listOf("TERM", "INT")
 
-    override fun trap(handler: (HostSignal) -> Unit): AutoCloseable? = try {
-        SunMiscSignals.trap(NAMES, handler)
-    } catch (e: LinkageError) {
-        logger.warn("Cannot handle signals, stopping in a shutdown hook instead: {}", e.toString())
-        null
-    } catch (e: IllegalArgumentException) {
-        logger.warn("Cannot handle signals, stopping in a shutdown hook instead: {}", e.toString())
-        null
+    override fun trap(handler: (HostSignal) -> Unit): AutoCloseable? {
+        if (!JdkFeatures.signals) {
+            logger.warn("Cannot handle signals, stopping in a shutdown hook instead: this JVM has no sun.misc.Signal")
+            return null
+        }
+        return try {
+            SunMiscSignals.trap(NAMES, handler)
+        } catch (e: IllegalArgumentException) {
+            logger.warn("Cannot handle signals, stopping in a shutdown hook instead: {}", e.toString())
+            null
+        }
     }
 
     override fun onShutdown(hook: () -> Unit): AutoCloseable {

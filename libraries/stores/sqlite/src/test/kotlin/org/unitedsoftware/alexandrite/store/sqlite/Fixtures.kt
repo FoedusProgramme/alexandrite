@@ -14,9 +14,6 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChatUser
 import org.unitedsoftware.alexandrite.sdk.chat.TurnId
 import org.unitedsoftware.alexandrite.sdk.chat.TurnInfo
 import org.unitedsoftware.alexandrite.sdk.chat.TurnKind
-import org.unitedsoftware.alexandrite.sdk.di.Key
-import org.unitedsoftware.alexandrite.sdk.di.container.Resolver
-import org.unitedsoftware.alexandrite.sdk.di.key
 import org.unitedsoftware.alexandrite.sdk.plugin.PluginFiles
 import org.unitedsoftware.alexandrite.sdk.plugin.PluginIndex
 import org.unitedsoftware.alexandrite.sdk.store.ConversationInfo
@@ -31,6 +28,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.UserEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.UserOrigin
 import org.unitedsoftware.alexandrite.testkit.TEST_TIME
+import org.unitedsoftware.alexandrite.testkit.engine.boundBy
 import org.unitedsoftware.alexandrite.testkit.testChat
 import org.unitedsoftware.alexandrite.testkit.testUser
 import java.nio.file.Path
@@ -74,22 +72,7 @@ internal val driverIndex: PluginIndex = when (
     else -> error("No SQLite driver $name.")
 }
 
-internal val driver: SqliteDriver = IndexResolver(driverIndex).get(key<SqliteDriver>())
-
-private class IndexResolver(private val index: PluginIndex) : Resolver {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : Any> get(key: Key<T>): T = index.bindings().single { it.key == key }.create(this) as T
-
-    override fun <T : Any> getOrNull(key: Key<T>): T? = null
-
-    override fun <T : Any> getAll(key: Key<T>): List<T> = emptyList()
-
-    override fun <T : Any> lazy(key: Key<T>): Lazy<T> = lazy { get(key) }
-
-    override fun <T : Any> provider(key: Key<T>): () -> T = { get(key) }
-
-    override fun pluginOf(instance: Any): String? = null
-}
+internal val driver: SqliteDriver = boundBy(driverIndex)
 
 internal class TestStore(directory: Path, val clock: MutableClock) {
     val database = StoreDatabase(TestFiles(directory), clock, driver)

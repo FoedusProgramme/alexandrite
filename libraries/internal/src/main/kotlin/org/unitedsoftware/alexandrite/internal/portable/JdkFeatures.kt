@@ -11,6 +11,9 @@ public object JdkFeatures {
     /** `com.sun.net.httpserver`. */
     public val httpServer: Boolean by lazy { present("com.sun.net.httpserver.HttpServer") }
 
+    /** `sun.misc.Signal`, the JVM's signal handlers. */
+    public val signals: Boolean by lazy { present("sun.misc.Signal") }
+
     private fun present(name: String): Boolean = try {
         Class.forName(name, false, JdkFeatures::class.java.classLoader)
         true

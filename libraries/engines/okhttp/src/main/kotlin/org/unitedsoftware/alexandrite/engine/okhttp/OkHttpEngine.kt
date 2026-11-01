@@ -42,7 +42,7 @@ import kotlin.time.Duration
  */
 @Singleton
 @Binds(HttpEngine::class)
-internal class OkHttpEngine :
+public class OkHttpEngine :
     HttpEngine,
     AutoCloseable {
     private val executor = ThreadPoolExecutor(0, Int.MAX_VALUE, 60, TimeUnit.SECONDS, SynchronousQueue()) {

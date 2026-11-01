@@ -18,13 +18,27 @@ public fun imageType(bytes: ByteArray): String? = when {
     else -> null
 }
 
-/** An image ready to send a model: [bytes] of [mediaType], [width] by [height] pixels, 0 by 0 when unknown. */
+/** An image ready to send a model: [bytes] of [mediaType], [width] by [height] pixels, each null when unknown. */
 public class NormalizedImage(
     public val bytes: ByteArray,
     public val mediaType: String,
-    public val width: Int,
-    public val height: Int,
+    public val width: Int?,
+    public val height: Int?,
 )
+
+/** Why an image is not shown where the host fits no images and a model does not take it as it is. */
+public const val NO_IMAGE_CODEC: String = "this host cannot process images"
+
+/**
+ * [bytes], an image of [mediaType], fit to send a model by [fit] where the host has one, else as they are; null when
+ * [fit] cannot decode them or, without it, they do not fit as they are.
+ */
+public fun modelImage(
+    bytes: ByteArray,
+    mediaType: String,
+    fit: ((bytes: ByteArray, mediaType: String, maxSide: Int, maxBytes: Int) -> NormalizedImage?)?,
+): NormalizedImage? =
+    if (fit == null) unchangedImage(bytes, mediaType) else fit(bytes, mediaType, MAX_IMAGE_SIDE, MAX_IMAGE_BYTES)
 
 /**
  * The width and height that the header of [bytes], a png, jpeg, gif or webp of [mediaType], declares; null for another
@@ -50,8 +64,8 @@ public fun unchangedImage(
 ): NormalizedImage? {
     if (bytes.size > maxBytes) return null
     if (mediaType == "image/webp") {
-        val (width, height) = webpDimensions(bytes) ?: (0 to 0)
-        return NormalizedImage(bytes, mediaType, width, height)
+        val dimensions = webpDimensions(bytes)
+        return NormalizedImage(bytes, mediaType, dimensions?.first, dimensions?.second)
     }
     if (mediaType !in PASSTHROUGH_TYPES) return null
     val (width, height) = headerDimensions(bytes, mediaType) ?: return null

@@ -3,6 +3,8 @@ package org.unitedsoftware.alexandrite.tools.fs
 import kotlinx.serialization.json.JsonObject
 import org.unitedsoftware.alexandrite.internal.hash.hex
 import org.unitedsoftware.alexandrite.internal.hash.sha256Digest
+import org.unitedsoftware.alexandrite.internal.io.readAtMost
+import org.unitedsoftware.alexandrite.internal.media.NO_IMAGE_CODEC
 import org.unitedsoftware.alexandrite.internal.media.imageType
 import org.unitedsoftware.alexandrite.internal.path.openRegularFile
 import org.unitedsoftware.alexandrite.internal.tool.ToolRefusal
@@ -25,7 +27,6 @@ import org.unitedsoftware.alexandrite.sdk.transcript.InlineMedia
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaPart
 import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
-import org.unitedsoftware.alexandrite.tools.media.NO_IMAGE_CODEC
 import org.unitedsoftware.alexandrite.tools.media.fittedImage
 import org.unitedsoftware.alexandrite.tools.media.imageDimensions
 import java.io.InputStream
@@ -74,7 +75,7 @@ internal class ReadTool(private val floor: HardFloor, private val ledger: ReadLe
             context.touched(file)
             val digest = sha256Digest()
             DigestInputStream(openRegularFile(file, floor.protectsAnything), digest).use { input ->
-                val prefix = input.readUpTo(IMAGE_SNIFF_BYTES)
+                val prefix = input.readAtMost(IMAGE_SNIFF_BYTES)
                 val mediaType = imageType(prefix)
                 if (mediaType != null) {
                     imageResult(path, file, attributes, mediaType, prefix, input, digest, conversation)
@@ -132,23 +133,11 @@ internal class ReadTool(private val floor: HardFloor, private val ledger: ReadLe
                     normalized.mediaType,
                     InlineMedia(normalized.bytes),
                     path.fileName?.toString(),
-                    normalized.width.takeIf { it > 0 },
-                    normalized.height.takeIf { it > 0 },
+                    normalized.width?.takeIf { it > 0 },
+                    normalized.height?.takeIf { it > 0 },
                 ),
             ),
         )
-    }
-
-    /** The next [count] bytes of the stream, fewer where it ends first. */
-    private fun InputStream.readUpTo(count: Int): ByteArray {
-        val buffer = ByteArray(count)
-        var filled = 0
-        while (filled < count) {
-            val read = read(buffer, filled, count - filled)
-            if (read < 0) break
-            filled += read
-        }
-        return if (filled == count) buffer else buffer.copyOf(filled)
     }
 
     /** Whether [input] ends within [MAX_WRITE_BYTES] more bytes, which it reads. */

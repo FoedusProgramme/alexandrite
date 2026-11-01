@@ -12,8 +12,9 @@ import javax.swing.text.html.parser.ParserDelegator
 /** Reads pages by the rules of the SDK's `HtmlParser` with Swing's HTML parser. */
 internal object SwingHtml {
     fun read(html: String, baseUrl: String?): HtmlReading {
-        val source = prepared(html)
-        val events = SwingEvents(source, HtmlReader(baseUrl))
+        val lineFeed = lineFeedStandIn(html)
+        val source = prepared(html, lineFeed)
+        val events = SwingEvents(source, HtmlReader(baseUrl), lineFeed)
         // Swing's parser renames one shared element for each unknown tag it meets
         synchronized(this) { ParserDelegator().parse(StringReader(source), events, true) }
         return events.read()
@@ -22,9 +23,10 @@ internal object SwingHtml {
 
 /**
  * Hands Swing's events to [reader], holding back the end of an element that Swing closes early by HTML 3.2's rules
- * until the end tag in [source] that closes it.
+ * until the end tag in [source] that closes it, and reading [lineFeed] as a line feed.
  */
-private class SwingEvents(private val source: String, private val reader: HtmlReader) : HTMLEditorKit.ParserCallback() {
+private class SwingEvents(private val source: String, private val reader: HtmlReader, private val lineFeed: Char) :
+    HTMLEditorKit.ParserCallback() {
     /** The elements Swing closed early, with where their end tags are. */
     private val held = mutableListOf<Pair<String, Int>>()
 
@@ -61,7 +63,7 @@ private class SwingEvents(private val source: String, private val reader: HtmlRe
 
     /** Splits the text Swing joined across an end tag it dropped, at the start of the part after it. */
     override fun handleText(data: CharArray, position: Int) {
-        val text = String(data).replace(PRE_LINE_FEED, '\n')
+        val text = String(data).replace(lineFeed, '\n')
         val due = due(position, null)
         if (due.isEmpty()) return reader.text(text)
         val after = sourceText(position).takeIf { text.endsWith(it) } ?: text
@@ -91,7 +93,7 @@ private class SwingEvents(private val source: String, private val reader: HtmlRe
     /** The text of [source] from [position] to the next tag, as Swing reports it. */
     private fun sourceText(position: Int): String {
         val raw = source.substring(position, source.indexOf('<', position).takeIf { it >= 0 } ?: source.length)
-        return if (PRE_LINE_FEED in raw) raw.replace(PRE_LINE_FEED, '\n') else raw.replace(WHITESPACE_RUN, " ")
+        return if (lineFeed in raw) raw.replace(lineFeed, '\n') else raw.replace(WHITESPACE_RUN, " ")
     }
 
     private fun endTagAt(position: Int, name: String): Boolean =
@@ -107,17 +109,17 @@ private class SwingEvents(private val source: String, private val reader: HtmlRe
 
 /**
  * [html] made ready for Swing: dropped elements cut out, a bogus comment of the HTML standard made a comment, a `<`
- * that starts no tag escaped, line ends inside `pre` kept from Swing's trimming, `&apos;` spelled as a number, and an
- * `&` that starts an attribute's parameter name (`?a=1&copy=2`) escaped.
+ * that starts no tag escaped, line ends inside `pre` written as [lineFeed], `&apos;` spelled as a number, and an `&`
+ * that starts an attribute's parameter name (`?a=1&copy=2`) escaped.
  */
-private fun prepared(html: String): String = buildString {
+private fun prepared(html: String, lineFeed: Char): String = buildString {
     var index = 0
     var pre = 0
     while (index < html.length) {
         val start = html.indexOf('<', index)
         val textEnd = if (start < 0) html.length else start
         val text = html.substring(index, textEnd).replace("&apos;", "&#39;")
-        append(if (pre > 0) text.replace(LINE_END, PRE_LINE_FEED.toString()) else text)
+        append(if (pre > 0) text.replace(LINE_END, lineFeed.toString()) else text)
         if (start < 0) break
         if (html.startsWith("<!--", start)) {
             val end = html.indexOf("-->", start + 4)
@@ -151,7 +153,7 @@ private fun prepared(html: String): String = buildString {
             if (close < 0) break
             val closeEnd = html.indexOf('>', close)
             if (closeEnd < 0) break
-            append(' ')
+            append(if (pre > 0) "<!---->" else " ")
             index = closeEnd + 1
             continue
         }
@@ -203,8 +205,21 @@ private fun Char.isAsciiLetter(): Boolean = this in 'a'..'z' || this in 'A'..'Z'
 /** The elements whose ends Swing places where the HTML standard does. */
 private val STRUCTURE = setOf("html", "head", "body", "title")
 
-/** What stands for a line feed inside `pre` while Swing parses, which it would drop before an end tag. */
-private const val PRE_LINE_FEED = '\uE000'
+/**
+ * A private-use character that [html] neither holds nor names by a numeric reference, to stand for the line feeds inside
+ * `pre` that Swing would drop before an end tag.
+ */
+private fun lineFeedStandIn(html: String): Char {
+    val named = NUMERIC_REFERENCE.findAll(html).mapNotNull { match ->
+        val (hex, decimal) = match.destructured
+        if (hex.isEmpty()) decimal.toIntOrNull() else hex.toIntOrNull(16)
+    }.toSet()
+    return PRIVATE_USE.firstOrNull { it !in html && it.code !in named } ?: PRIVATE_USE.first
+}
+
+private val PRIVATE_USE = '\uE000'..'\uF8FF'
+
+private val NUMERIC_REFERENCE = Regex("&#(?:[xX]([0-9A-Fa-f]{1,8})|([0-9]{1,10}))")
 
 private val LINE_END = Regex("\r\n?|\n")
 

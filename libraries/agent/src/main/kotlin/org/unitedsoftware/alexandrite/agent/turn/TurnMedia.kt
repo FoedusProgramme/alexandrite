@@ -15,11 +15,10 @@ import org.unitedsoftware.alexandrite.agent.prompt.NotedMedia
 import org.unitedsoftware.alexandrite.agent.prompt.mediaNote
 import org.unitedsoftware.alexandrite.agent.prompt.oneLine
 import org.unitedsoftware.alexandrite.agent.prompt.shortened
-import org.unitedsoftware.alexandrite.internal.media.MAX_IMAGE_BYTES
-import org.unitedsoftware.alexandrite.internal.media.MAX_IMAGE_SIDE
+import org.unitedsoftware.alexandrite.internal.media.NO_IMAGE_CODEC
 import org.unitedsoftware.alexandrite.internal.media.NormalizedImage
 import org.unitedsoftware.alexandrite.internal.media.imageType
-import org.unitedsoftware.alexandrite.internal.media.unchangedImage
+import org.unitedsoftware.alexandrite.internal.media.modelImage
 import org.unitedsoftware.alexandrite.sdk.channel.IncomingMessage
 import org.unitedsoftware.alexandrite.sdk.channel.MediaAttachment
 import org.unitedsoftware.alexandrite.sdk.chat.TurnId
@@ -55,7 +54,7 @@ internal class TurnMedia(
     private val codec: ImageCodec?,
 ) {
     /** Why an image is not shown when it cannot be fit. */
-    private val unfit = if (codec == null) "this host cannot process images" else "the image could not be decoded"
+    private val unfit = if (codec == null) NO_IMAGE_CODEC else "the image could not be decoded"
 
     /** The bytes of the media the turn put or read, null where the store has none. */
     private val loaded = HashMap<MediaId, InlineMedia?>()
@@ -260,22 +259,15 @@ internal class TurnMedia(
     private fun normalized(part: MediaPart): MediaPart? {
         val bytes = (part.source as InlineMedia).bytes()
         val image = fitted(bytes) ?: return null
-        val width = image.width.takeIf { it > 0 }
-        val height = image.height.takeIf { it > 0 }
+        val width = image.width?.takeIf { it > 0 }
+        val height = image.height?.takeIf { it > 0 }
         return MediaPart(MediaKind.IMAGE, image.mediaType, InlineMedia(image.bytes), part.name, width, height)
     }
 
     /** [bytes] fit by the [codec], or as they are where none is bound. */
     private fun fitted(bytes: ByteArray): NormalizedImage? {
         val type = imageType(bytes) ?: return null
-        if (codec == null) return unchangedImage(bytes, type)
-        val image = codec.fitted(bytes, type, MAX_IMAGE_SIDE, MAX_IMAGE_BYTES) ?: return null
-        return NormalizedImage(
-            image.bytes,
-            image.mediaType,
-            image.dimensions?.width ?: 0,
-            image.dimensions?.height ?: 0,
-        )
+        return modelImage(bytes, type, codec?.let { it::normalized })
     }
 
     private suspend fun read(id: MediaId): InlineMedia? {
@@ -311,3 +303,8 @@ private fun ToolResultEntry.withContent(part: (ToolOutputPart) -> ToolOutputPart
     ToolResultEntry(record, callId, toolName, content.map(part), outcome)
 
 private val logger = LoggerFactory.getLogger(TurnMedia::class.java)
+
+private fun ImageCodec.normalized(bytes: ByteArray, mediaType: String, maxSide: Int, maxBytes: Int): NormalizedImage? =
+    fitted(bytes, mediaType, maxSide, maxBytes)?.let {
+        NormalizedImage(it.bytes, it.mediaType, it.dimensions?.width, it.dimensions?.height)
+    }

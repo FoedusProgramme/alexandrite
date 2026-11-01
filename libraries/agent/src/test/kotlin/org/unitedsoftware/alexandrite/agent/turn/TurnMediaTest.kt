@@ -10,7 +10,7 @@ import org.unitedsoftware.alexandrite.agent.media.MediaReading
 import org.unitedsoftware.alexandrite.agent.media.MediaRoute
 import org.unitedsoftware.alexandrite.agent.tinyGif
 import org.unitedsoftware.alexandrite.agent.tinyPng
-import org.unitedsoftware.alexandrite.engine.awtimages.AwtImageCodec
+import org.unitedsoftware.alexandrite.engine.awtimages.AlexandriteEngineAwtImagesIndex
 import org.unitedsoftware.alexandrite.sdk.channel.IncomingMessage
 import org.unitedsoftware.alexandrite.sdk.channel.MediaAttachment
 import org.unitedsoftware.alexandrite.sdk.channel.MediaContent
@@ -34,6 +34,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.ToolResultEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.UserEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.UserPart
 import org.unitedsoftware.alexandrite.testkit.MemoryStore
+import org.unitedsoftware.alexandrite.testkit.engine.boundBy
 import org.unitedsoftware.alexandrite.testkit.testMessage
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import org.unitedsoftware.alexandrite.testkit.testUserEntry
@@ -413,4 +414,4 @@ private class Media(private val store: MediaStore) : MediaStore by store {
 }
 
 /** The codec the desktop host binds. */
-private val AwtCodec: ImageCodec = AwtImageCodec()
+private val AwtCodec: ImageCodec = boundBy(AlexandriteEngineAwtImagesIndex())

@@ -101,8 +101,8 @@ internal object AwtImages {
     /** [bytes] unchanged when within [maxBytes], else null: ImageIO cannot re-encode a webp it did not decode. */
     private fun webpImage(bytes: ByteArray, maxBytes: Int): NormalizedImage? {
         if (bytes.size > maxBytes) return null
-        val (width, height) = webpDimensions(bytes) ?: (0 to 0)
-        return NormalizedImage(bytes, "image/webp", width, height)
+        val dimensions = webpDimensions(bytes)
+        return NormalizedImage(bytes, "image/webp", dimensions?.first, dimensions?.second)
     }
 
     /** [decoded] scaled to [maxSide], then PNG when it has alpha and fits [maxBytes], else JPEG at a falling quality. */

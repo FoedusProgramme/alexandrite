@@ -11,6 +11,8 @@ dependencies {
     implementation("org.unitedsoftware.alexandrite:alexandrite-runtime")
     implementation("org.unitedsoftware.alexandrite:alexandrite-agent")
     implementation("org.unitedsoftware.alexandrite:alexandrite-tools")
+    implementation("org.unitedsoftware.alexandrite:alexandrite-engine-jdk-http")
+    implementation("org.unitedsoftware.alexandrite:alexandrite-engine-swing-html")
 
     testImplementation("org.unitedsoftware.alexandrite:alexandrite-testkit")
     testImplementation(libs.kotlin.test)

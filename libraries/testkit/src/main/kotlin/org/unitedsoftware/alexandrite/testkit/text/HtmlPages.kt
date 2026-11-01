@@ -190,6 +190,23 @@ internal val HTML_PAGES: List<HtmlParserCheck> by lazy {
             listOf("Before after.", "It's kept & shown."),
         ),
         page(
+            "dropped content inside pre",
+            """
+            <pre>a<script>x()</script>b<style>p { }</style>c
+            d<noscript>no</noscript>e</pre>
+            """,
+            null,
+            null,
+            listOf("abc", "de"),
+        ),
+        page(
+            "private-use characters",
+            "<p>&#xE000; icon &#57344;</p><pre>a&#xE000;b\nc</pre>",
+            null,
+            null,
+            listOf(" icon ", "ab", "c"),
+        ),
+        page(
             "a page without its optional tags",
             """
             <!doctype html>
