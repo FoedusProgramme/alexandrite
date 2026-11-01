@@ -16,7 +16,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
-/** Pipelines run without `ProcessHandle` and `Redirect.DISCARD`. */
+/** Pipelines run without `ProcessHandle`. */
 @DisabledOnOs(OS.WINDOWS)
 class ProgramRunTest {
     @TempDir
@@ -26,7 +26,7 @@ class ProgramRunTest {
         Stage(listOf("/bin/sh", "-c", script), mapOf("PATH" to "/usr/bin:/bin"), redirects.toList(), limit)
 
     private fun run(vararg stages: Stage, timeout: Duration = 20.seconds): ProgramOutcome = runBlocking {
-        runPipeline(stages.toList(), directory, timeout, MAX_CHARS, trees = ProcessTrees.direct, discard = null)
+        runPipeline(stages.toList(), directory, timeout, MAX_CHARS, trees = ProcessTrees.direct)
     }
 
     @Test
@@ -38,12 +38,21 @@ class ProgramRunTest {
     }
 
     @Test
-    fun `discarded streams are read to their end, so a program writing more than a pipe holds finishes`() {
+    fun `a program writing more than a pipe holds to a discarded stream finishes`() {
         val output = run(stage("$MEGABYTE; echo shown >&2", Redirect.OUTPUT_DISCARDED))
         val both = run(stage("$MEGABYTE; $MEGABYTE >&2; exit 4", Redirect.BOTH_DISCARDED))
 
         assertEquals(0 to "shown", output.exitCode to output.output.trim())
         assertEquals(4 to "", both.exitCode to both.output)
+    }
+
+    @Test
+    fun `a call ends with its program while a process it left running holds the discarded streams`() {
+        val start = TimeSource.Monotonic.markNow()
+        val outcome = run(stage("sleep 3 & echo started >&2", Redirect.BOTH_DISCARDED))
+
+        assertEquals(0 to "", outcome.exitCode to outcome.output)
+        assertTrue(start.elapsedNow() < 900.milliseconds)
     }
 
     @Test

@@ -56,8 +56,8 @@ private object HandleTrees : ProcessTrees {
         return Descendants { grace -> stopAll(handles, grace) }
     }
 
-    /** Descendants are found before the process ends, as they no longer count as its descendants afterwards. */
     override suspend fun destroy(process: Process, grace: Duration) {
+        // Listed before the process ends, which drops them from its descendants
         val descendants = process.descendants().toList()
         descendants.forEach { stop(it, forcibly = false) }
         process.destroy()

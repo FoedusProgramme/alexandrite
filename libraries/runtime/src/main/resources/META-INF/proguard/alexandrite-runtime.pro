@@ -7,3 +7,7 @@
 -keepattributes RuntimeVisibleAnnotations
 -keep @interface org.unitedsoftware.alexandrite.sdk.runtime.HostApi
 -keep,allowshrinking,allowobfuscation @org.unitedsoftware.alexandrite.sdk.runtime.HostApi class *
+
+# JDK classes Android lacks, used only behind a JdkFeatures probe.
+-dontwarn sun.misc.Signal
+-dontwarn sun.misc.SignalHandler
