@@ -237,7 +237,7 @@ object AlexandriteLayout {
 
     val LAYER_DEPENDENCIES: Map<Layer, Set<Layer>> = mapOf(
         Layer.SDK to emptySet(),
-        Layer.INTERNAL to emptySet(),
+        Layer.INTERNAL to setOf(Layer.SDK),
         Layer.KSP to emptySet(),
         Layer.RUNTIME to setOf(Layer.SDK, Layer.INTERNAL),
         Layer.AGENT to setOf(Layer.SDK, Layer.INTERNAL),

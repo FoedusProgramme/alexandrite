@@ -19,6 +19,7 @@ import org.unitedsoftware.alexandrite.sdk.model.ModelOptions
 import org.unitedsoftware.alexandrite.sdk.model.ModelRequest
 import org.unitedsoftware.alexandrite.sdk.model.Trust
 import org.unitedsoftware.alexandrite.sdk.model.TurnContextMode
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import org.unitedsoftware.alexandrite.sdk.transcript.EndpointId
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 import org.unitedsoftware.alexandrite.sdk.web.WebQuery
@@ -46,12 +47,13 @@ public class MessagesSettings(
 }
 
 /**
- * An endpoint that speaks the Messages API in [flavor] at `{baseUrl}/v1/messages`, which describes each model by the
- * last listing it read.
+ * An endpoint that speaks the Messages API in [flavor] at `{baseUrl}/v1/messages` through [engine], which describes
+ * each model by the last listing it read.
  */
 public class MessagesEndpoint(
     override val id: EndpointId,
     private val settings: EndpointSettings,
+    engine: HttpEngine,
     private val flavor: MessagesFlavor,
     private val messages: MessagesSettings = MessagesSettings(),
 ) : ModelEndpoint,
@@ -59,6 +61,7 @@ public class MessagesEndpoint(
     private val core = EndpointCore(
         id,
         settings,
+        engine,
         flavor.listing,
         flavor.dialect,
         SENDS,

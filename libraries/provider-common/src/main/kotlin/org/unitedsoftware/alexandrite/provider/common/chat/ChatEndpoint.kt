@@ -21,21 +21,23 @@ import org.unitedsoftware.alexandrite.sdk.model.ModelOptions
 import org.unitedsoftware.alexandrite.sdk.model.ModelRequest
 import org.unitedsoftware.alexandrite.sdk.model.Trust
 import org.unitedsoftware.alexandrite.sdk.model.TurnContextMode
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import org.unitedsoftware.alexandrite.sdk.transcript.EndpointId
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 
 /**
- * An endpoint that speaks Chat Completions in [flavor] at `{baseUrl}/chat/completions`, which describes each model by
- * the last listing it read.
+ * An endpoint that speaks Chat Completions in [flavor] at `{baseUrl}/chat/completions` through [engine], which
+ * describes each model by the last listing it read.
  */
 public class ChatEndpoint(
     override val id: EndpointId,
     private val settings: EndpointSettings,
+    engine: HttpEngine,
     private val flavor: ChatFlavor,
     private val chat: ChatApiSettings = ChatApiSettings(),
 ) : ModelEndpoint,
     AutoCloseable {
-    private val core = EndpointCore(id, settings, flavor.listing, flavor.dialect, SENDS)
+    private val core = EndpointCore(id, settings, engine, flavor.listing, flavor.dialect, SENDS)
 
     override suspend fun models(): List<ModelInfo> = core.models()
 

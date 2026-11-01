@@ -35,6 +35,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.ToolOutcome
 import org.unitedsoftware.alexandrite.sdk.transcript.ToolResultEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptRules
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import org.unitedsoftware.alexandrite.testkit.testUserEntry
 import java.time.Instant
@@ -65,7 +66,13 @@ class AnthropicCompatibleLiveTest {
                 }
             },
         )
-        return MessagesEndpoint(EndpointId("live"), config.settings, MessagesFlavor.STANDARD, config.options)
+        return MessagesEndpoint(
+            EndpointId("live"),
+            config.settings,
+            testHttpEngine(),
+            MessagesFlavor.STANDARD,
+            config.options,
+        )
     }
 
     private fun request(

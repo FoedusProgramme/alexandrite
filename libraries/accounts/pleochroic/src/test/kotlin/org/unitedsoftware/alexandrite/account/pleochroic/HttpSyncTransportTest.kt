@@ -8,6 +8,7 @@ import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
 import org.unitedsoftware.alexandrite.internal.http.HttpTransport
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -15,7 +16,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
-private fun transport() = HttpTransport(HttpTimeouts(5.seconds, 5.seconds, 5.seconds))
+private fun transport() = HttpTransport(HttpTimeouts(5.seconds, 5.seconds, 5.seconds), testHttpEngine())
 
 class HttpSyncTransportTest {
     @Test

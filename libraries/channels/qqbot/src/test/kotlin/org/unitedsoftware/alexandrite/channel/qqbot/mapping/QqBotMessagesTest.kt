@@ -9,6 +9,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 import org.unitedsoftware.alexandrite.sdk.chat.ChatKind
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -18,7 +19,7 @@ import kotlin.test.assertTrue
 class QqBotMessagesTest {
     private val instance = ChannelInstanceId(ChannelType("qqbot"), "main")
 
-    private val http = QqBotHttp(testConfig("http://127.0.0.1:1"))
+    private val http = QqBotHttp(testConfig("http://127.0.0.1:1"), testHttpEngine())
     private val media = QqBotMedia(http)
 
     @Test

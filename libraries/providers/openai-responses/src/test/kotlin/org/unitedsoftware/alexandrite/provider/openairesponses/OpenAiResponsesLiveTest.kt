@@ -30,6 +30,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.ToolOutcome
 import org.unitedsoftware.alexandrite.sdk.transcript.ToolResultEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptRules
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import org.unitedsoftware.alexandrite.testkit.testUserEntry
 import kotlin.test.Test
@@ -60,7 +61,13 @@ class OpenAiResponsesLiveTest {
                 putJsonObject("models") { put(model, Json.encodeToJsonElement(ModelConfig.serializer(), reasoning)) }
             },
         )
-        return ResponsesEndpoint(EndpointId("live"), config.settings, ResponsesFlavor.STANDARD, config.options)
+        return ResponsesEndpoint(
+            EndpointId("live"),
+            config.settings,
+            testHttpEngine(),
+            ResponsesFlavor.STANDARD,
+            config.options,
+        )
     }
 
     private fun request(history: List<TranscriptEntry>, round: Int, block: ModelRequest.Builder.() -> Unit) =

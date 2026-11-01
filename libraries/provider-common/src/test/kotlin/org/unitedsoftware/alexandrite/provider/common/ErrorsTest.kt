@@ -15,6 +15,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.EndpointId
 import org.unitedsoftware.alexandrite.sdk.transcript.ModelRef
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.FakeResponse
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import org.unitedsoftware.alexandrite.testkit.testUserEntry
 import java.net.ServerSocket
@@ -114,7 +115,7 @@ class ErrorsTest {
         val port = ServerSocket(0).use { it.localPort }
         val settings = EndpointSettings(baseUrl = "http://127.0.0.1:$port/v1", timeouts = FIXTURE_TIMEOUTS)
 
-        val error = ChatEndpoint(EndpointId("test"), settings, ChatFlavor.STANDARD).use {
+        val error = ChatEndpoint(EndpointId("test"), settings, testHttpEngine(), ChatFlavor.STANDARD).use {
             assertFailsWith<ModelException> { runBlocking { it.events(request) } }
         }.error
 

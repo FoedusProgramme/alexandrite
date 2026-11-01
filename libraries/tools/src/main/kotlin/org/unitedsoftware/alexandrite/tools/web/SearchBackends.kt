@@ -14,6 +14,7 @@ import org.unitedsoftware.alexandrite.internal.http.HttpTransport
 import org.unitedsoftware.alexandrite.sdk.di.Contribute
 import org.unitedsoftware.alexandrite.sdk.di.Lifecycle
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import org.unitedsoftware.alexandrite.sdk.web.WebQuery
 import org.unitedsoftware.alexandrite.sdk.web.WebSearchBackend
 import org.unitedsoftware.alexandrite.sdk.web.WebSearchResult
@@ -21,11 +22,12 @@ import java.net.URI
 import java.net.URLEncoder
 import kotlin.time.Duration.Companion.seconds
 
-/** The HTTP client of the built-in search backends, one for all their calls. */
+/** The HTTP client of the built-in search backends, one for all their calls, which it sends through [engine]. */
 @Singleton
-internal class SearchHttp(private val config: WebConfig) : Lifecycle {
+internal class SearchHttp(private val config: WebConfig, engine: HttpEngine) : Lifecycle {
     private val timeout = config.timeoutSeconds.seconds
-    private val transport = HttpTransport(HttpTimeouts(minOf(10.seconds, timeout), timeout, minOf(10.seconds, timeout)))
+    private val transport =
+        HttpTransport(HttpTimeouts(minOf(10.seconds, timeout), timeout, minOf(10.seconds, timeout)), engine)
 
     suspend fun send(call: HttpCall): JsonObject = withTimeout(timeout) {
         Json.parseToJsonElement(transport.send(call, 1_000_000)) as? JsonObject

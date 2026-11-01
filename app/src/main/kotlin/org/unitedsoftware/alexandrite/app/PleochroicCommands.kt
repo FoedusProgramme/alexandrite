@@ -23,8 +23,10 @@ import org.unitedsoftware.alexandrite.account.pleochroic.serviceAccount
 import org.unitedsoftware.alexandrite.app.control.ConfigChangeView
 import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
 import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.internal.http.JdkHttpEngine
 import org.unitedsoftware.alexandrite.runtime.config.EnvReferences
 import org.unitedsoftware.alexandrite.runtime.config.writtenConfig
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import java.io.IOException
 import java.net.InetAddress
 import java.nio.file.Files
@@ -42,7 +44,10 @@ private const val PLEOCHROIC_ID = "pleochroic"
 private const val CLIENT = "alexandrite"
 
 /** The timeouts every Pleochroic account HTTP call uses. */
-private fun pleochroicHttp() = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds))
+private fun pleochroicHttp() = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds), cliEngine)
+
+/** The engine of the commands that send requests outside a runtime. */
+internal val cliEngine: HttpEngine by lazy { JdkHttpEngine() }
 
 /** The `X-Client` header's value, as the service API's convention asks for it. */
 private fun clientHeader(deviceName: String?): String =

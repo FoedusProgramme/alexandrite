@@ -27,6 +27,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.ToolOutcome
 import org.unitedsoftware.alexandrite.sdk.transcript.ToolResultEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptRules
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import org.unitedsoftware.alexandrite.testkit.testUserEntry
 import kotlin.test.Test
@@ -43,7 +44,7 @@ class OpenAiCompatibleLiveTest {
     private fun live(): ChatEndpoint {
         assumeTrue(baseUrl != null && model != null, "No live endpoint is configured.")
         val settings = EndpointSettings(baseUrl!!, apiKey?.let(::Secret))
-        return ChatEndpoint(EndpointId("live"), settings, ChatFlavor.STANDARD)
+        return ChatEndpoint(EndpointId("live"), settings, testHttpEngine(), ChatFlavor.STANDARD)
     }
 
     private fun request(history: List<TranscriptEntry>, round: Int, block: ModelRequest.Builder.() -> Unit) =

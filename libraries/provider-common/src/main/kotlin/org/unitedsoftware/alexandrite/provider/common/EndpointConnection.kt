@@ -2,17 +2,25 @@ package org.unitedsoftware.alexandrite.provider.common
 
 import org.unitedsoftware.alexandrite.internal.http.HttpCall
 import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import java.net.URI
 
-/** The HTTP side of one endpoint, which sends the API key of [settings] in [wire]'s header and [own] with every request. */
-internal class EndpointConnection(settings: EndpointSettings, own: Map<String, String>, wire: WireHeaders) :
-    AutoCloseable {
+/**
+ * The HTTP side of one endpoint, which sends through [engine] the API key of [settings] in [wire]'s header and [own]
+ * with every request.
+ */
+internal class EndpointConnection(
+    settings: EndpointSettings,
+    engine: HttpEngine,
+    own: Map<String, String>,
+    wire: WireHeaders,
+) : AutoCloseable {
     val base: String = settings.baseUrl.trimEnd('/')
     private val own = auth(settings, wire.auth) + own
     private val headers = settings.headers.entries.associate { it.key.lowercase() to it.value.reveal() }
     private val secrets = listOfNotNull(settings.apiKey?.reveal()) + headers.values
 
-    val transport: HttpTransport = HttpTransport(settings.timeouts.timeouts())
+    val transport: HttpTransport = HttpTransport(settings.timeouts.timeouts(), engine)
 
     fun call(
         method: String,

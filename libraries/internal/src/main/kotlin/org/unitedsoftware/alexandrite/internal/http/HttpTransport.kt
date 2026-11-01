@@ -1,32 +1,27 @@
 package org.unitedsoftware.alexandrite.internal.http
 
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withTimeoutOrNull
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngineRequest
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngineResponse
+import org.unitedsoftware.alexandrite.sdk.net.HttpHeaders
+import org.unitedsoftware.alexandrite.sdk.net.HttpRequestBody
 import java.io.ByteArrayOutputStream
-import java.io.IOException
 import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpConnectTimeoutException
-import java.net.http.HttpHeaders
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.net.http.HttpTimeoutException
-import java.nio.ByteBuffer
 import java.time.Clock
-import java.util.concurrent.CompletionException
-import java.util.concurrent.ExecutionException
-import java.util.concurrent.Flow.Subscriber
-import java.util.concurrent.Flow.Subscription
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
-import kotlin.time.toJavaDuration
-import kotlinx.coroutines.channels.Channel as CoroutineChannel
 
 /** The timeouts of an [HttpTransport]. */
 public class HttpTimeouts(
@@ -105,14 +100,16 @@ public fun printable(uri: URI): String = buildString {
     append(uri.rawPath ?: "")
 }
 
-/** Sends HTTP/1.1 requests with [timeouts], and ends a call's exchange once its coroutine is cancelled. */
-public class HttpTransport(private val timeouts: HttpTimeouts, private val clock: Clock = Clock.systemUTC()) :
-    AutoCloseable {
-    private val client: HttpClient = HttpClient.newBuilder()
-        .version(HttpClient.Version.HTTP_1_1)
-        .connectTimeout(timeouts.connect.toJavaDuration())
-        .followRedirects(HttpClient.Redirect.NEVER)
-        .build()
+/** Sends HTTP/1.1 requests through [engine] with [timeouts], and ends an exchange once its call is cancelled. */
+public class HttpTransport(
+    private val timeouts: HttpTimeouts,
+    private val engine: HttpEngine,
+    private val clock: Clock = Clock.systemUTC(),
+) : AutoCloseable {
+    private val exchanges = ConcurrentHashMap.newKeySet<Exchange>()
+
+    @Volatile
+    private var closed = false
 
     /** The body of [call]'s response as text, its first [limit] bytes at most. */
     public suspend fun send(call: HttpCall, limit: Int = DEFAULT_LIMIT): String = open(call) { it.text(limit) }
@@ -132,73 +129,93 @@ public class HttpTransport(private val timeouts: HttpTimeouts, private val clock
                     "Latin-1.",
             )
         }
-        val firstByte = call.firstByte ?: timeouts.firstByte
-        val body = BodyChannel()
-        val info = CompletableDeferred<HttpResponse.ResponseInfo>()
-        val future = try {
-            client.sendAsync(request(call)) { response ->
-                info.complete(response)
-                HttpResponse.BodySubscribers.fromSubscriber(body)
-            }
-        } catch (e: IllegalStateException) {
-            throw HttpException(HttpFailureKind.CONNECTION, "$call failed: the transport is closed.", cause = e)
+        val request = try {
+            request(call)
         } catch (e: IllegalArgumentException) {
-            throw HttpException(
-                HttpFailureKind.PROTOCOL,
-                "$call cannot be sent: its method, URI or a header is invalid.",
-            )
+            throw refused(call)
         }
-        future.whenComplete { _, error ->
-            if (error != null) {
-                val cause = unwrap(error)
-                info.completeExceptionally(cause)
-                body.fail(cause)
-            }
-        }
+        val firstByte = call.firstByte ?: timeouts.firstByte
+        val exchange = Exchange()
+        exchanges += exchange
         try {
-            val response = try {
-                withTimeoutOrNull(firstByte) { info.await() }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                throw failure(call, e)
-            } ?: throw HttpException(
-                HttpFailureKind.TIMEOUT,
-                "$call got no response within $firstByte.",
-            )
-            val stream = HttpResponseStream(call, response, body, started + firstByte, timeouts.idle)
-            if (response.statusCode() !in 200..299) throw stream.failure(clock)
+            if (closed) throw closedFailure(call)
+            val response = response(call, request, exchange, firstByte)
+            val stream = HttpResponseStream(call, response, started + firstByte, timeouts.idle)
+            if (response.status !in 200..299) throw stream.failure(clock)
             return block(stream)
         } finally {
-            if (!body.ended) {
-                body.cancel()
-                future.cancel(true)
-            }
+            exchanges -= exchange
+            exchange.end()
         }
     }
 
-    /** Ends every call in flight and frees the client. */
+    /** Ends its calls in flight and refuses later ones. */
     override fun close() {
-        client.shutdownNow()
+        closed = true
+        exchanges.forEach { it.end() }
     }
 
-    private fun request(call: HttpCall): HttpRequest {
-        val multipart = call.multipart
-        val publisher = multipart?.publisher()
-            ?: call.body?.let { HttpRequest.BodyPublishers.ofString(it) }
-            ?: HttpRequest.BodyPublishers.noBody()
-        val builder = HttpRequest.newBuilder(call.uri).method(call.method, publisher)
+    /** The response to [request], which comes within [firstByte] unless [close] ends [exchange] first. */
+    private suspend fun response(
+        call: HttpCall,
+        request: HttpEngineRequest,
+        exchange: Exchange,
+        firstByte: Duration,
+    ): HttpEngineResponse = supervisorScope {
+        // Undispatched, so that the request is on its way when the caller first suspends; held, so that the
+        // exchange's end closes a response that comes after the timeout
+        val opening = async(start = CoroutineStart.UNDISPATCHED) {
+            engine.open(request).also { exchange.response = it }
+        }
+        exchange.opening = opening
+        if (closed) opening.cancel()
+        val response = try {
+            withTimeoutOrNull(firstByte) { opening.await() }
+        } catch (e: CancellationException) {
+            if (!currentCoroutineContext().isActive || !opening.isCancelled) throw e
+            throw closedFailure(call)
+        } catch (e: IllegalArgumentException) {
+            throw refused(call)
+        } catch (e: Exception) {
+            throw HttpException(HttpFailureKind.CONNECTION, call.mask("$call failed: $e"), cause = e)
+        }
+        if (response == null) {
+            opening.cancel()
+            throw HttpException(HttpFailureKind.TIMEOUT, "$call got no response within $firstByte.")
+        }
+        if (closed) throw closedFailure(call)
+        response
+    }
+
+    private fun request(call: HttpCall): HttpEngineRequest {
+        val builder = HttpEngineRequest.builder(call.method, call.uri.toString()).connectTimeout(timeouts.connect)
         call.headers.forEach { (name, value) -> builder.header(name, value) }
+        val multipart = call.multipart
         if (multipart != null && call.headers.keys.none { it.equals(CONTENT_TYPE, ignoreCase = true) }) {
             builder.header(CONTENT_TYPE, multipart.contentType)
         }
+        builder.body(multipart?.body() ?: call.body?.let { HttpRequestBody.of(it) })
         return builder.build()
     }
 
-    private fun failure(call: HttpCall, error: Throwable): HttpException {
-        val timedOut = error is HttpTimeoutException && error !is HttpConnectTimeoutException
-        val kind = if (timedOut) HttpFailureKind.TIMEOUT else HttpFailureKind.CONNECTION
-        return HttpException(kind, call.mask("$call failed: $error"), cause = error)
+    private fun refused(call: HttpCall): HttpException =
+        HttpException(HttpFailureKind.PROTOCOL, "$call cannot be sent: its method, URI or a header is invalid.")
+
+    private fun closedFailure(call: HttpCall): HttpException =
+        HttpException(HttpFailureKind.CONNECTION, "$call failed: the transport is closed.")
+
+    /** One call's exchange, which its call or [close] ends. */
+    private class Exchange {
+        @Volatile
+        var opening: Deferred<HttpEngineResponse>? = null
+
+        @Volatile
+        var response: HttpEngineResponse? = null
+
+        fun end() {
+            opening?.cancel()
+            response?.close()
+        }
     }
 
     public companion object {
@@ -215,25 +232,23 @@ public class HttpTransport(private val timeouts: HttpTimeouts, private val clock
 /** The response to an [HttpCall], whose body is read once. */
 public class HttpResponseStream internal constructor(
     private val call: HttpCall,
-    response: HttpResponse.ResponseInfo,
-    private val body: BodyChannel,
+    private val response: HttpEngineResponse,
     private val firstByteDeadline: TimeSource.Monotonic.ValueTimeMark,
     private val idle: Duration,
 ) {
     private var read = false
 
-    public val status: Int = response.statusCode()
+    public val status: Int = response.status
 
-    public val headers: HttpHeaders = response.headers()
+    public val headers: HttpHeaders = response.headers
 
     /** The media type of the body in lower case without its parameters, null when the response names none. */
-    public val mediaType: String? = headers.firstValue("content-type").orElse(null)
-        ?.substringBefore(';')?.trim()?.lowercase()?.ifEmpty { null }
+    public val mediaType: String? = headers["content-type"]?.substringBefore(';')?.trim()?.lowercase()?.ifEmpty { null }
 
     /** The next piece of the body, null at its end. */
     public suspend fun read(): ByteArray? {
         val wait = if (read) idle else -firstByteDeadline.elapsedNow()
-        val piece = withTimeoutOrNull(wait.coerceAtLeast(Duration.ZERO)) { Piece(body.receive()) }
+        val piece = withTimeoutOrNull(wait.coerceAtLeast(Duration.ZERO)) { Piece(receive()) }
             ?: throw HttpException(
                 HttpFailureKind.TIMEOUT,
                 if (read) "$call got no data for $idle." else "$call got no data in time.",
@@ -270,7 +285,7 @@ public class HttpResponseStream internal constructor(
     }
 
     /** The body as text, its first [limit] bytes at most. */
-    public suspend fun text(limit: Int): String = bytes(limit).toString(Charsets.UTF_8)
+    public suspend fun text(limit: Int): String = bytes(limit).toByteArray().toString(Charsets.UTF_8)
 
     /** The failure that this response's status means. */
     internal suspend fun failure(clock: Clock): HttpException {
@@ -301,7 +316,7 @@ public class HttpResponseStream internal constructor(
 
     /** The body's first [HttpTransport.ERROR_BODY_LIMIT] bytes, masked before the cut, null when blank. */
     private suspend fun errorBody(): String? {
-        val text = bytes(HttpTransport.ERROR_BODY_LIMIT + call.longestSecret).toString(Charsets.UTF_8)
+        val text = bytes(HttpTransport.ERROR_BODY_LIMIT + call.longestSecret).toByteArray().toString(Charsets.UTF_8)
         if (text.isBlank()) return null
         return call.mask(text, prefixWithin(text, HttpTransport.ERROR_BODY_LIMIT))
     }
@@ -312,9 +327,11 @@ public class HttpResponseStream internal constructor(
         throw HttpException(e.kind, "$call broke off: ${e.message}", status = status, afterResponse = true)
     }
 
-    private suspend fun BodyChannel.receive(): ByteArray? = try {
-        next()
-    } catch (e: IOException) {
+    private suspend fun receive(): ByteArray? = try {
+        response.body.read()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
         throw HttpException(
             HttpFailureKind.CONNECTION,
             call.mask("$call broke off: $e"),
@@ -329,68 +346,6 @@ public class HttpResponseStream internal constructor(
     private companion object {
         /** The characters of an error body that a message quotes. */
         const val MESSAGE_BODY = 500
-    }
-}
-
-/** Hands the pieces of a response body to one coroutine, one piece of demand at a time. */
-internal class BodyChannel : Subscriber<List<ByteBuffer>> {
-    private val pieces = CoroutineChannel<ByteArray>(CoroutineChannel.UNLIMITED)
-    private val subscription = AtomicReference<Subscription?>()
-    private val cancelled = AtomicBoolean()
-
-    /** Whether the whole body arrived. */
-    @Volatile
-    var ended: Boolean = false
-        private set
-
-    override fun onSubscribe(subscription: Subscription) {
-        if (!this.subscription.compareAndSet(null, subscription) || cancelled.get()) {
-            subscription.cancel()
-            return
-        }
-        subscription.request(1)
-    }
-
-    override fun onNext(item: List<ByteBuffer>) {
-        val bytes = ByteArray(item.sumOf { it.remaining() })
-        var offset = 0
-        for (buffer in item) {
-            val count = buffer.remaining()
-            buffer.get(bytes, offset, count)
-            offset += count
-        }
-        if (bytes.isEmpty()) subscription.get()?.request(1) else pieces.trySend(bytes)
-    }
-
-    override fun onError(throwable: Throwable) {
-        fail(throwable)
-    }
-
-    override fun onComplete() {
-        ended = true
-        pieces.close()
-    }
-
-    fun fail(error: Throwable) {
-        pieces.close(error as? IOException ?: IOException(error))
-    }
-
-    /** The next piece, null at the end of the body. */
-    suspend fun next(): ByteArray? {
-        val result = pieces.receiveCatching()
-        result.getOrNull()?.let { bytes ->
-            subscription.get()?.request(1)
-            return bytes
-        }
-        result.exceptionOrNull()?.let { throw it }
-        return null
-    }
-
-    fun cancel() {
-        if (cancelled.compareAndSet(false, true)) {
-            subscription.get()?.cancel()
-            pieces.cancel()
-        }
     }
 }
 
@@ -410,14 +365,6 @@ private fun prefixWithin(text: String, bytes: Int): Int {
         index += Character.charCount(point)
     }
     return index
-}
-
-private fun unwrap(error: Throwable): Throwable {
-    var current = error
-    while ((current is CompletionException || current is ExecutionException) && current.cause != null) {
-        current = current.cause!!
-    }
-    return current
 }
 
 /** How long a finished answer's stream is read on for its end. */

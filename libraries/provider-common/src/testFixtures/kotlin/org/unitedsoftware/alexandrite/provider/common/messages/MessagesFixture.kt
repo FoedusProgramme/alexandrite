@@ -28,6 +28,7 @@ import org.unitedsoftware.alexandrite.testkit.ProviderFixture
 import org.unitedsoftware.alexandrite.testkit.RecordedRequest
 import org.unitedsoftware.alexandrite.testkit.ScriptedToolCall
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 
 /** An endpoint `test` of [flavor] at [server], with the models [models] configured. */
 public fun messagesEndpoint(
@@ -47,7 +48,7 @@ public fun messagesEndpoint(
         timeouts = FIXTURE_TIMEOUTS,
         wire = MessagesEndpoint.WIRE,
     )
-    return MessagesEndpoint(EndpointId("test"), settings, flavor, messages)
+    return MessagesEndpoint(EndpointId("test"), settings, testHttpEngine(), flavor, messages)
 }
 
 /** The events of [request]'s response. */

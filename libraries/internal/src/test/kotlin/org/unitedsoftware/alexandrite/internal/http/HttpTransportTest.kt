@@ -3,11 +3,13 @@ package org.unitedsoftware.alexandrite.internal.http
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import org.unitedsoftware.alexandrite.sdk.net.HttpHeaders
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
@@ -29,7 +31,7 @@ import kotlin.time.Duration.Companion.seconds
 class HttpTransportTest {
     private val server = TestServer()
     private val now = Instant.parse("2026-10-08T12:00:00Z")
-    private val transport = HttpTransport(SHORT, Clock.fixed(now, ZoneOffset.UTC))
+    private val transport = HttpTransport(SHORT, ENGINE, Clock.fixed(now, ZoneOffset.UTC))
 
     @AfterTest
     fun close() {
@@ -81,7 +83,7 @@ class HttpTransportTest {
         assertEquals(429, error.status)
         assertEquals(7.seconds, error.retryAfter)
         assertEquals("req-1", error.requestId)
-        assertEquals("7", error.headers?.firstValue("retry-after")?.orElse(null))
+        assertEquals("7", error.headers?.get("retry-after"))
         assertFalse(error.afterResponse)
         assertFalse("sk-test-secret" in error.message.orEmpty(), error.message)
         assertFalse("sk-test-secret" in error.body.orEmpty(), error.body)
@@ -118,8 +120,25 @@ class HttpTransportTest {
     }
 
     @Test
+    fun `closing a transport ends its calls in flight and leaves the engine to the others`() = runBlocking {
+        val closed = CompletableDeferred<Boolean>()
+        server.handle { closed.complete(it.awaitClientClose(3.seconds)) }
+        server.handle { it.chunk("ok").end() }
+        val own = HttpTransport(SHORT, ENGINE)
+        val call = async(Dispatchers.Default) { runCatching { own.send(post()) } }
+        withContext(Dispatchers.IO) { server.nextRequest() }
+
+        own.close()
+
+        val error = call.await().exceptionOrNull()
+        assertEquals(HttpFailureKind.CONNECTION, (error as? HttpException)?.kind, "$error")
+        assertTrue(withContext(Dispatchers.IO) { closed.await() }, "The server still holds the connection.")
+        assertEquals("ok", transport.send(HttpCall("GET", server.uri)))
+    }
+
+    @Test
     fun `a body that pauses too long times out after the response`() = runBlocking {
-        val quick = HttpTransport(QUICK)
+        val quick = HttpTransport(QUICK, ENGINE)
         server.handle { it.chunk("data: a\n\n").pause(1.seconds).end() }
         val seen = mutableListOf<String>()
 
@@ -185,7 +204,7 @@ class HttpTransportTest {
 
     @Test
     fun `a secret in the path appears in no timeout`() = runBlocking {
-        val quick = HttpTransport(QUICK)
+        val quick = HttpTransport(QUICK, ENGINE)
         server.handle { Thread.sleep(1_000) }
         server.handle { it.pause(1.seconds).end() }
         server.handle { it.chunk("data: a\n\n").pause(1.seconds).end() }
@@ -317,7 +336,7 @@ class HttpTransportTest {
     }
 
     @Test
-    fun `a request the JDK refuses fails as an HTTP failure that quotes neither the request nor its cause`() =
+    fun `a request the engine refuses fails as an HTTP failure that quotes neither the request nor its cause`() =
         runBlocking {
             val calls = listOf(
                 HttpCall("GET", URI("http:///bot$TOKEN/getMe"), secrets = listOf(TOKEN)),
@@ -341,7 +360,7 @@ class HttpTransportTest {
         }
 
         val error = assertFailsWith<HttpException> { transport.send(bot(firstByte = 300.milliseconds)) }
-        val text = HttpTransport(QUICK).use { it.send(bot(firstByte = 2.seconds)) }
+        val text = HttpTransport(QUICK, ENGINE).use { it.send(bot(firstByte = 2.seconds)) }
 
         assertEquals(HttpFailureKind.TIMEOUT, error.kind)
         assertTrue("within 300ms" in error.message.orEmpty(), error.message)
@@ -350,7 +369,7 @@ class HttpTransportTest {
 
     @Test
     fun `a call's first-byte timeout also bounds the first piece of its body`() = runBlocking {
-        val quick = HttpTransport(QUICK)
+        val quick = HttpTransport(QUICK, ENGINE)
         repeat(2) { server.handle { it.pause(600.milliseconds).chunk("data: late\n\n").end() } }
 
         val (late, error) = quick.use { client ->
@@ -419,8 +438,7 @@ class HttpTransportTest {
 
     @Test
     fun `retry delays come from milliseconds, seconds or a date`() {
-        fun headers(vararg pairs: Pair<String, String>) =
-            java.net.http.HttpHeaders.of(pairs.associate { it.first to listOf(it.second) }) { _, _ -> true }
+        fun headers(vararg pairs: Pair<String, String>) = HttpHeaders.of(*pairs)
 
         assertEquals(1.5.seconds, retryAfter(headers("retry-after-ms" to "1500", "retry-after" to "9"), now))
         assertEquals(2.seconds, retryAfter(headers("retry-after" to "2"), now))

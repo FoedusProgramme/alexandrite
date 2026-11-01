@@ -6,18 +6,20 @@ import org.unitedsoftware.alexandrite.internal.http.HttpResponseStream
 import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
 import org.unitedsoftware.alexandrite.internal.http.HttpTransport
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import java.net.URI
 import kotlin.time.Duration.Companion.milliseconds
 
-/** The HTTP calls of one bot, over the transport the internal module keeps. */
+/** The HTTP calls of one bot, sent through [engine]. */
 @ChannelInstanceScoped
-internal class QqBotHttp(private val config: QqBotInstanceConfig) : AutoCloseable {
+internal class QqBotHttp(private val config: QqBotInstanceConfig, engine: HttpEngine) : AutoCloseable {
     private val transport = HttpTransport(
         HttpTimeouts(
             connect = config.connectTimeoutMillis.milliseconds,
             firstByte = config.firstByteTimeoutMillis.milliseconds,
             idle = config.idleTimeoutMillis.milliseconds,
         ),
+        engine,
     )
 
     /** The body of the answer to [call] as it came, which a caller reads as JSON. */

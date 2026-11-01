@@ -9,6 +9,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
 import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -20,7 +21,10 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class HttpClientTest {
-    private val transport = HttpTransport(HttpTimeouts(connect = 5.seconds, firstByte = 10.seconds, idle = 10.seconds))
+    private val transport = HttpTransport(
+        HttpTimeouts(connect = 5.seconds, firstByte = 10.seconds, idle = 10.seconds),
+        testHttpEngine(),
+    )
     private val servers = mutableListOf<FakeHttpServer>()
 
     @AfterTest

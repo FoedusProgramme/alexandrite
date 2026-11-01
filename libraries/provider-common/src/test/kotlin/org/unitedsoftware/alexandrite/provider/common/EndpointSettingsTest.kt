@@ -7,6 +7,7 @@ import org.unitedsoftware.alexandrite.provider.common.messages.MessagesFlavor
 import org.unitedsoftware.alexandrite.sdk.config.Secret
 import org.unitedsoftware.alexandrite.sdk.model.ReasoningEffort
 import org.unitedsoftware.alexandrite.sdk.transcript.EndpointId
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -66,9 +67,9 @@ class EndpointSettingsTest {
         val settings = EndpointSettings("https://a.example", headers = mapOf("Anthropic-Version" to Secret("x")))
 
         refused("may not set anthropic-version") {
-            MessagesEndpoint(EndpointId("test"), settings, MessagesFlavor.STANDARD)
+            MessagesEndpoint(EndpointId("test"), settings, testHttpEngine(), MessagesFlavor.STANDARD)
         }
-        ChatEndpoint(EndpointId("test"), settings, ChatFlavor.STANDARD).close()
+        ChatEndpoint(EndpointId("test"), settings, testHttpEngine(), ChatFlavor.STANDARD).close()
     }
 
     @Test

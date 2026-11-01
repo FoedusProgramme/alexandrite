@@ -18,6 +18,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelMessageRef
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -290,10 +291,10 @@ class QqBotSenderTest {
             server.on(SEND_GROUP, """{"id":"sent1","timestamp":"2026-07-21T10:00:00+08:00"}""")
             server.on(SEND_DIRECT, """{"id":"sent1","timestamp":"2026-07-21T10:00:00+08:00"}""")
             val config = testConfig(server.base)
-            http = QqBotHttp(config)
+            http = QqBotHttp(config, testHttpEngine())
             val tokens = QqBotTokens(config, http, clock)
             val api = QqBotApi(http, tokens)
-            sender = QqBotSender(api, QqBotUploads(api, config), QqBotSentMessages(), index)
+            sender = QqBotSender(api, QqBotUploads(api, config, testHttpEngine()), QqBotSentMessages(), index)
         }
 
         override fun close() {

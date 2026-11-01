@@ -104,7 +104,7 @@ public class HttpSyncTransport(
             transport.open(call) { stream ->
                 val text = stream.text(LIMIT)
                 val json = if (text.isBlank()) null else parseObject(text)
-                val etag = stream.headers.firstValue(ETAG).orElse(null)
+                val etag = stream.headers[ETAG]
                 result = (if (etag != null) mapOf(ETAG to etag) else emptyMap()) to json
             }
             result

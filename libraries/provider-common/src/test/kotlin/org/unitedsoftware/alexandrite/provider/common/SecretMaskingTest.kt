@@ -27,6 +27,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.EndpointId
 import org.unitedsoftware.alexandrite.sdk.transcript.ModelRef
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.FakeResponse
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import org.unitedsoftware.alexandrite.testkit.testUserEntry
 import kotlin.test.AfterTest
@@ -55,11 +56,13 @@ class SecretMaskingTest {
         wire = wire,
     )
 
-    private fun chat() = ChatEndpoint(EndpointId("test"), settings("${server.baseUrl}/v1"), ChatFlavor.STANDARD)
+    private fun chat() =
+        ChatEndpoint(EndpointId("test"), settings("${server.baseUrl}/v1"), testHttpEngine(), ChatFlavor.STANDARD)
 
     private fun messages() = MessagesEndpoint(
         EndpointId("test"),
         settings(server.baseUrl, MessagesEndpoint.WIRE),
+        testHttpEngine(),
         MessagesFlavor.STANDARD,
     )
 
@@ -118,10 +121,10 @@ class SecretMaskingTest {
         server.enqueue(sse(*textEvents(listOf("Hi."))))
 
         runBlocking {
-            ChatEndpoint(EndpointId("test"), plain("${server.baseUrl}/v1"), ChatFlavor.STANDARD).use {
+            ChatEndpoint(EndpointId("test"), plain("${server.baseUrl}/v1"), testHttpEngine(), ChatFlavor.STANDARD).use {
                 it.stream(request()).toList()
             }
-            MessagesEndpoint(EndpointId("test"), plain(server.baseUrl), MessagesFlavor.STANDARD).use {
+            MessagesEndpoint(EndpointId("test"), plain(server.baseUrl), testHttpEngine(), MessagesFlavor.STANDARD).use {
                 it.stream(request()).toList()
             }
         }

@@ -17,6 +17,7 @@ import org.unitedsoftware.alexandrite.sdk.di.Contribute
 import org.unitedsoftware.alexandrite.sdk.di.Inject
 import org.unitedsoftware.alexandrite.sdk.di.Lifecycle
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import org.unitedsoftware.alexandrite.sdk.plugin.PluginInfo
 import org.unitedsoftware.alexandrite.sdk.plugin.PluginScope
 import org.unitedsoftware.alexandrite.sdk.store.Records
@@ -38,10 +39,17 @@ internal class McpHub internal constructor(
     timings: McpTimings,
     records: Records,
     clock: Clock,
+    engine: HttpEngine,
 ) : ToolSource,
     Lifecycle {
     @Inject
-    constructor(settings: McpSettings, scope: PluginScope, info: PluginInfo, records: Records) : this(
+    constructor(
+        settings: McpSettings,
+        scope: PluginScope,
+        info: PluginInfo,
+        records: Records,
+        engine: HttpEngine,
+    ) : this(
         settings,
         scope,
         McpImplementation(CLIENT_NAME, info.version),
@@ -50,11 +58,15 @@ internal class McpHub internal constructor(
         McpTimings(),
         records,
         Clock.systemUTC(),
+        engine,
     )
 
-    private val transport = HttpTransport(HttpTimeouts(connect = 10.seconds, firstByte = 60.seconds, idle = 5.minutes))
+    private val transport =
+        HttpTransport(HttpTimeouts(connect = 10.seconds, firstByte = 60.seconds, idle = 5.minutes), engine)
 
-    val oauth: McpOAuth = McpOAuth(settings, records, transport, scope, clock) { server(it)?.restart() }
+    val oauth: McpOAuth = McpOAuth(settings, records, transport, scope, clock) {
+        server(it)?.restart()
+    }
 
     private val shared = McpShared(transport, client, clientOptions, host, timings, oauth)
     private val published = MutableStateFlow<List<Tool>>(emptyList())

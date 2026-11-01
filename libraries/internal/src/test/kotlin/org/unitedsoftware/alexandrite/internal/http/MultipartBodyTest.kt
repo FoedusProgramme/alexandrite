@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 class MultipartBodyTest {
     private val server = TestServer()
-    private val transport = HttpTransport(SHORT)
+    private val transport = HttpTransport(SHORT, ENGINE)
 
     @AfterTest
     fun close() {

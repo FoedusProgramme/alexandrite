@@ -91,7 +91,7 @@ internal class McpHttpConnection(
             val response = try {
                 transport.open(post.call) { stream ->
                     if (method == INITIALIZE) {
-                        sessionId = stream.headers.firstValue(McpHeaders.SESSION_ID).orElse(null)
+                        sessionId = stream.headers[McpHeaders.SESSION_ID]
                     }
                     answer(stream, id, method)
                 }
@@ -295,7 +295,7 @@ internal class McpHttpConnection(
         authorized: Boolean,
     ): McpException {
         val status = e.status
-        val challenge = e.headers?.allValues(WWW_AUTHENTICATE)?.joinToString(", ")?.ifEmpty { null }
+        val challenge = e.headers?.all(WWW_AUTHENTICATE)?.joinToString(", ")?.ifEmpty { null }
         return when {
             status == UNAUTHORIZED || (status == FORBIDDEN && challenge != null) ->
                 McpUnauthorized(challenge, "The server refused $what with HTTP $status.", status, authorized)

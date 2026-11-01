@@ -830,6 +830,7 @@ private class Setup(override val cli: Cli, override val options: InitOptions) : 
 
     private fun pleochroicHttp() = org.unitedsoftware.alexandrite.internal.http.HttpTransport(
         HttpTimeouts(10.seconds, 30.seconds, 30.seconds),
+        cliEngine,
     )
 
     // Web search and fetch.

@@ -16,6 +16,7 @@ import org.unitedsoftware.alexandrite.sdk.turn.CommandContext
 import org.unitedsoftware.alexandrite.sdk.turn.CommandHandler
 import org.unitedsoftware.alexandrite.sdk.turn.CommandInvocation
 import org.unitedsoftware.alexandrite.sdk.turn.CommandSpec
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -293,7 +294,7 @@ class QqBotMenuSyncTest {
 
         init {
             server.on("/app/getAppAccessToken", """{"access_token":"access","expires_in":"7200"}""")
-            http = QqBotHttp(config)
+            http = QqBotHttp(config, testHttpEngine())
             api = QqBotApi(http, QqBotTokens(config, http, clock))
         }
 

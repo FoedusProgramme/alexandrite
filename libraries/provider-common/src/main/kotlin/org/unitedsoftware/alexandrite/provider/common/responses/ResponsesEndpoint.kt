@@ -25,6 +25,7 @@ import org.unitedsoftware.alexandrite.sdk.model.ModelOptions
 import org.unitedsoftware.alexandrite.sdk.model.ModelRequest
 import org.unitedsoftware.alexandrite.sdk.model.Trust
 import org.unitedsoftware.alexandrite.sdk.model.TurnContextMode
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import org.unitedsoftware.alexandrite.sdk.transcript.EndpointId
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 import org.unitedsoftware.alexandrite.sdk.web.WebQuery
@@ -68,17 +69,18 @@ internal object ReasoningSummarySerializer : KSerializer<ReasoningSummary> {
 }
 
 /**
- * An endpoint that speaks the Responses API in [flavor] at `{baseUrl}/responses`, statelessly, which describes each
- * model by the last listing it read.
+ * An endpoint that speaks the Responses API in [flavor] at `{baseUrl}/responses` through [engine], statelessly, which
+ * describes each model by the last listing it read.
  */
 public class ResponsesEndpoint(
     override val id: EndpointId,
     private val settings: EndpointSettings,
+    engine: HttpEngine,
     private val flavor: ResponsesFlavor,
     private val responses: ResponsesSettings = ResponsesSettings(),
 ) : ModelEndpoint,
     AutoCloseable {
-    private val core = EndpointCore(id, settings, flavor.listing, flavor.dialect, SENDS)
+    private val core = EndpointCore(id, settings, engine, flavor.listing, flavor.dialect, SENDS)
 
     override suspend fun webSearch(model: String, query: WebQuery): List<WebSearchResult> {
         if (!responses.nativeSearch) return super.webSearch(model, query)

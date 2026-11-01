@@ -6,6 +6,7 @@ import org.unitedsoftware.alexandrite.sdk.config.Secret
 import org.unitedsoftware.alexandrite.sdk.web.WebQuery
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -25,7 +26,7 @@ class PleochroicWebTest {
                 "/search",
             )
             val config = WebConfig(pleochroicApiBase = server.baseUrl, pleochroicApiKey = Secret("plc-fixture-key"))
-            val search = PleochroicSearch(config, SearchHttp(config))
+            val search = PleochroicSearch(config, SearchHttp(config, testHttpEngine()))
 
             val results = search.search(WebQuery("question", 5))
 
@@ -53,7 +54,7 @@ class PleochroicWebTest {
                 "/fetch",
             )
             val config = WebConfig(pleochroicApiBase = server.baseUrl, pleochroicApiKey = Secret("plc-fixture-key"))
-            val fetch = PleochroicFetch(config, SearchHttp(config))
+            val fetch = PleochroicFetch(config, SearchHttp(config, testHttpEngine()))
 
             val page = fetch.fetch("https://example.com/page")
 
@@ -69,7 +70,7 @@ class PleochroicWebTest {
             server.enqueue(fakeResponse(429) { body("""{"error": {"code": "quota_exceeded"}}""") })
             server.enqueue(fakeResponse(402) { body("""{"error": {"code": "insufficient_credits"}}""") })
             val config = WebConfig(pleochroicApiBase = server.baseUrl, pleochroicApiKey = Secret("plc-fixture-key"))
-            val search = PleochroicSearch(config, SearchHttp(config))
+            val search = PleochroicSearch(config, SearchHttp(config, testHttpEngine()))
 
             val messages = (1..3).map {
                 assertFailsWith<IllegalStateException> { search.search(WebQuery("q", 1)) }.message.orEmpty()
@@ -86,7 +87,7 @@ class PleochroicWebTest {
     fun `an unconfigured backend refuses clearly instead of calling out`() = runBlocking {
         val error =
             assertFailsWith<IllegalArgumentException> {
-                PleochroicSearch(WebConfig(), SearchHttp(WebConfig())).search(WebQuery("q", 1))
+                PleochroicSearch(WebConfig(), SearchHttp(WebConfig(), testHttpEngine())).search(WebQuery("q", 1))
             }
         assertTrue(error.message.orEmpty().contains("pleochroicApiBase"))
     }

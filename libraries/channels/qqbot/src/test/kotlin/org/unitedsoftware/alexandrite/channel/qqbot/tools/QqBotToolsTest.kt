@@ -16,6 +16,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 import org.unitedsoftware.alexandrite.sdk.tool.ToolContext
 import org.unitedsoftware.alexandrite.testkit.TestToolContext
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testToolContext
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import java.time.Instant
@@ -167,7 +168,7 @@ class QqBotToolsTest {
         init {
             server.on("/app/getAppAccessToken", """{"access_token":"access","expires_in":"7200"}""")
             val config = testConfig(server.base)
-            http = QqBotHttp(config)
+            http = QqBotHttp(config, testHttpEngine())
             val tokens = QqBotTokens(config, http, MutableClock(Instant.parse("2026-07-21T00:00:00Z")))
             apis.register(instance, QqBotApi(http, tokens))
             read = QqBotReadTool(apis)

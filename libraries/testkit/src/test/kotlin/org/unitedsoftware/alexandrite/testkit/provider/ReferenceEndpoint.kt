@@ -60,6 +60,7 @@ import org.unitedsoftware.alexandrite.testkit.ProviderFixture
 import org.unitedsoftware.alexandrite.testkit.RecordedRequest
 import org.unitedsoftware.alexandrite.testkit.ScriptedToolCall
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import java.net.URI
 import java.util.Base64
 import kotlin.time.Duration.Companion.seconds
@@ -176,7 +177,7 @@ internal class ReferenceEndpoint(private val base: String, private val flaw: Fla
     var closed: Boolean = false
         private set
 
-    private val transport = HttpTransport(HttpTimeouts(2.seconds, 20.seconds, 20.seconds))
+    private val transport = HttpTransport(HttpTimeouts(2.seconds, 20.seconds, 20.seconds), testHttpEngine())
 
     private val detached = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

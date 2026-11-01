@@ -27,6 +27,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.MediaPart
 import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testToolContext
 import org.unitedsoftware.alexandrite.tools.browse.FakeBackend
 import org.unitedsoftware.alexandrite.tools.browse.PIXEL
@@ -70,7 +71,7 @@ class BrowserToolTest {
             )
             server.enqueue(fakeResponse { body("""{"ok": true, "minutes": 1}""") }, "/browser/sessions/bs_1")
             val config = WebConfig(pleochroicApiBase = server.baseUrl, pleochroicApiKey = Secret("plc-fixture-key"))
-            val browser = PleochroicBrowser(config)
+            val browser = PleochroicBrowser(config, testHttpEngine())
 
             val id = browser.open(BrowseOpen(120, "en-GB"))
             val view = browser.act(id, BrowseStep.Look(setOf(BrowseView.IMAGE)))
@@ -107,7 +108,7 @@ class BrowserToolTest {
             )
             server.enqueue(fakeResponse(404) { body("""{"error": {"code": "not_found"}}""") })
             val config = WebConfig(pleochroicApiBase = server.baseUrl, pleochroicApiKey = Secret("plc-fixture-key"))
-            val browser = PleochroicBrowser(config)
+            val browser = PleochroicBrowser(config, testHttpEngine())
 
             val gone =
                 assertFailsWith<BrowseSessionGone> {
@@ -142,7 +143,7 @@ class BrowserToolTest {
             )
             server.enqueue(fakeResponse { body("""{"url": "https://example.com/", "title": "A"}""") })
             val config = WebConfig(pleochroicApiBase = server.baseUrl, pleochroicApiKey = Secret("plc-fixture-key"))
-            val browser = PleochroicBrowser(config)
+            val browser = PleochroicBrowser(config, testHttpEngine())
 
             val both = browser.act("bs_1", BrowseStep.Look(setOf(BrowseView.LAYOUT, BrowseView.IMAGE), fullPage = true))
             browser.act("bs_1", BrowseStep.Click(BrowseTarget.Ref("e4")))
@@ -160,7 +161,7 @@ class BrowserToolTest {
     fun `the Pleochroic backend refuses a point, a hover and a right click without asking the service`() = runBlocking {
         FakeModelServer().use { server ->
             val config = WebConfig(pleochroicApiBase = server.baseUrl, pleochroicApiKey = Secret("plc-fixture-key"))
-            val browser = PleochroicBrowser(config)
+            val browser = PleochroicBrowser(config, testHttpEngine())
 
             assertFailsWith<IllegalArgumentException> {
                 browser.act("bs_1", BrowseStep.Click(BrowseTarget.Point(10, 20)))
@@ -234,7 +235,7 @@ class BrowserToolTest {
     @Test
     fun `Pleochroic's limits shape the schema, and a step it does not know is refused`() = runBlocking {
         val config = WebConfig(browserBackend = PLEOCHROIC_WEB_ID)
-        val browser = PleochroicBrowser(config)
+        val browser = PleochroicBrowser(config, testHttpEngine())
         val tool = BrowserTools(config, listOf(browser)).tools.value.single() as ReviewedTool
         val properties = tool.definition.parameters["properties"]!!.jsonObject
 

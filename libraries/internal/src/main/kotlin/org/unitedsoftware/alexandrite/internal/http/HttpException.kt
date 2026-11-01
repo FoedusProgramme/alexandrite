@@ -1,7 +1,7 @@
 package org.unitedsoftware.alexandrite.internal.http
 
+import org.unitedsoftware.alexandrite.sdk.net.HttpHeaders
 import java.io.IOException
-import java.net.http.HttpHeaders
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -73,10 +73,10 @@ public enum class HttpFailureKind(public val retryable: Boolean) {
 
 /** The wait that [headers] ask for at [now] in `retry-after-ms` or `retry-after`, null when they ask for none. */
 public fun retryAfter(headers: HttpHeaders, now: Instant): Duration? {
-    headers.firstValue("retry-after-ms").orElse(null)?.trim()?.toDoubleOrNull()
+    headers["retry-after-ms"]?.trim()?.toDoubleOrNull()
         ?.takeIf { it.isFinite() && it >= 0 }
         ?.let { return it.milliseconds }
-    val value = headers.firstValue("retry-after").orElse(null)?.trim() ?: return null
+    val value = headers["retry-after"]?.trim() ?: return null
     value.toDoubleOrNull()?.let { return if (it.isFinite() && it >= 0) it.seconds else null }
     return try {
         val at = ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant()
@@ -88,7 +88,7 @@ public fun retryAfter(headers: HttpHeaders, now: Instant): Duration? {
 
 /** The server's id of the request in [headers], null when they hold none. */
 public fun requestId(headers: HttpHeaders): String? = REQUEST_ID_HEADERS.firstNotNullOfOrNull { name ->
-    headers.firstValue(name).orElse(null)?.takeIf { it.isNotBlank() }
+    headers[name]?.takeIf { it.isNotBlank() }
 }
 
 private val REQUEST_ID_HEADERS = listOf("x-request-id", "request-id", "x-amzn-requestid", "x-amz-request-id")

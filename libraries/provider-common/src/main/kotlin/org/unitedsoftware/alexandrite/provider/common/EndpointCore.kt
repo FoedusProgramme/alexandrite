@@ -11,6 +11,7 @@ import org.unitedsoftware.alexandrite.sdk.model.ModelException
 import org.unitedsoftware.alexandrite.sdk.model.ModelInfo
 import org.unitedsoftware.alexandrite.sdk.model.ModelRequest
 import org.unitedsoftware.alexandrite.sdk.model.rebuild
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import org.unitedsoftware.alexandrite.sdk.transcript.Dialect
 import org.unitedsoftware.alexandrite.sdk.transcript.EndpointId
 import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
@@ -19,6 +20,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 internal class EndpointCore(
     val id: EndpointId,
     settings: EndpointSettings,
+    engine: HttpEngine,
     listing: ModelListing,
     dialect: Dialect,
     /** The media kinds the wire API carries, which bound what any model of the endpoint is said to take. */
@@ -38,7 +40,7 @@ internal class EndpointCore(
         }
     }
 
-    private val connection = EndpointConnection(settings, own, settings.wire ?: wire)
+    private val connection = EndpointConnection(settings, engine, own, settings.wire ?: wire)
     private val catalog = ModelCatalog(id, settings, listing, dialect, sends, connection)
 
     /** The models, which search the web natively when [nativeSearch] holds. */

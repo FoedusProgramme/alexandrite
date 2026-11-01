@@ -161,6 +161,9 @@ internal class Exchange(private val socket: Socket, private val input: InputStre
     }
 }
 
+/** The engine of every test's transport, which outlives them. */
+internal val ENGINE = JdkHttpEngine()
+
 internal val SHORT = HttpTimeouts(connect = 2.seconds, firstByte = 2.seconds, idle = 2.seconds)
 
 internal val QUICK = HttpTimeouts(connect = 2.seconds, firstByte = 300.milliseconds, idle = 300.milliseconds)

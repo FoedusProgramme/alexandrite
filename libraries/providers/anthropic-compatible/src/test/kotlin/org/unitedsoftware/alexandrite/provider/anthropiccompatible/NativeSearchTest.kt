@@ -13,6 +13,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.ModelRef
 import org.unitedsoftware.alexandrite.sdk.web.WebQuery
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -28,7 +29,13 @@ class NativeSearchTest {
             {"baseUrl": "${server.baseUrl}", "models": {"${ref.model}": {}}, "discover": false, "nativeSearch": $enabled}
             """.trimIndent(),
         )
-        return MessagesEndpoint(ref.endpoint, config.settings, MessagesFlavor.STANDARD, config.options)
+        return MessagesEndpoint(
+            ref.endpoint,
+            config.settings,
+            testHttpEngine(),
+            MessagesFlavor.STANDARD,
+            config.options,
+        )
     }
 
     @Test

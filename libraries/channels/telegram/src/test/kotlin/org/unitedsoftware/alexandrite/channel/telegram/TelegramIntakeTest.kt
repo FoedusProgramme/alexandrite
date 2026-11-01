@@ -25,6 +25,7 @@ import org.unitedsoftware.alexandrite.sdk.turn.Capacity
 import org.unitedsoftware.alexandrite.sdk.turn.RefusalReason
 import org.unitedsoftware.alexandrite.sdk.turn.Submission
 import org.unitedsoftware.alexandrite.testkit.PluginHarness
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -83,7 +84,9 @@ class TelegramIntakeTest {
     @Test
     fun `a group message reaches the agent only when it names the bot`() {
         telegram.run {
-            val bot = HttpBotApi(configOf(fake)).use { it.sendMessage(SendMessage(GROUP, "The build is green.")) }
+            val bot = HttpBotApi(configOf(fake), testHttpEngine()).use {
+                it.sendMessage(SendMessage(GROUP, "The build is green."))
+            }
             fake.send(telegram.bob, telegram.group, "Lunch at noon?")
             fake.send(telegram.bob, telegram.group, "/start@other_bot")
             fake.send(telegram.bob, telegram.group, "@alexandrite_test_bot what is new?")

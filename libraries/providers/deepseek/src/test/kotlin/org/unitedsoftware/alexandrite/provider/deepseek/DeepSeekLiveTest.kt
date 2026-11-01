@@ -28,6 +28,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.ToolOutcome
 import org.unitedsoftware.alexandrite.sdk.transcript.ToolResultEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptRules
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import org.unitedsoftware.alexandrite.testkit.testUserEntry
 import kotlin.test.Test
@@ -50,7 +51,7 @@ class DeepSeekLiveTest {
                 baseUrl?.let { put("baseUrl", it) }
             },
         )
-        return ChatEndpoint(EndpointId("live"), config.settings, DEEPSEEK_FLAVOR)
+        return ChatEndpoint(EndpointId("live"), config.settings, testHttpEngine(), DEEPSEEK_FLAVOR)
     }
 
     private fun request(history: List<TranscriptEntry>, round: Int, block: ModelRequest.Builder.() -> Unit) =

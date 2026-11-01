@@ -20,6 +20,7 @@ import org.unitedsoftware.alexandrite.sdk.store.Records
 import org.unitedsoftware.alexandrite.sdk.tool.Tool
 import org.unitedsoftware.alexandrite.sdk.tool.ToolResult
 import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testRecords
 import java.nio.file.Path
 import java.time.Clock
@@ -110,6 +111,7 @@ internal fun withHub(
         QUICK,
         records,
         clock,
+        testHttpEngine(),
     )
     try {
         hub.onOpen()

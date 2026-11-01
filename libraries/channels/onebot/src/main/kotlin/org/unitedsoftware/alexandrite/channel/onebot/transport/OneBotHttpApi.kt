@@ -19,6 +19,7 @@ import org.unitedsoftware.alexandrite.internal.http.HttpException
 import org.unitedsoftware.alexandrite.internal.http.HttpFailureKind
 import org.unitedsoftware.alexandrite.internal.http.HttpTimeouts
 import org.unitedsoftware.alexandrite.internal.http.HttpTransport
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import java.net.URI
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -32,6 +33,7 @@ import kotlin.time.Duration.Companion.milliseconds
 public class OneBotHttpApi(
     private val endpoint: String,
     private val token: Value?,
+    engine: HttpEngine,
     connectTimeoutMillis: Long,
     firstByteTimeoutMillis: Long,
     idleTimeoutMillis: Long,
@@ -43,6 +45,7 @@ public class OneBotHttpApi(
             firstByte = firstByteTimeoutMillis.milliseconds,
             idle = idleTimeoutMillis.milliseconds,
         ),
+        engine,
     )
 
     /** Sends one call, with [action] already carrying its suffix. */

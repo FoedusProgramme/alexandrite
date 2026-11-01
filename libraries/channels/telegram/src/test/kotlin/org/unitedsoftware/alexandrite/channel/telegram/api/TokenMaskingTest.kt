@@ -12,6 +12,7 @@ import org.unitedsoftware.alexandrite.channel.telegram.logged
 import org.unitedsoftware.alexandrite.channel.telegram.reply.SendLimiter
 import org.unitedsoftware.alexandrite.sdk.channel.OutboundFile
 import org.unitedsoftware.alexandrite.sdk.config.Secret
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import java.net.ServerSocket
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -24,7 +25,7 @@ import kotlin.time.Duration.Companion.seconds
 class TokenMaskingTest {
     private val fake = FakeBotApi()
     private val config = configOf(fake)
-    private val api = HttpBotApi(config, QUICK)
+    private val api = HttpBotApi(config, testHttpEngine(), QUICK)
     private val chat = fake.direct(FakeUser(42, "Ada")).id
     private val failures = mutableListOf<BotApiException>()
 
@@ -67,9 +68,9 @@ class TokenMaskingTest {
             fails { api.getMe() }
             repeat(2) { fake.fail("sendMessage", 429, "Too Many Requests: ${fake.token}", retryAfter = 1) }
             fails { SendLimiter().message(chat) { api.sendMessage(SendMessage(chat, "Hi")) } }
-            HttpBotApi(configOf(fake, OTHER_TOKEN)).use { other -> fails { other.getMe() } }
+            HttpBotApi(configOf(fake, OTHER_TOKEN), testHttpEngine()).use { other -> fails { other.getMe() } }
             val gone = TelegramInstanceConfig(Secret(fake.token), apiBaseUrl = "http://127.0.0.1:$closedPort")
-            HttpBotApi(gone, QUICK).use { unreachable -> fails { unreachable.getMe() } }
+            HttpBotApi(gone, testHttpEngine(), QUICK).use { unreachable -> fails { unreachable.getMe() } }
             val logger = LoggerFactory.getLogger(TokenMaskingTest::class.java)
             failures.forEach { logger.error("The call failed", it) }
         }

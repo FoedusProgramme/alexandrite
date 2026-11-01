@@ -11,6 +11,7 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
 import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 import org.unitedsoftware.alexandrite.sdk.chat.TurnId
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -56,9 +57,10 @@ class QqBotProgressTest {
             server.on(TOKEN_PATH, """{"access_token":"access","expires_in":"7200"}""")
             server.on(STREAM_DIRECT, """{"id":"stream1"}""")
             val config = testConfig(server.base)
-            http = QqBotHttp(config)
+            http = QqBotHttp(config, testHttpEngine())
             val api = QqBotApi(http, QqBotTokens(config, http, clock))
-            sender = QqBotSender(api, QqBotUploads(api, config), QqBotSentMessages(), QqBotMessageIndex())
+            sender =
+                QqBotSender(api, QqBotUploads(api, config, testHttpEngine()), QqBotSentMessages(), QqBotMessageIndex())
         }
 
         override fun close() {

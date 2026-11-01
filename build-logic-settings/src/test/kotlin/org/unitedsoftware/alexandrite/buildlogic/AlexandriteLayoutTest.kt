@@ -682,6 +682,7 @@ class AlexandriteLayoutTest {
         }
         assertAllowed(testkit, runtime)
         assertAllowed(notes, sdk)
+        assertAllowed(internals, sdk)
         for (library in libraries - testkit) assertAllowed(app, library)
         assertAllowed(app, ":libraries:providers:example")
         assertAllowed(":libraries:providers:example", internals)
@@ -694,7 +695,6 @@ class AlexandriteLayoutTest {
     @Test
     fun `forbidden pairs`() {
         assertForbidden(sdk, internals)
-        assertForbidden(internals, sdk)
         for (from in listOf(tools, telegram, openAi, anthropic, sqlite)) assertForbidden(from, agent)
         for (other in listOf(agent, tools, telegram, openAi, sqlite)) {
             assertForbidden(commands, other)
@@ -904,7 +904,7 @@ class AlexandriteLayoutTest {
     @Test
     fun `a test configuration does not widen the other layer rules`() {
         assertForbidden(sdk, internals, "testImplementation")
-        assertForbidden(internals, sdk, "testImplementation")
+        assertForbidden(internals, runtime, "testImplementation")
         assertForbidden(telegram, agent, "testImplementation")
         assertForbidden(agent, tools, "testRuntimeOnly")
     }

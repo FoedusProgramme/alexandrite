@@ -31,23 +31,24 @@ import org.unitedsoftware.alexandrite.internal.http.MultipartBody
 import org.unitedsoftware.alexandrite.sdk.di.Binds
 import org.unitedsoftware.alexandrite.sdk.di.ChannelInstanceScoped
 import org.unitedsoftware.alexandrite.sdk.di.Inject
+import org.unitedsoftware.alexandrite.sdk.net.HttpEngine
 import java.io.ByteArrayOutputStream
 import java.net.URI
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-/** The [BotApi] of the bot that [config] names, served over HTTP. */
+/** The [BotApi] of the bot that [config] names, served over HTTP through [engine]. */
 @ChannelInstanceScoped
 @Binds(BotApi::class)
-internal class HttpBotApi(config: TelegramInstanceConfig, timeouts: HttpTimeouts) :
+internal class HttpBotApi(config: TelegramInstanceConfig, engine: HttpEngine, timeouts: HttpTimeouts) :
     BotApi,
     AutoCloseable {
     @Inject
-    constructor(config: TelegramInstanceConfig) : this(config, TIMEOUTS)
+    constructor(config: TelegramInstanceConfig, engine: HttpEngine) : this(config, engine, TIMEOUTS)
 
     private val token = config.botToken
     private val base = config.apiBase
-    private val transport = HttpTransport(timeouts)
+    private val transport = HttpTransport(timeouts, engine)
 
     override suspend fun getMe(): User = call("getMe", NO_PARAMETERS, User.serializer())
 

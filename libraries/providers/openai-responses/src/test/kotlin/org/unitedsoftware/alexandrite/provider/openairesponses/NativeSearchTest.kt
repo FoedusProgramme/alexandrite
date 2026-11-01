@@ -14,6 +14,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.ModelRef
 import org.unitedsoftware.alexandrite.sdk.web.WebQuery
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -28,7 +29,13 @@ class NativeSearchTest {
             EndpointSerializer.read(
                 """{"baseUrl": "${server.baseUrl}/v1", "discover": false, "nativeSearch": $enabled}""",
             )
-        return ResponsesEndpoint(ref.endpoint, config.settings, ResponsesFlavor.STANDARD, config.options)
+        return ResponsesEndpoint(
+            ref.endpoint,
+            config.settings,
+            testHttpEngine(),
+            ResponsesFlavor.STANDARD,
+            config.options,
+        )
     }
 
     @Test

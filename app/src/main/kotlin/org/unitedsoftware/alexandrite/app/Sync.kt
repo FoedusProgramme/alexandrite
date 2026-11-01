@@ -65,7 +65,7 @@ internal fun syncNow(cli: Cli, json: Boolean, dryRun: Boolean = false): Int {
     val state = readSyncState(cli)
     if (!state.enabled) return cli.fail(cli.t("sync.not_enabled"))
     val local = HostConfigSyncLocal(CliHostConfig(cli), cli.locations.configFile, cli.secrets)
-    val http = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds))
+    val http = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds), cliEngine)
     val (report, next) = try {
         http.use { transport ->
             runBlocking { SyncRunner(local, HttpSyncTransport(transport, apiBase, key)).run(state, dryRun) }
@@ -179,7 +179,7 @@ private fun withPendingSync(cli: Cli, block: (PendingSync, SyncState) -> Int): I
     val (apiBase, key) = credentials(cli) ?: return cli.fail(cli.t("sync.not_signed_in"))
     val state = readSyncState(cli)
     val local = HostConfigSyncLocal(CliHostConfig(cli), cli.locations.configFile, cli.secrets)
-    val http = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds))
+    val http = HttpTransport(HttpTimeouts(10.seconds, 30.seconds, 30.seconds), cliEngine)
     return try {
         http.use { transport -> block(PendingSync(local, HttpSyncTransport(transport, apiBase, key)), state) }
     } catch (e: SyncServiceException) {

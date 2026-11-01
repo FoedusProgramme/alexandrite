@@ -14,6 +14,7 @@ import org.unitedsoftware.alexandrite.sdk.model.RequestIds
 import org.unitedsoftware.alexandrite.sdk.transcript.EndpointId
 import org.unitedsoftware.alexandrite.sdk.transcript.ModelRef
 import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testTurn
 import org.unitedsoftware.alexandrite.testkit.testUserEntry
 import kotlin.test.Test
@@ -37,7 +38,7 @@ class PleochroicLiveTest {
                 put("baseUrl", baseUrl)
             },
         )
-        return ChatEndpoint(EndpointId("live"), config.settings, PLEOCHROIC_FLAVOR)
+        return ChatEndpoint(EndpointId("live"), config.settings, testHttpEngine(), PLEOCHROIC_FLAVOR)
     }
 
     @Test

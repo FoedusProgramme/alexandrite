@@ -20,6 +20,7 @@ import org.unitedsoftware.alexandrite.sdk.web.WebSearchBackend
 import org.unitedsoftware.alexandrite.sdk.web.WebSearchResult
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
+import org.unitedsoftware.alexandrite.testkit.testHttpEngine
 import org.unitedsoftware.alexandrite.testkit.testToolContext
 import java.io.ByteArrayInputStream
 import java.net.InetAddress
@@ -390,7 +391,7 @@ class WebTest {
                     body("""{"results":[{"title":"Two","url":"https://example.com/b","content":"body"}]}""")
                 },
             )
-            val http = SearchHttp(WebConfig())
+            val http = SearchHttp(WebConfig(), testHttpEngine())
             val brave = braveResults(http.send(braveCall("a & b", 3, "fixture-key", server.baseUrl)), 3)
             val tavily = tavilyResults(http.send(tavilyCall("question", 2, "fixture-key", server.baseUrl)), 2)
             assertEquals("desc", brave.single().snippet)
@@ -446,7 +447,7 @@ class WebTest {
                     )
                 },
             )
-            val http = SearchHttp(WebConfig())
+            val http = SearchHttp(WebConfig(), testHttpEngine())
             val searxng = searxngResults(http.send(searxngCall("a & b", 5, server.baseUrl)), 5)
             val duckDuckGo = duckDuckGoResults(http.sendText(duckDuckGoCall("a & b", server.baseUrl)), 1)
             assertEquals(listOf("first", "second"), searxng.map { it.snippet })
