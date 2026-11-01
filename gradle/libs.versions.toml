@@ -6,6 +6,7 @@ ktlint = "1.8.0"
 kotlinx-coroutines = "1.11.0"
 kotlinx-serialization = "1.11.0"
 sqlite-jdbc = "3.53.4.0"
+androidx-sqlite = "2.7.1"
 slf4j = "2.0.20"
 logback = "1.6.5"
 junit = "6.1.3"
@@ -36,6 +37,7 @@ kotlin-serialization-compiler-plugin-embeddable = { module = "org.jetbrains.kotl
 kctfork-core = { module = "dev.zacsweers.kctfork:core", version.ref = "kctfork" }
 kctfork-ksp = { module = "dev.zacsweers.kctfork:ksp", version.ref = "kctfork" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
+androidx-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "androidx-sqlite" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 jline-terminal = { module = "org.jline:jline-terminal", version.ref = "jline" }

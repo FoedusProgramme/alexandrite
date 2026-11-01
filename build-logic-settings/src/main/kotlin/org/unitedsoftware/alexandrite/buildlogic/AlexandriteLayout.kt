@@ -111,6 +111,10 @@ data class AlexandriteModule(
 
     val published: Boolean
         get() = layer in AlexandriteLayout.PUBLISHED_LAYERS
+
+    /** Whether `alexandrite.portable` checks its main classes */
+    val portable: Boolean
+        get() = layer in AlexandriteLayout.PORTABLE_LAYERS && path !in AlexandriteLayout.JDK_ONLY_MODULES
 }
 
 data class Discovery(
@@ -316,6 +320,9 @@ object AlexandriteLayout {
         Layer.PROVIDER,
         Layer.ENGINE,
     )
+
+    /** Modules of [PORTABLE_LAYERS] made for the desktop JVM alone */
+    val JDK_ONLY_MODULES: Set<String> = setOf(":libraries:engines:sqlite-xerial")
 
     /** Layers whose modules are published to Maven Central */
     val PUBLISHED_LAYERS: Set<Layer> = Layer.entries.toSet() - setOf(Layer.EXAMPLE, Layer.APP)

@@ -50,7 +50,7 @@ if (module.layer !in AlexandriteLayout.THIRD_PARTY_LAYERS) {
     }
 }
 
-if (module.layer in AlexandriteLayout.PORTABLE_LAYERS) {
+if (module.portable) {
     apply(plugin = "alexandrite.portable")
 }
 
