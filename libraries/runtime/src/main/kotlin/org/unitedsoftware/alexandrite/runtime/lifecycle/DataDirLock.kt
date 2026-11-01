@@ -1,6 +1,7 @@
 package org.unitedsoftware.alexandrite.runtime.lifecycle
 
 import org.unitedsoftware.alexandrite.internal.path.createOwnerOnly
+import org.unitedsoftware.alexandrite.internal.portable.ProcessIds
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
@@ -33,8 +34,11 @@ internal class DataDirLock private constructor(private val key: Any, private val
         /** The lock files that runtimes of this JVM hold, by file key. */
         private val held: MutableSet<Any> = ConcurrentHashMap.newKeySet()
 
-        /** Locks [dataDir], calling [inUse] with the holder when another runtime has it. */
-        fun acquire(dataDir: Path, inUse: (holder: String) -> Nothing): DataDirLock {
+        /**
+         * Locks [dataDir], calling [inUse] with the holder when another runtime has it, and writes [pid] into the lock
+         * file where it is known.
+         */
+        fun acquire(dataDir: Path, pid: Long? = ProcessIds.current, inUse: (holder: String) -> Nothing): DataDirLock {
             createOwnerOnly(dataDir)
             val file = dataDir.toRealPath().resolve(FILE_NAME)
             try {
@@ -46,14 +50,14 @@ internal class DataDirLock private constructor(private val key: Any, private val
             val key = attributes.fileKey() ?: file
             if (!held.add(key)) inUse(THIS_JVM)
             try {
-                return DataDirLock(key, lockedChannel(file, inUse))
+                return DataDirLock(key, lockedChannel(file, pid, inUse))
             } catch (e: Throwable) {
                 held.remove(key)
                 throw e
             }
         }
 
-        private fun lockedChannel(file: Path, inUse: (holder: String) -> Nothing): FileChannel {
+        private fun lockedChannel(file: Path, pid: Long?, inUse: (holder: String) -> Nothing): FileChannel {
             val channel = FileChannel.open(file, READ, WRITE, NOFOLLOW_LINKS)
             try {
                 val lock = try {
@@ -63,7 +67,7 @@ internal class DataDirLock private constructor(private val key: Any, private val
                 }
                 if (lock == null) inUse(holder(channel))
                 channel.truncate(0)
-                channel.write(ByteBuffer.wrap("${ProcessHandle.current().pid()}\n".toByteArray()), 0)
+                if (pid != null) channel.write(ByteBuffer.wrap("$pid\n".toByteArray()), 0)
                 channel.force(false)
                 return channel
             } catch (e: Throwable) {

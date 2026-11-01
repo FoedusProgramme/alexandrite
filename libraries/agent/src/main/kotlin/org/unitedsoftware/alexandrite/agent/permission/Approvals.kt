@@ -28,6 +28,7 @@ import org.unitedsoftware.alexandrite.sdk.tool.RuleSubject
 import org.unitedsoftware.alexandrite.sdk.transcript.NotRunReason
 import org.unitedsoftware.alexandrite.sdk.transcript.ToolOutcome
 import java.nio.file.Path
+import java.nio.file.Paths
 
 /** Asks a person about the gated calls that nothing else lets run. */
 internal interface Approvals {
@@ -293,6 +294,6 @@ private fun escaped(preview: ReviewPreview): ReviewPreview? = when (preview) {
     else -> null
 }
 
-private fun escaped(path: Path): Path = Path.of(ReviewText.escapeName(path.toString()))
+private fun escaped(path: Path): Path = Paths.get(ReviewText.escapeName(path.toString()))
 
 private val logger = LoggerFactory.getLogger(ChannelApprovals::class.java)

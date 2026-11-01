@@ -62,6 +62,15 @@ class DataDirTest {
     }
 
     @Test
+    fun `a lock without a known pid leaves the lock file empty`() {
+        val lockFile = Files.write(dataDir.resolve("runtime.lock"), "123\n".toByteArray())
+
+        DataDirLock.acquire(dataDir, pid = null) { holder -> fail("$holder holds the lock") }.use {
+            assertEquals(0, Files.size(lockFile))
+        }
+    }
+
+    @Test
     fun `a second runtime of this JVM cannot use a data directory in use`() {
         lateinit var error: RuntimeStartException
 

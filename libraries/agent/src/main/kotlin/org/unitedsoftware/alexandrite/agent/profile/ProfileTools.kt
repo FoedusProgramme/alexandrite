@@ -34,6 +34,7 @@ import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
 import org.unitedsoftware.alexandrite.sdk.turn.ProfileSummary
 import org.unitedsoftware.alexandrite.sdk.turn.SettingChange
 import java.nio.file.Path
+import java.nio.file.Paths
 
 @Singleton
 @Contribute(Tool::class)
@@ -244,7 +245,7 @@ internal fun profileText(profile: AgentProfile): String {
 }
 
 /** A path that exists only to title [id] in a diff preview. */
-private fun syntheticPath(id: AgentId): Path = Path.of("profiles", "$id")
+private fun syntheticPath(id: AgentId): Path = Paths.get("profiles", "$id")
 
 /** What an approved edit or removal of [profile] compares again before it runs. */
 private fun hash(profile: AgentProfile): String = "sha256:" + sha256Hex(profileText(profile))

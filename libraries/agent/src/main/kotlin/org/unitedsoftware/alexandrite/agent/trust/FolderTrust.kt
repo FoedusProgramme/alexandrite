@@ -29,6 +29,7 @@ import org.unitedsoftware.alexandrite.sdk.turn.TrustedFolder
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.time.Instant
 
 /**
@@ -193,7 +194,7 @@ internal class FolderTrust(settings: AgentSettings, paths: HostPaths, private va
 private class FolderGrant(val agent: AgentId? = null, val by: Granter? = null, val trustedAt: Long? = null)
 
 private fun absolute(text: String): Path? = try {
-    Path.of(text).takeIf { it.isAbsolute }
+    Paths.get(text).takeIf { it.isAbsolute }
 } catch (e: InvalidPathException) {
     null
 }

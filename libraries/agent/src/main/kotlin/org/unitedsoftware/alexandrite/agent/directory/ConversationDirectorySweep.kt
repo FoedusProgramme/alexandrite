@@ -24,6 +24,7 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.stream.Collectors
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.deleteRecursively
@@ -87,7 +88,7 @@ internal class ConversationDirectorySweep(
     }
 
     private suspend fun children(directory: Path): List<Path> = withContext(Dispatchers.IO) {
-        Files.list(directory).use { entries -> entries.filter(Files::isDirectory).toList() }
+        Files.list(directory).use { entries -> entries.filter(Files::isDirectory).collect(Collectors.toList()) }
     }
 }
 

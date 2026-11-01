@@ -77,7 +77,7 @@ public open class MessagesListing : ModelListing() {
     override fun next(page: JsonObject): String? {
         if (page.boolean("has_more") != true) return null
         val last = page.string("last_id") ?: return null
-        return "models?after_id=${URLEncoder.encode(last, Charsets.UTF_8)}"
+        return "models?after_id=${URLEncoder.encode(last, "UTF-8")}"
     }
 
     override fun facts(model: JsonObject): ModelFacts {

@@ -29,6 +29,7 @@ import org.unitedsoftware.alexandrite.sdk.turn.TrustedPerson
 import org.unitedsoftware.alexandrite.sdk.turn.rebuild
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -328,12 +329,12 @@ internal class TrustCommands(
     }
 
     private fun dateOf(instant: Instant, replies: Replies): LocalDate =
-        LocalDate.ofInstant(instant, replies.zone ?: clock.zone)
+        instant.atZone(replies.zone ?: clock.zone).toLocalDate()
 
     /** The absolute folder [text] names, null once the reply says why it names none. */
     private suspend fun folder(command: String, text: String, context: CommandContext, replies: Replies): Path? {
         val folder = try {
-            Path.of(text)
+            Paths.get(text)
         } catch (e: InvalidPathException) {
             context.reply(replies.usage(command))
             return null

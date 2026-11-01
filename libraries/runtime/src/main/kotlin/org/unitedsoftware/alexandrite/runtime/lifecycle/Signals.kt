@@ -2,6 +2,7 @@ package org.unitedsoftware.alexandrite.runtime.lifecycle
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.unitedsoftware.alexandrite.internal.portable.JdkOnly
 import org.unitedsoftware.alexandrite.runtime.AlexandriteRuntime
 import org.unitedsoftware.alexandrite.runtime.RuntimeSpec
 import org.unitedsoftware.alexandrite.runtime.Termination
@@ -94,6 +95,7 @@ internal object JvmSignals : Signals {
 }
 
 /** The JVM's signal handlers, shared by every trap and given back when the last one closes. */
+@JdkOnly
 private object SunMiscSignals {
     private val traps = mutableListOf<Trap>()
     private var previous: List<Pair<Signal, SignalHandler>> = emptyList()

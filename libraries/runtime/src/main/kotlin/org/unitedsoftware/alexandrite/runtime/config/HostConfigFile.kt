@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.unitedsoftware.alexandrite.internal.io.readUtf8
 import org.unitedsoftware.alexandrite.runtime.AlexandriteRuntime
 import org.unitedsoftware.alexandrite.runtime.ConfigFile
 import org.unitedsoftware.alexandrite.runtime.ConfigFileException
@@ -24,7 +25,6 @@ import org.unitedsoftware.alexandrite.sdk.di.container.Binding
 import org.unitedsoftware.alexandrite.sdk.di.container.Resolver
 import org.unitedsoftware.alexandrite.sdk.di.container.Scope
 import java.io.IOException
-import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 
@@ -46,7 +46,7 @@ public class HostConfigFile(
     override suspend fun get(path: String): JsonElement? = lockedConfig {
         val configured = file ?: throw refused(ConfigEditRefusal.NO_FILE, "The host names no config file.")
         val text = try {
-            Files.readString(configured)
+            readUtf8(configured)
         } catch (e: NoSuchFileException) {
             throw refused(ConfigEditRefusal.NO_FILE, "The config file $configured does not exist.", e)
         } catch (e: IOException) {

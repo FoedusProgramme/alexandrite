@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.unitedsoftware.alexandrite.internal.io.readUtf8
 import org.unitedsoftware.alexandrite.runtime.config.BYTE_ORDER_MARK
 import org.unitedsoftware.alexandrite.runtime.config.EnvReferences
 import org.unitedsoftware.alexandrite.runtime.config.jsonStringEnd
@@ -15,7 +16,6 @@ import org.unitedsoftware.alexandrite.sdk.config.ConfigPath
 import org.unitedsoftware.alexandrite.sdk.config.ConfigSource
 import org.unitedsoftware.alexandrite.sdk.config.JsonConfigSource
 import java.io.IOException
-import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 
@@ -28,7 +28,7 @@ public object ConfigFile {
      */
     public fun read(file: Path, environment: Map<String, String> = System.getenv()): ConfigSource {
         val text = try {
-            Files.readString(file)
+            readUtf8(file)
         } catch (e: NoSuchFileException) {
             throw ConfigFileException.Missing(file)
         } catch (e: IOException) {

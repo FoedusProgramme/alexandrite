@@ -19,6 +19,7 @@ import org.unitedsoftware.alexandrite.agent.tool.CompanionTool
 import org.unitedsoftware.alexandrite.agent.tool.property
 import org.unitedsoftware.alexandrite.agent.tool.review
 import org.unitedsoftware.alexandrite.internal.hash.sha256Hex
+import org.unitedsoftware.alexandrite.internal.io.readAtMost
 import org.unitedsoftware.alexandrite.internal.path.expandHome
 import org.unitedsoftware.alexandrite.internal.path.hardLinks
 import org.unitedsoftware.alexandrite.internal.path.openRegularFile
@@ -55,6 +56,7 @@ import java.nio.file.InvalidPathException
 import java.nio.file.LinkOption
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.Locale
 
@@ -201,7 +203,7 @@ internal class SendFileTool(private val floor: HardFloor, private val channels: 
 
     /** The bytes of [file], read once. */
     private fun read(file: CheckedFile): ByteArray {
-        val bytes = openRegularFile(file.path, floor.protectsAnything).use { it.readNBytes((file.limit + 1).toInt()) }
+        val bytes = openRegularFile(file.path, floor.protectsAnything).use { it.readAtMost((file.limit + 1).toInt()) }
         if (bytes.size > file.limit) {
             throw ToolRefusal("${file.path} grew past the ${file.limit} bytes a file sent to this chat may hold.")
         }
@@ -224,7 +226,7 @@ internal class SendFileTool(private val floor: HardFloor, private val channels: 
 /** [argument] as an absolute path, a relative one resolved against the workspace and a leading `~` as the home. */
 private suspend fun absolute(argument: String, context: ToolContext): Path {
     val path = try {
-        Path.of(expandHome(argument))
+        Paths.get(expandHome(argument))
     } catch (e: InvalidPathException) {
         throw ToolRefusal("'$argument' is no valid path.")
     }

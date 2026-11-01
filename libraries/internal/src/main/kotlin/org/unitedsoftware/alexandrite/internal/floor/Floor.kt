@@ -10,6 +10,7 @@ import org.unitedsoftware.alexandrite.internal.path.nameKey
 import java.io.File
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import java.nio.file.Paths
 
 /** A protected place: [path] and everything under it, except what lies in its [carveOuts]. */
 public class DenyRoot(
@@ -238,7 +239,9 @@ private fun standardRoots(
         home?.let { addAll(CREDENTIAL_STORES.map { (name, kind) -> DenyRoot(home.resolve(name), kind) }) }
         addAll(movedStores(environment))
     }
-    if (StandardPlaces.SYSTEM in standard && Platform.HOST == Platform.POSIX) add(DenyRoot(Path.of("/dev"), "devices"))
+    if (StandardPlaces.SYSTEM in standard && Platform.HOST == Platform.POSIX) {
+        add(DenyRoot(Paths.get("/dev"), "devices"))
+    }
 }
 
 /** The credential stores at the absolute places that the variables of [environment] name. */
@@ -260,7 +263,7 @@ private fun movedStores(environment: Map<String, String>): List<DenyRoot> {
 }
 
 private fun absolute(text: String): Path? = try {
-    text.takeIf { it.isNotBlank() }?.let { Path.of(it) }?.takeIf { it.isAbsolute }?.normalize()
+    text.takeIf { it.isNotBlank() }?.let { Paths.get(it) }?.takeIf { it.isAbsolute }?.normalize()
 } catch (e: InvalidPathException) {
     null
 }
