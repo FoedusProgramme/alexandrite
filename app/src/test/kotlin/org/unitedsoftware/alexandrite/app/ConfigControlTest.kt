@@ -14,8 +14,10 @@ import org.unitedsoftware.alexandrite.sdk.di.key
 import org.unitedsoftware.alexandrite.sdk.runtime.StopRequest
 import org.unitedsoftware.alexandrite.sdk.tool.FloorCheck
 import org.unitedsoftware.alexandrite.sdk.tool.HardFloor
+import org.unitedsoftware.alexandrite.sdk.turn.ChatHistory
 import org.unitedsoftware.alexandrite.sdk.turn.ConversationControl
 import org.unitedsoftware.alexandrite.sdk.turn.PermissionRules
+import org.unitedsoftware.alexandrite.sdk.turn.SideQuestions
 import org.unitedsoftware.alexandrite.sdk.turn.TrustControl
 import org.unitedsoftware.alexandrite.sdk.turn.TurnControl
 import org.unitedsoftware.alexandrite.sdk.turn.UsageReports
@@ -101,11 +103,13 @@ class ConfigControlTest {
                 services.getOrNull<TrustControl>(),
                 services.getOrNull<PermissionRules>(),
                 services.getOrNull<UsageReports>(),
+                services.getOrNull<ChatHistory>(),
+                services.getOrNull<SideQuestions>(),
                 agentApis(services),
             )
         }
 
-        assertEquals(6, apis.filterNotNull().size)
+        assertEquals(8, apis.filterNotNull().size)
     }
 
     @Test

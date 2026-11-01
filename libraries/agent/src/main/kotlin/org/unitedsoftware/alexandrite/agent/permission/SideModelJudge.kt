@@ -12,15 +12,13 @@ import org.slf4j.LoggerFactory
 import org.unitedsoftware.alexandrite.agent.config.AgentDirectory
 import org.unitedsoftware.alexandrite.agent.model.Endpoints
 import org.unitedsoftware.alexandrite.agent.model.ask
-import org.unitedsoftware.alexandrite.agent.model.select
+import org.unitedsoftware.alexandrite.agent.model.listed
 import org.unitedsoftware.alexandrite.internal.text.ReviewText
 import org.unitedsoftware.alexandrite.internal.text.shellLine
 import org.unitedsoftware.alexandrite.sdk.chat.AgentChatKey
 import org.unitedsoftware.alexandrite.sdk.chat.TurnInfo
 import org.unitedsoftware.alexandrite.sdk.di.Binds
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
-import org.unitedsoftware.alexandrite.sdk.model.ModelError
-import org.unitedsoftware.alexandrite.sdk.model.ModelErrorKind
 import org.unitedsoftware.alexandrite.sdk.model.ModelException
 import org.unitedsoftware.alexandrite.sdk.model.PromptSection
 import org.unitedsoftware.alexandrite.sdk.model.RequestIds
@@ -118,14 +116,7 @@ internal class SideModelJudge(private val endpoints: Endpoints, private val dire
 
     /** The text that [model] answers [prompt] with. */
     private suspend fun reply(model: ModelRef, turn: TurnInfo, prompt: String): String {
-        val selected = endpoints.select(model) ?: throw ModelException(
-            ModelError.builder(
-                ModelErrorKind.MODEL_NOT_FOUND,
-                "Endpoint '${model.endpoint}' lists no '${model.model}'.",
-            )
-                .retryable(false)
-                .build(),
-        )
+        val selected = endpoints.listed(model)
         val ids = RequestIds(turn.conversation, turn.id, 0)
         val instructions = listOf(PromptSection(SOURCE, RUBRIC, stable = true))
         return selected.ask(ids, SOURCE, prompt, instructions, MAX_OUTPUT_TOKENS, temperature = 0.0).text

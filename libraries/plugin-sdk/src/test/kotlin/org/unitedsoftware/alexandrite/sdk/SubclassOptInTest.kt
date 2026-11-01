@@ -396,6 +396,24 @@ class SubclassOptInTest {
             override suspend fun report(chat: org.unitedsoftware.alexandrite.sdk.chat.ChatAddress, everyAgent: Boolean) =
                 TODO()
         }
+
+        class History : org.unitedsoftware.alexandrite.sdk.turn.ChatHistory {
+            override suspend fun chats(agent: org.unitedsoftware.alexandrite.sdk.chat.AgentId) = TODO()
+            override suspend fun entries(
+                chat: org.unitedsoftware.alexandrite.sdk.chat.ChatAddress,
+                after: org.unitedsoftware.alexandrite.sdk.transcript.EntryId?,
+                limit: Int,
+                agent: org.unitedsoftware.alexandrite.sdk.chat.AgentId?,
+            ) = TODO()
+        }
+
+        class Questions : org.unitedsoftware.alexandrite.sdk.turn.SideQuestions {
+            override suspend fun ask(
+                chat: org.unitedsoftware.alexandrite.sdk.chat.ChatAddress,
+                question: String,
+                by: org.unitedsoftware.alexandrite.sdk.chat.ChatUser?,
+            ) = TODO()
+        }
     """.trimIndent()
 
     /** `when`s over open hierarchies and enumerations, each with an `ELSE` line. */

@@ -57,9 +57,7 @@ import org.unitedsoftware.alexandrite.agent.messaging.MessageBudget
 import org.unitedsoftware.alexandrite.agent.model.Endpoints
 import org.unitedsoftware.alexandrite.agent.model.RetryPolicy
 import org.unitedsoftware.alexandrite.agent.model.SelectedModel
-import org.unitedsoftware.alexandrite.agent.model.cacheKey
 import org.unitedsoftware.alexandrite.agent.model.collectResponse
-import org.unitedsoftware.alexandrite.agent.model.crossedTo
 import org.unitedsoftware.alexandrite.agent.model.movesOn
 import org.unitedsoftware.alexandrite.agent.model.nextModel
 import org.unitedsoftware.alexandrite.agent.model.plus
@@ -82,7 +80,6 @@ import org.unitedsoftware.alexandrite.agent.prompt.turnContextPlan
 import org.unitedsoftware.alexandrite.agent.routing.ChatTopology
 import org.unitedsoftware.alexandrite.agent.tool.CANCELLED_RESULT
 import org.unitedsoftware.alexandrite.agent.tool.DelegatingTurn
-import org.unitedsoftware.alexandrite.agent.tool.RenderedTool
 import org.unitedsoftware.alexandrite.agent.tool.RunChain
 import org.unitedsoftware.alexandrite.agent.tool.ToolExecutor
 import org.unitedsoftware.alexandrite.agent.tool.ToolRegistry
@@ -140,8 +137,6 @@ import org.unitedsoftware.alexandrite.sdk.model.ModelOptions
 import org.unitedsoftware.alexandrite.sdk.model.ModelRequest
 import org.unitedsoftware.alexandrite.sdk.model.PromptSection
 import org.unitedsoftware.alexandrite.sdk.model.ReasoningEffort
-import org.unitedsoftware.alexandrite.sdk.model.RequestIds
-import org.unitedsoftware.alexandrite.sdk.model.ToolChoice
 import org.unitedsoftware.alexandrite.sdk.model.Trust
 import org.unitedsoftware.alexandrite.sdk.model.TurnContextItem
 import org.unitedsoftware.alexandrite.sdk.model.Usage
@@ -343,7 +338,7 @@ internal class AgentTurnRunner(
             val options = requestOptions(agent, selected.info, reasoning)
             val toolset = toolsOf(selected)
             val offered = toolset.offered
-            val definitions = offered.map { (it as? RenderedTool)?.definitionFor(turn) ?: it.definition }
+            val definitions = toolset.definitions(turn)
             val narrowed = hooks.turnStart(turn, message, definitions).or { return stopped(it) }.map { it.name }
             val callable = tools.callable(turn, narrowed + toolset.callableUnoffered)
             this.callable = callable
@@ -947,18 +942,8 @@ internal class AgentTurnRunner(
             round: Int,
             toolless: Boolean,
         ): ModelRequest {
-            val turn = checkNotNull(turn)
-            val (entries, turnStart) = parts.window.history(appending.withLock { stored.toList() } + pending)
-            val history = crossedTo(parts.model.ref, media.inline(entries, mediaPlan))
-            val ids = RequestIds(turn.conversation, turn.id, round)
-            return ModelRequest.builder(parts.model.ref, history, turnStart, ids)
-                .instructions(parts.sections)
-                .turnContext(parts.context.kept)
-                .tools(parts.tools)
-                .toolChoice(if (toolless) ToolChoice.None else ToolChoice.Auto)
-                .options(options)
-                .cacheKey(cacheKey(turn.key))
-                .build()
+            val current = appending.withLock { stored.toList() } + pending
+            return parts.request(checkNotNull(turn), current, round, options, toolless, media, mediaPlan)
         }
 
         /** The model [ref] names, as its endpoint lists it. */
@@ -1004,8 +989,7 @@ internal class AgentTurnRunner(
             val options = requestOptions(agent, selected.info, reasoning)
             val toolset = toolsOf(selected)
             val names = parts.tools.mapTo(HashSet()) { it.name }
-            val definitions = toolset.offered.map { (it as? RenderedTool)?.definitionFor(turn) ?: it.definition }
-                .filter { it.name in names }
+            val definitions = toolset.definitions(turn).filter { it.name in names }
             val contextPlan = turnContextPlan(contextItems) {
                 selected.endpoint.turnContextMode(next.model, options, it)
             }
@@ -1742,16 +1726,6 @@ internal class AgentTurnRunner(
         }
     }
 }
-
-/** What every request of one turn shares. */
-private class RequestParts(
-    val model: SelectedModel,
-    val options: ModelOptions,
-    val window: Compactor.TurnWindow,
-    val sections: List<PromptSection>,
-    val tools: List<ToolDefinition>,
-    val context: TurnContextPlan,
-)
 
 /** The tools that a turn's calls may name, by name, and the names of those it may call. */
 private class TurnTools(val offered: Map<String, Tool>, val callable: Set<String>)
