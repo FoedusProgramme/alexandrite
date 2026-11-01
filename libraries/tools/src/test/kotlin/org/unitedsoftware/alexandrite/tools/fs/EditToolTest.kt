@@ -19,6 +19,7 @@ import org.unitedsoftware.alexandrite.sdk.tool.ReviewPreview
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
 import org.unitedsoftware.alexandrite.testkit.testToolContext
 import org.unitedsoftware.alexandrite.testkit.testTurn
+import org.unitedsoftware.alexandrite.tools.media.AWT_CODEC
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -45,7 +46,7 @@ class EditToolTest {
     fun setUp() {
         fs = FsFixture(directory)
         ledger = ReadLedger()
-        reader = ReadTool(fs.floor, ledger)
+        reader = ReadTool(fs.floor, ledger, AWT_CODEC)
         tool = EditTool(fs.floor, ledger, fs.places)
     }
 
@@ -225,7 +226,7 @@ class EditToolTest {
         val file = fs.write("repo/notes.md", "Notes.")
         Files.createLink(fs.root.resolve("repo/other.md"), file)
         val unprotected = EditTool(fs.unprotected, ledger, fs.places)
-        ReadTool(fs.unprotected, ledger).call(fs.context(), "path" to file)
+        ReadTool(fs.unprotected, ledger, AWT_CODEC).call(fs.context(), "path" to file)
 
         assertEquals(
             "refused: $file has more than one hard link, so it may be another name of a protected file: it is not " +

@@ -73,6 +73,7 @@ class BuiltInRuntimeTest {
         const val NOTES_INDEX = "com.example.notes.NotesIndex"
 
         /** The built-in plugins that the distribution leaves out, for hosts that embed the runtime elsewhere. */
-        val LEFT_OUT = setOf("alexandrite-store-memory", "alexandrite-engine-sqlite-bundled")
+        val LEFT_OUT =
+            setOf("alexandrite-store-memory", "alexandrite-engine-sqlite-bundled", "alexandrite-engine-jsoup")
     }
 }

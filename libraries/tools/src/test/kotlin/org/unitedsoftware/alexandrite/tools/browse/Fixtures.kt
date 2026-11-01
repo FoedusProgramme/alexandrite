@@ -15,9 +15,11 @@ import org.unitedsoftware.alexandrite.sdk.browse.BrowseSurface
 import org.unitedsoftware.alexandrite.sdk.browse.BrowseTarget
 import org.unitedsoftware.alexandrite.sdk.browse.BrowseView
 import org.unitedsoftware.alexandrite.sdk.browse.WebStep
+import org.unitedsoftware.alexandrite.sdk.media.ImageCodec
 import org.unitedsoftware.alexandrite.sdk.tool.ReviewedTool
 import org.unitedsoftware.alexandrite.sdk.tool.ToolActivity
 import org.unitedsoftware.alexandrite.sdk.tool.ToolRisk
+import org.unitedsoftware.alexandrite.tools.media.AWT_CODEC
 
 /** A 1×1 PNG, as a screenshot comes back base64-encoded. */
 internal const val PIXEL =
@@ -73,7 +75,7 @@ internal class FakeBackend(
 }
 
 /** A tool over [backend] with nothing of any one surface's wording or policy. */
-internal fun browseTool(backend: BrowseBackend): ReviewedTool {
+internal fun browseTool(backend: BrowseBackend, codec: ImageCodec? = AWT_CODEC): ReviewedTool {
     val profile = BrowseProfile(
         name = "screen.use",
         subject = "screen",
@@ -85,5 +87,5 @@ internal fun browseTool(backend: BrowseBackend): ReviewedTool {
         risk = { ToolRisk.EXTERNAL_ACTION },
         ended = "look again first.",
     )
-    return BrowseTool(backend, BrowseSessions(60), profile).asTool() as ReviewedTool
+    return BrowseTool(backend, BrowseSessions(60), profile, codec).asTool() as ReviewedTool
 }
