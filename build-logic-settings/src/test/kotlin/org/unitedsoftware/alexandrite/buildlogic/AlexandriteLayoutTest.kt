@@ -601,6 +601,7 @@ class AlexandriteLayoutTest {
                 ACCOUNT,
                 AUTOMATION,
                 SANDBOX,
+                ENGINE,
                 APP,
             }
 
@@ -929,7 +930,7 @@ class AlexandriteLayoutTest {
             assertNotNull(violation(app, ksp)),
             ":libraries:channels:*, $channelCommon, :libraries:providers:*, :libraries:provider-common, " +
                 ":libraries:stores:*, :libraries:accounts:*, :libraries:automations:*, $automationCommon, " +
-                ":libraries:sandboxes:*, $discovery; $testkit, :examples:* only from configurations named test*;",
+                ":libraries:sandboxes:*, :libraries:engines:*, $discovery; $testkit, :examples:* only from configurations named test*;",
         )
         assertContains(
             assertNotNull(violation(notes, internals)),

@@ -50,6 +50,10 @@ if (module.layer !in AlexandriteLayout.THIRD_PARTY_LAYERS) {
     }
 }
 
+if (module.layer in AlexandriteLayout.PORTABLE_LAYERS) {
+    apply(plugin = "alexandrite.portable")
+}
+
 if (module.builtIn && module.layer in AlexandriteLayout.INDEXED_LAYERS) {
     apply(plugin = "alexandrite.ksp")
 }

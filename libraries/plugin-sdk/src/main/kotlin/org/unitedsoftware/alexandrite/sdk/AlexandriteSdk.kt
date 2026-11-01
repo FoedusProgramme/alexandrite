@@ -19,9 +19,10 @@ package org.unitedsoftware.alexandrite.sdk
  */
 public object AlexandriteSdk {
     /**
-     * The SDK's major version, 1 for its first release and raised by every breaking change.
+     * The SDK's major version, 1 for its first release and raised by every breaking change: 2 adds the engine ports
+     * (`HttpEngine`, `ImageCodec`, `HtmlParser`, `SqliteDriver`) for hosts beyond the JDK.
      *
      * A runtime loads only plugins built against its own.
      */
-    public const val API_VERSION: Int = 1
+    public const val API_VERSION: Int = 2
 }

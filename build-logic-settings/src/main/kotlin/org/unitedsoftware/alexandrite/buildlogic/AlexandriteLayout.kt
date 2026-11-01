@@ -46,6 +46,9 @@ enum class Layer {
     /** OS sandboxes that commands run in. */
     SANDBOX,
 
+    /** Implementations of the SDK's engine ports (HTTP, HTML, SQLite) other than the JDK defaults the runtime binds. */
+    ENGINE,
+
     /** Finding and bringing in another tool's skills and MCP servers. */
     DISCOVERY,
 
@@ -204,6 +207,12 @@ object AlexandriteLayout {
             jarPrefix = "alexandrite-sandbox-",
             packagePrefix = "$PACKAGE.sandbox.",
         ),
+        Location.Family(
+            "libraries/engines",
+            Layer.ENGINE,
+            jarPrefix = "alexandrite-engine-",
+            packagePrefix = "$PACKAGE.engine.",
+        ),
         Location.Slot("libraries/discovery", Layer.DISCOVERY),
         Location.Slot("libraries/testkit", Layer.TESTKIT),
         Location.Slot("build-ksp-plugin", Layer.KSP, jarName = "alexandrite-ksp"),
@@ -243,6 +252,7 @@ object AlexandriteLayout {
         Layer.AUTOMATION to setOf(Layer.SDK, Layer.INTERNAL, Layer.AUTOMATION_COMMON),
         Layer.AUTOMATION_COMMON to emptySet(),
         Layer.SANDBOX to setOf(Layer.SDK, Layer.INTERNAL),
+        Layer.ENGINE to setOf(Layer.SDK, Layer.INTERNAL),
         Layer.DISCOVERY to setOf(Layer.SDK, Layer.INTERNAL),
         Layer.TESTKIT to setOf(Layer.SDK, Layer.INTERNAL, Layer.RUNTIME),
         Layer.EXAMPLE to setOf(Layer.SDK, Layer.CHANNEL_COMMON, Layer.PROVIDER_COMMON),
@@ -263,6 +273,7 @@ object AlexandriteLayout {
             Layer.AUTOMATION,
             Layer.AUTOMATION_COMMON,
             Layer.SANDBOX,
+            Layer.ENGINE,
             Layer.DISCOVERY,
         ),
     )
@@ -279,6 +290,7 @@ object AlexandriteLayout {
         Layer.ACCOUNT to setOf(Layer.TESTKIT),
         Layer.AUTOMATION to setOf(Layer.TESTKIT),
         Layer.SANDBOX to setOf(Layer.TESTKIT),
+        Layer.ENGINE to setOf(Layer.TESTKIT),
         Layer.DISCOVERY to setOf(Layer.TESTKIT),
         Layer.KSP to setOf(Layer.SDK),
         Layer.EXAMPLE to setOf(Layer.TESTKIT),
@@ -287,6 +299,23 @@ object AlexandriteLayout {
 
     /** Layers compiled without the SDK's internal API, as third-party plugins are */
     val THIRD_PARTY_LAYERS: Set<Layer> = setOf(Layer.CHANNEL_COMMON, Layer.PROVIDER_COMMON, Layer.EXAMPLE)
+
+    /**
+     * Layers whose main code runs wherever a host may embed the runtime, Android included: they use only the JDK API
+     * that Android's API level 26 has, which `alexandrite.portable` checks. A capability only the JDK has comes through
+     * an SDK port with a JDK default the runtime binds, or is probed for where it is used.
+     */
+    val PORTABLE_LAYERS: Set<Layer> = setOf(
+        Layer.SDK,
+        Layer.INTERNAL,
+        Layer.RUNTIME,
+        Layer.AGENT,
+        Layer.TOOLS,
+        Layer.COMMANDS,
+        Layer.PROVIDER_COMMON,
+        Layer.PROVIDER,
+        Layer.ENGINE,
+    )
 
     /** Layers whose modules are published to Maven Central */
     val PUBLISHED_LAYERS: Set<Layer> = Layer.entries.toSet() - setOf(Layer.EXAMPLE, Layer.APP)
@@ -306,6 +335,7 @@ object AlexandriteLayout {
         Layer.ACCOUNT,
         Layer.AUTOMATION,
         Layer.SANDBOX,
+        Layer.ENGINE,
         Layer.EXAMPLE,
         Layer.APP,
     )
@@ -394,9 +424,9 @@ object AlexandriteLayout {
         return "Modules are out of place:\n" +
             problems.joinToString("\n") { "  - $it" } + "\n" +
             "Modules may live only at:\n" + locationList() + "\n" +
-            "Every slot must hold its module; a channel, provider, store, automation, sandbox or example is added by " +
-            "creating its directory. A new kind of module needs a new slot or family in the location map, with its " +
-            "layer's dependency rules, in $LAYOUT_LOCATION."
+            "Every slot must hold its module; a channel, provider, store, automation, sandbox, engine or example is " +
+            "added by creating its directory. A new kind of module needs a new slot or family in the location map, " +
+            "with its layer's dependency rules, in $LAYOUT_LOCATION."
     }
 
     /** Null when the module name of every indexed module in [modules] is a plugin id. */
