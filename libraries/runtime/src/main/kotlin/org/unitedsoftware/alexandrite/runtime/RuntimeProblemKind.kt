@@ -55,7 +55,7 @@ public enum class RuntimeProblemKind : ProblemKind {
     /** Enabled plugins that each bind store ports. */
     DUPLICATE_STORE,
 
-    /** Enabled plugins that each bind the same engine port. */
+    /** Enabled plugins that bind the same engine port. */
     DUPLICATE_ENGINE,
 
     /** An engine port that an enabled plugin needs and no enabled plugin binds. */

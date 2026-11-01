@@ -28,7 +28,7 @@ import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.UserEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.UserOrigin
 import org.unitedsoftware.alexandrite.testkit.TEST_TIME
-import org.unitedsoftware.alexandrite.testkit.engine.boundBy
+import org.unitedsoftware.alexandrite.testkit.boundBy
 import org.unitedsoftware.alexandrite.testkit.testChat
 import org.unitedsoftware.alexandrite.testkit.testUser
 import java.nio.file.Path

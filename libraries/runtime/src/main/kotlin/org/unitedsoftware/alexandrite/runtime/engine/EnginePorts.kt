@@ -2,6 +2,7 @@ package org.unitedsoftware.alexandrite.runtime.engine
 
 import org.unitedsoftware.alexandrite.runtime.RuntimeProblemKind
 import org.unitedsoftware.alexandrite.runtime.plugin.PluginSet
+import org.unitedsoftware.alexandrite.runtime.plugin.binds
 import org.unitedsoftware.alexandrite.sdk.di.container.Binding
 import org.unitedsoftware.alexandrite.sdk.di.container.DependencyKind
 import org.unitedsoftware.alexandrite.sdk.media.ImageCodec
@@ -12,7 +13,7 @@ import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteDriver
 import org.unitedsoftware.alexandrite.sdk.text.HtmlParser
 import kotlin.reflect.KClass
 
-/** An engine port of the SDK, which one plugin at most binds, with the [engines] that bind it on each host. */
+/** An engine port of the SDK, with the [engines] that bind it on each host. */
 internal class EnginePort(val port: KClass<*>, val engines: String) {
     val name: String = port.java.simpleName
 }
@@ -34,41 +35,32 @@ internal val ENGINE_PORTS: List<EnginePort> = listOf(
     ),
 )
 
-/**
- * The problems of the [ports] that several [enabled] plugins bind, and of each enabled plugin that needs a port no
- * plugin binds.
- */
-internal fun engineProblems(
-    enabled: List<PluginSet.Member>,
-    bindings: Map<String, List<Binding<*>>>,
-    ports: List<EnginePort> = ENGINE_PORTS,
-): List<Problem> = ports.flatMap { port ->
-    val binders = enabled.filter { member -> bindings.getValue(member.id).any { port.boundBy(it) } }
-    when {
-        binders.size > 1 -> {
-            val described = binders.joinToString(" and ") { "plugin '${it.id}' (root '${it.index.configRoot}')" }
-            val message =
-                "Duplicate engine: $described bind ${port.name}, but one plugin at most provides an engine. " +
-                    "Switch all but one of them off with `<root>.${PluginIds.ENABLED_KEY} = false`."
-            listOf(Problem(RuntimeProblemKind.DUPLICATE_ENGINE, message, null))
-        }
-
-        binders.isEmpty() -> enabled.filter { member -> bindings.getValue(member.id).any { port.neededBy(it) } }
-            .map { member ->
-                Problem(
-                    RuntimeProblemKind.MISSING_ENGINE,
-                    "Missing engine: plugin '${member.id}' needs ${port.name}, which no enabled plugin binds. Put an " +
-                        "engine that binds it on the class path: ${port.engines}.",
-                    member.id,
-                )
+/** The problems of the engine ports that several [enabled] plugins bind, or that one needs and none binds. */
+internal fun engineProblems(enabled: List<PluginSet.Member>, bindings: Map<String, List<Binding<*>>>): List<Problem> =
+    ENGINE_PORTS.flatMap { port ->
+        val binders = enabled.filter { member -> bindings.getValue(member.id).any { it.binds(port.port) } }
+        when {
+            binders.size > 1 -> {
+                val described = binders.joinToString(" and ") { "plugin '${it.id}' (root '${it.index.configRoot}')" }
+                val message =
+                    "Duplicate engine: $described bind ${port.name}, but one plugin at most binds each engine port. " +
+                        "Switch all but one of them off with `<root>.${PluginIds.ENABLED_KEY} = false`."
+                listOf(Problem(RuntimeProblemKind.DUPLICATE_ENGINE, message, null))
             }
 
-        else -> emptyList()
-    }
-}
+            binders.isEmpty() -> enabled.filter { member -> bindings.getValue(member.id).any { port.neededBy(it) } }
+                .map { member ->
+                    Problem(
+                        RuntimeProblemKind.MISSING_ENGINE,
+                        "Missing engine: plugin '${member.id}' needs ${port.name}, which no enabled plugin binds. " +
+                            "Put an engine that binds it on the class path: ${port.engines}.",
+                        member.id,
+                    )
+                }
 
-private fun EnginePort.boundBy(binding: Binding<*>): Boolean =
-    !binding.multi && binding.key.qualifier == null && binding.key.type.classifier == port
+            else -> emptyList()
+        }
+    }
 
 private fun EnginePort.neededBy(binding: Binding<*>): Boolean = binding.dependencies.any {
     it.kind != DependencyKind.OPTIONAL && it.kind != DependencyKind.ALL && it.key.qualifier == null &&

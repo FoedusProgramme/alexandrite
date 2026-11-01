@@ -10,7 +10,7 @@ dependencies {
     implementation(project(":libraries:internal"))
 
     testImplementation(project(":libraries:testkit"))
+    testImplementation(project(":libraries:engines:awt-images"))
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.logback.classic)
-    testImplementation(project(":libraries:engines:awt-images"))
 }

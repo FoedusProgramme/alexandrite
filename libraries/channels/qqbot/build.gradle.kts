@@ -15,6 +15,6 @@ dependencies {
     implementation(libs.java.websocket)
 
     testImplementation(project(":libraries:testkit"))
-    testImplementation(libs.logback.classic)
     testImplementation(project(":libraries:engines:jdk-http"))
+    testImplementation(libs.logback.classic)
 }

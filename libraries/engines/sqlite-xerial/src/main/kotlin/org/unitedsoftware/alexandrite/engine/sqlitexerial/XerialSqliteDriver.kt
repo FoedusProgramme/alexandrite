@@ -1,6 +1,9 @@
 package org.unitedsoftware.alexandrite.engine.sqlitexerial
 
 import org.sqlite.JDBC
+import org.sqlite.core.Codes
+import org.sqlite.core.CoreStatement
+import org.sqlite.core.SafeStmtPtr
 import org.unitedsoftware.alexandrite.sdk.di.Binds
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
 import org.unitedsoftware.alexandrite.sdk.store.sql.SqliteConnection
@@ -55,6 +58,9 @@ private class JdbcConnection(private val connection: Connection) : SqliteConnect
 
 /** A prepared statement, which its first [step] executes. */
 private class JdbcStatement(private val statement: PreparedStatement) : SqliteStatement {
+    /** The SQLite statement under [statement], which describes its columns from the prepare on. */
+    private val native: SafeStmtPtr = (statement as CoreStatement).pointer
+
     private var executed = false
 
     /** The rows of the executed statement, null when it yields none. */
@@ -78,16 +84,24 @@ private class JdbcStatement(private val statement: PreparedStatement) : SqliteSt
         rows?.next() ?: false
     }
 
-    override fun columnCount(): Int = jdbc { row().metaData.columnCount }
+    override fun columnCount(): Int =
+        jdbc { native.safeRunInt<SQLException> { db, pointer -> db.column_count(pointer) } }
 
-    override fun columnName(index: Int): String = jdbc { row().metaData.getColumnName(index + 1) }
+    override fun columnName(index: Int): String {
+        checkColumn(index)
+        return jdbc { native.safeRun<String, SQLException> { db, pointer -> db.column_name(pointer, index) } }
+    }
 
-    override fun columnType(index: Int): SqliteType = when (jdbc { row().getObject(index + 1) }) {
-        null -> SqliteType.NULL
-        is Int, is Long -> SqliteType.INTEGER
-        is Double -> SqliteType.FLOAT
-        is ByteArray -> SqliteType.BLOB
-        else -> SqliteType.TEXT
+    override fun columnType(index: Int): SqliteType {
+        row()
+        checkColumn(index)
+        return when (jdbc { native.safeRunInt<SQLException> { db, pointer -> db.column_type(pointer, index) } }) {
+            Codes.SQLITE_INTEGER -> SqliteType.INTEGER
+            Codes.SQLITE_FLOAT -> SqliteType.FLOAT
+            Codes.SQLITE_BLOB -> SqliteType.BLOB
+            Codes.SQLITE_NULL -> SqliteType.NULL
+            else -> SqliteType.TEXT
+        }
     }
 
     override fun getLong(index: Int): Long = jdbc { row().getLong(index + 1) }
@@ -109,6 +123,10 @@ private class JdbcStatement(private val statement: PreparedStatement) : SqliteSt
     override fun close() = jdbc { statement.close() }
 
     private fun row(): ResultSet = rows ?: throw SqliteException("The statement is on no row.")
+
+    private fun checkColumn(index: Int) {
+        if (index !in 0 until columnCount()) throw SqliteException("The statement has no column $index.")
+    }
 }
 
 private inline fun <T> jdbc(block: () -> T): T = try {

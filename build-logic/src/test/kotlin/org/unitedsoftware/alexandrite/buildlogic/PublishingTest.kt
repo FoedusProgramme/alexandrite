@@ -67,8 +67,8 @@ class PublishingTest {
         assertContains(
             pom,
             "<description>Helpers. An implementation module: its API may change in any release, so plugins " +
-                "build on alexandrite-plugin-sdk, alexandrite-channel-common and alexandrite-provider-common " +
-                "only.</description>",
+                "build on alexandrite-plugin-sdk, alexandrite-channel-common, alexandrite-provider-common and " +
+                "alexandrite-http-common only.</description>",
         )
     }
 

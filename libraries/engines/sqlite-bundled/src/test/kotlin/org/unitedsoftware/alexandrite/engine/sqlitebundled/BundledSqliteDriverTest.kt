@@ -11,12 +11,13 @@ import kotlin.test.assertIs
 
 class BundledSqliteDriverTest {
     @TestFactory
-    fun `the driver keeps the SQLite driver contract`(): List<DynamicTest> = SQLITE_DRIVER_CONTRACT.map { check ->
-        DynamicTest.dynamicTest(check.name) { check.run(BundledSqliteDriver()) }
-    }
+    fun `the bundled driver keeps the SQLite driver contract`(): List<DynamicTest> =
+        SQLITE_DRIVER_CONTRACT.map { check ->
+            DynamicTest.dynamicTest(check.name) { check.run(BundledSqliteDriver()) }
+        }
 
     @Test
-    fun `the plugin binds the driver`() {
+    fun `the plugin binds its driver`() {
         runBlocking {
             PluginHarness.builder(AlexandriteEngineSqliteBundledIndex()).build().run {
                 assertIs<BundledSqliteDriver>(get<SqliteDriver>())

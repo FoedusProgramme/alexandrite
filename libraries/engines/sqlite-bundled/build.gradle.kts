@@ -2,7 +2,7 @@ plugins {
     id("alexandrite.kotlin-library")
 }
 
-description = "The SQLite driver of Alexandrite over androidx's bundled SQLite, for Android and the desktop JVM"
+description = "The SqliteDriver on androidx's bundled SQLite, for Android and desktop hosts"
 
 dependencies {
     api(project(":libraries:plugin-sdk"))

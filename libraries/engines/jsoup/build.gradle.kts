@@ -2,7 +2,7 @@ plugins {
     id("alexandrite.kotlin-library")
 }
 
-description = "The jsoup HTML parser that Alexandrite reads web pages with where the JDK has no Swing"
+description = "The HtmlParser on jsoup, for hosts without the JDK's Swing such as Android"
 
 dependencies {
     api(project(":libraries:plugin-sdk"))

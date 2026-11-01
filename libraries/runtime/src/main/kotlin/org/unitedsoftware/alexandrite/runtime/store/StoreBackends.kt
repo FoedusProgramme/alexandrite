@@ -2,6 +2,7 @@ package org.unitedsoftware.alexandrite.runtime.store
 
 import org.unitedsoftware.alexandrite.runtime.RuntimeProblemKind
 import org.unitedsoftware.alexandrite.runtime.plugin.PluginSet
+import org.unitedsoftware.alexandrite.runtime.plugin.binds
 import org.unitedsoftware.alexandrite.sdk.di.container.Binding
 import org.unitedsoftware.alexandrite.sdk.plugin.PluginIds
 import org.unitedsoftware.alexandrite.sdk.problem.Problem
@@ -63,5 +64,3 @@ private val STORE_PORTS: List<KClass<*>> =
         ChatStateStore::class,
         RecordStore::class,
     )
-
-private fun Binding<*>.binds(port: KClass<*>): Boolean = !multi && key.qualifier == null && key.type.classifier == port

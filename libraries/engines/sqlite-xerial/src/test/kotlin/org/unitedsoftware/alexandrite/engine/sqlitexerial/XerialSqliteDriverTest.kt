@@ -11,12 +11,13 @@ import kotlin.test.assertIs
 
 class XerialSqliteDriverTest {
     @TestFactory
-    fun `the driver keeps the SQLite driver contract`(): List<DynamicTest> = SQLITE_DRIVER_CONTRACT.map { check ->
-        DynamicTest.dynamicTest(check.name) { check.run(XerialSqliteDriver()) }
-    }
+    fun `the xerial driver keeps the SQLite driver contract`(): List<DynamicTest> =
+        SQLITE_DRIVER_CONTRACT.map { check ->
+            DynamicTest.dynamicTest(check.name) { check.run(XerialSqliteDriver()) }
+        }
 
     @Test
-    fun `the plugin binds the driver`() {
+    fun `the plugin binds its driver`() {
         runBlocking {
             PluginHarness.builder(AlexandriteEngineSqliteXerialIndex()).build().run {
                 assertIs<XerialSqliteDriver>(get<SqliteDriver>())

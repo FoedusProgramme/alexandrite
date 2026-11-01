@@ -4,7 +4,6 @@ import kotlinx.coroutines.runBlocking
 import org.unitedsoftware.alexandrite.sdk.text.HtmlParser
 import org.unitedsoftware.alexandrite.testkit.FakeModelServer
 import org.unitedsoftware.alexandrite.testkit.fakeResponse
-import org.unitedsoftware.alexandrite.tools.media.SWING_HTML
 import java.io.StringReader
 import javax.swing.text.MutableAttributeSet
 import javax.swing.text.html.HTML

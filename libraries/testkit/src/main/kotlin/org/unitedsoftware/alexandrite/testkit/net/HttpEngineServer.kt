@@ -1,4 +1,4 @@
-package org.unitedsoftware.alexandrite.testkit.engine
+package org.unitedsoftware.alexandrite.testkit.net
 
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
@@ -20,7 +20,7 @@ import kotlin.time.Duration.Companion.seconds
  * An HTTP/1.1 server on the loopback interface for the engine contract, which answers each request with the next
  * queued handler and keeps a connection for the next request when the handler answered whole.
  */
-internal class EngineServer : AutoCloseable {
+internal class HttpEngineServer : AutoCloseable {
     private val server = ServerSocket(0, 50, InetAddress.getLoopbackAddress())
     private val handlers = LinkedBlockingQueue<(ServerExchange) -> Unit>()
     private val received = LinkedBlockingQueue<ServerRequest>()
@@ -30,7 +30,7 @@ internal class EngineServer : AutoCloseable {
     val baseUrl: String = "http://127.0.0.1:${server.localPort}"
 
     init {
-        daemon("engine-server-${server.localPort}") {
+        daemon("http-engine-server-${server.localPort}") {
             while (!server.isClosed) {
                 val socket = try {
                     server.accept()
@@ -38,7 +38,7 @@ internal class EngineServer : AutoCloseable {
                     break
                 }
                 sockets += socket
-                daemon("engine-server-connection") { serve(socket) }
+                daemon("http-engine-server-connection") { serve(socket) }
             }
         }
     }

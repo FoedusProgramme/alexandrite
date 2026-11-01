@@ -1,4 +1,4 @@
-package org.unitedsoftware.alexandrite.testkit.engine
+package org.unitedsoftware.alexandrite.testkit
 
 import org.unitedsoftware.alexandrite.sdk.di.Key
 import org.unitedsoftware.alexandrite.sdk.di.container.Resolver

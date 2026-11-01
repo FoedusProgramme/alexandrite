@@ -1,11 +1,12 @@
 package org.unitedsoftware.alexandrite.engine.awtimages
 
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.TestFactory
 import org.junit.jupiter.api.io.TempDir
 import org.unitedsoftware.alexandrite.internal.media.imageType
-import org.unitedsoftware.alexandrite.sdk.di.key
 import org.unitedsoftware.alexandrite.sdk.media.ImageCodec
-import org.unitedsoftware.alexandrite.sdk.media.ImageDimensions
+import org.unitedsoftware.alexandrite.testkit.IMAGE_CODEC_CONTRACT
 import org.unitedsoftware.alexandrite.testkit.PluginHarness
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
@@ -18,27 +19,21 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AwtImagesTest {
+    @TestFactory
+    fun `the AWT codec keeps the image codec contract`(): List<DynamicTest> =
+        IMAGE_CODEC_CONTRACT.map { check -> DynamicTest.dynamicTest(check.name) { check.run(AwtImageCodec()) } }
+
     @Test
-    fun `the plugin binds a codec that reads and fits images`() {
-        var bound: ImageCodec? = null
+    fun `the plugin binds its codec`() {
         runBlocking {
             PluginHarness.builder(AlexandriteEngineAwtImagesIndex()).build().run {
-                bound =
-                    get(key<ImageCodec>())
+                assertIs<AwtImageCodec>(get<ImageCodec>())
             }
         }
-        val codec = assertIs<AwtImageCodec>(bound)
-        val png = encode(image(40, 20, alpha = false), "png")
-
-        val fitted = assertNotNull(codec.fitted(png, "image/png", 10, 1_000_000))
-
-        assertEquals(ImageDimensions(40, 20), codec.dimensions(png, "image/png"))
-        assertEquals("image/jpeg" to ImageDimensions(10, 5), fitted.mediaType to fitted.dimensions)
     }
 
     @Test
