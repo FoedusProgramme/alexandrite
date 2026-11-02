@@ -5,7 +5,7 @@ import org.unitedsoftware.alexandrite.sdk.di.BoundSpi
 /**
  * Opens SQLite databases.
  *
- * - The SQLite behind it is version 3.35 or newer and has FTS5 with the trigram tokenizer.
+ * - The SQLite behind it is version 3.18 or newer, the SQLite of Android's API level 26, and has FTS4.
  * - Opening an existing database leaves its file unchanged.
  * - Every call blocks, and every failure of SQLite is a [SqliteException].
  */
@@ -16,7 +16,7 @@ public interface SqliteDriver {
 }
 
 /**
- * A connection to one database, used by one thread at a time.
+ * A connection to one database, used by one thread at a time, and in a transaction by the thread that began it.
  *
  * Outside a transaction that [beginImmediate] began, each statement runs in a transaction of its own.
  */

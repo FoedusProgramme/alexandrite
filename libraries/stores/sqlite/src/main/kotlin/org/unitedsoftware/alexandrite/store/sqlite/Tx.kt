@@ -20,6 +20,12 @@ internal class Tx(
         return connection.changes().toInt()
     }
 
+    /** Runs the `INSERT` [sql] with [arguments] and returns the rowid of the row it added. */
+    fun insert(sql: String, vararg arguments: Any?): Long {
+        prepare(sql, arguments).use { it.runToEnd() }
+        return connection.lastInsertRowId()
+    }
+
     fun <T> query(sql: String, vararg arguments: Any?, row: Row.() -> T): List<T> =
         prepare(sql, arguments).use { statement ->
             val current = Row(statement)
@@ -93,6 +99,8 @@ internal class Row(private val statement: SqliteStatement) {
     fun getInt(column: String): Int = getLong(column).toInt()
 
     fun getInt(position: Int): Int = getLong(position).toInt()
+
+    fun getBlob(position: Int): ByteArray = statement.getBlob(position - 1)
 
     /** The column's value as a Long, a Double, a String or a ByteArray, null when it is NULL. */
     fun getObject(position: Int): Any? = when (statement.columnType(position - 1)) {

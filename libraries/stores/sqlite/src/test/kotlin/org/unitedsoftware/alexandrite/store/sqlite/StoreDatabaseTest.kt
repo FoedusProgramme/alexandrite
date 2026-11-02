@@ -149,9 +149,23 @@ class StoreDatabaseTest {
 
         assertEquals(setOf(1L to "Old rocket notes", 4L to "The rocket is back"), found.toSet())
         connect(file).use {
-            assertEquals(6, STORE_MIGRATIONS.size)
+            assertEquals(7, STORE_MIGRATIONS.size)
             assertEquals(STORE_MIGRATIONS.size, it.userVersion())
         }
+    }
+
+    @Test
+    fun `a store of version 6 trades its FTS5 index for one on FTS4`() {
+        storeWithFts5Index(readable = true)
+
+        assertFts4Index()
+    }
+
+    @Test
+    fun `a store of version 6 drops an FTS5 index that this SQLite cannot read`() {
+        storeWithFts5Index(readable = false)
+
+        assertFts4Index()
     }
 
     @Test
@@ -318,6 +332,47 @@ class StoreDatabaseTest {
 
             assertEquals("committed", returned)
             assertEquals(listOf(listOf("began")), rows("SELECT address FROM chats"))
+        }
+    }
+
+    /** A store of schema 6 that holds an entry in its FTS5 index, made with a module unknown to SQLite unless [readable]. */
+    private fun storeWithFts5Index(readable: Boolean) {
+        storeWithTurn(version = 6)
+        val now = MutableClock().instant
+        openStore(engineDriver, file, STORE_MIGRATIONS.take(6), now).use { connection ->
+            connection.inTransaction(now) {
+                execute(
+                    "INSERT INTO entries (conversation, turn, type, created_at, format, body) " +
+                        "VALUES ('c1', 't1', 'user', 0, ?, ?)",
+                    TranscriptCodec.FORMAT_VERSION,
+                    TranscriptCodec.encode(message("Old rocket notes")),
+                )
+                if (readable) {
+                    execute("CREATE VIRTUAL TABLE entry_text USING fts5(text, tokenize = 'trigram case_sensitive 0')")
+                    execute("INSERT INTO entry_text (rowid, text) VALUES (1, 'Old rocket notes')")
+                } else {
+                    for (shadow in listOf("data", "idx", "content", "docsize", "config")) {
+                        execute("CREATE TABLE entry_text_$shadow (x)")
+                    }
+                    execute("PRAGMA writable_schema = ON")
+                    execute(
+                        "INSERT INTO sqlite_master (type, name, tbl_name, rootpage, sql) VALUES ('table', " +
+                            "'entry_text', 'entry_text', 0, 'CREATE VIRTUAL TABLE entry_text USING nosuchmodule(text)')",
+                    )
+                    execute("PRAGMA writable_schema = OFF")
+                }
+            }
+        }
+    }
+
+    private fun assertFts4Index() {
+        val found = withStore(directory) { transcripts.search("rocket", setOf(main), 10).map { it.snippet } }
+
+        assertEquals(listOf("Old rocket notes"), found)
+        connect(file).use {
+            assertEquals(STORE_MIGRATIONS.size, it.userVersion())
+            assertEquals(emptyList(), it.tables().filter { table -> table.startsWith("entry_text") })
+            assertEquals(listOf("ok"), it.texts("PRAGMA integrity_check"))
         }
     }
 

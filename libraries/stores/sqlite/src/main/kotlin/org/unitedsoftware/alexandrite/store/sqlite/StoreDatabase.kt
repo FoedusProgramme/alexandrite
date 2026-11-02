@@ -16,7 +16,11 @@ import java.time.Clock
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-/** The store's SQLite database, `store.db` in the plugin's data directory, which runs one block at a time. */
+/**
+ * The store's SQLite database, `store.db` in the plugin's data directory, which runs one block at a time.
+ *
+ * Its SQL keeps to SQLite 3.18 with FTS4, the SQLite of Android's API level 26.
+ */
 @Singleton
 internal class StoreDatabase(
     private val files: PluginFiles,

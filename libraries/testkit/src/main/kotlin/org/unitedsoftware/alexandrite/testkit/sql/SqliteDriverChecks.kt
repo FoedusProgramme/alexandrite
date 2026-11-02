@@ -172,16 +172,18 @@ internal val SQLITE_DRIVER_CHECKS: List<SqliteDriverCheck> = listOf(
         }
         expectEqual(noise.toList(), Files.readAllBytes(file("noise.db")).toList(), "the file that is no database")
     },
-    SqliteDriverCheck("the SQLite is 3.35 or newer, writes ahead and has RETURNING and FTS5 with trigrams") {
+    SqliteDriverCheck("the SQLite is 3.18 or newer, writes ahead and has FTS4 with matchinfo") {
         connect {
             val version = texts("SELECT sqlite_version()").single().split('.').map { it.toInt() }
-            expect(version[0] > 3 || (version[0] == 3 && version[1] >= 35)) { "SQLite $version is older than 3.35." }
+            expect(version[0] > 3 || (version[0] == 3 && version[1] >= 18)) { "SQLite $version is older than 3.18." }
             expectEqual(listOf("wal"), texts("PRAGMA journal_mode = WAL"), "the journal mode")
-            execute("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
-            expectEqual(listOf("1"), texts("INSERT INTO t (v) VALUES ('a') RETURNING id"), "what an insert returned")
-            execute("CREATE VIRTUAL TABLE f USING fts5(text, tokenize = 'trigram case_sensitive 0')")
+            execute("CREATE VIRTUAL TABLE f USING fts4(text)")
             execute("INSERT INTO f (text) VALUES ('The Rocket starts')")
             expectEqual(listOf("The Rocket starts"), texts("SELECT text FROM f WHERE f MATCH 'rocket'"), "the match")
+            prepare("SELECT matchinfo(f, 'pcnalx') FROM f WHERE f MATCH 'rock*'").use { select ->
+                expect(select.step()) { "The prefix found no row." }
+                expectEqual(32, select.getBlob(0).size, "the bytes of the match's info")
+            }
         }
     },
 )

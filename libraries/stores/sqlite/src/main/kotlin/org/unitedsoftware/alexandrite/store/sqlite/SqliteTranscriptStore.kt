@@ -18,6 +18,7 @@ import org.unitedsoftware.alexandrite.sdk.di.Singleton
 import org.unitedsoftware.alexandrite.sdk.store.ConversationState
 import org.unitedsoftware.alexandrite.sdk.store.TranscriptMatch
 import org.unitedsoftware.alexandrite.sdk.store.TranscriptStore
+import org.unitedsoftware.alexandrite.sdk.store.searchText
 import org.unitedsoftware.alexandrite.sdk.store.searchWords
 import org.unitedsoftware.alexandrite.sdk.transcript.EntryId
 import org.unitedsoftware.alexandrite.sdk.transcript.EntryRecord
@@ -99,50 +100,37 @@ internal class SqliteTranscriptStore(private val database: StoreDatabase, privat
         ids.size
     }
 
-    /**
-     * Ranks the matches by `bm25`, then the newest first. A word shorter than a trigram, which the index cannot look up,
-     * only filters by `LIKE`.
-     */
+    /** Ranks the matches by BM25, then the newest first. */
     override suspend fun search(query: String, keys: Set<AgentChatKey>, limit: Int): List<TranscriptMatch> {
         require(limit >= 1) { "A search finds at least one entry, was $limit." }
         val words = searchWords(query)
         if (words.isEmpty()) return emptyList()
-        val (indexed, short) = words.partition { it.codePointCount(0, it.length) >= TRIGRAM }
         return database.transaction {
             val scopes = keys.mapNotNull { key -> chatIdOrNull(key.chat)?.let { Scope(key.agent, it) to key } }.toMap()
             if (scopes.isEmpty()) return@transaction emptyList()
-            val conditions = mutableListOf<String>()
-            val arguments = mutableListOf<Any?>()
-            if (indexed.isNotEmpty()) {
-                conditions += "entry_text MATCH ?"
-                arguments += indexed.joinToString(" ") { "\"${it.replace("\"", "\"\"")}\"" }
-            }
-            for (word in short) {
-                conditions += "entry_text.text LIKE ? ESCAPE '\\'"
-                arguments += "%${word.replace(LIKE_SPECIAL, "\\\\$0")}%"
-            }
-            conditions += scopes.keys.joinToString(" OR ", "(", ")") { "(c.agent = ? AND c.chat_id = ?)" }
-            for (scope in scopes.keys) arguments.addAll(listOf(scope.agent.value, scope.chat))
-            val order = if (indexed.isEmpty()) "e.id DESC" else "bm25(entry_text), e.id DESC"
+            val within = scopes.keys.joinToString(" OR ", "(", ")") { "(c.agent = ? AND c.chat_id = ?)" }
+            val arguments = scopes.keys.flatMap { listOf<Any>(it.agent.value, it.chat) }
             query(
-                "SELECT e.id, e.conversation, e.turn, e.created_at, e.format, e.type, e.body, c.agent, c.chat_id, " +
-                    "entry_text.text AS text FROM entry_text JOIN entries e ON e.id = entry_text.rowid " +
-                    "JOIN conversations c ON c.id = e.conversation WHERE ${conditions.joinToString(" AND ")} " +
-                    "ORDER BY $order LIMIT ?",
+                "SELECT entry_grams.docid, matchinfo(entry_grams, 'pcnalx'), c.agent, c.chat_id FROM entry_grams " +
+                    "CROSS JOIN entries e ON e.id = entry_grams.docid " +
+                    "CROSS JOIN conversations c ON c.id = e.conversation WHERE entry_grams MATCH ? AND $within",
+                gramQuery(words),
                 *arguments.toTypedArray(),
-                limit,
-            ) {
-                val key = scopes.getValue(Scope(AgentId(getString("agent")), getLong("chat_id")))
-                Hit(stored(), key, getString("text"))
-            }
-        }.map { TranscriptMatch(it.stored.entry(), it.key, snippet(it.text, words, SNIPPET_CHARS)) }
+            ) { Hit(getLong(1), bm25(getBlob(2)), scopes.getValue(Scope(AgentId(getString(3)), getLong(4)))) }
+                .sortedWith(compareByDescending<Hit> { it.weight }.thenByDescending { it.id })
+                .take(limit)
+                .map { hit -> rows("WHERE id = ?", hit.id).single() to hit.key }
+        }.map { (stored, key) ->
+            val entry = stored.entry()
+            TranscriptMatch(entry, key, snippet(entry.searchText(), words, SNIPPET_CHARS))
+        }
     }
 
     private fun Tx.insert(conversation: ConversationId, turn: TurnId, encoded: Encoded): TranscriptEntry {
         val message = ((encoded.entry as? UserEntry)?.origin as? UserOrigin.FromChat)?.message
-        val id = queryOne(
+        val id = insert(
             "INSERT INTO entries (conversation, turn, type, created_at, format, body, message_chat_id, message_id) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             conversation.value,
             turn.value,
             encoded.type,
@@ -151,7 +139,7 @@ internal class SqliteTranscriptStore(private val database: StoreDatabase, privat
             encoded.body,
             message?.let { chatId(it.chat) },
             message?.id,
-        ) { getLong(1) } ?: throw IllegalStateException("The store gave the entry no id.")
+        )
         for (mediaId in encoded.entry.storedMedia()) {
             requireNotNull(queryOne("SELECT 1 FROM media WHERE id = ?", mediaId.value) { true }) {
                 "An entry to store refers to the unknown media $mediaId."
@@ -181,7 +169,7 @@ internal class SqliteTranscriptStore(private val database: StoreDatabase, privat
 
     private data class Scope(val agent: AgentId, val chat: Long)
 
-    private class Hit(val stored: Stored, val key: AgentChatKey, val text: String)
+    private class Hit(val id: Long, val weight: Double, val key: AgentChatKey)
 
     private class Encoded(val entry: TranscriptEntry, val body: String) {
         val type: String = Json.parseToJsonElement(body).jsonObject.getValue("type").jsonPrimitive.content
@@ -209,12 +197,7 @@ internal class SqliteTranscriptStore(private val database: StoreDatabase, privat
     }
 }
 
-/** The fewest characters that the trigram index looks up. */
-private const val TRIGRAM = 3
-
 private const val SNIPPET_CHARS = 240
-
-private val LIKE_SPECIAL = Regex("[%_\\\\]")
 
 /** The field of an unknown entry's JSON that holds a body that is no JSON object. */
 private const val BODY = "body"
