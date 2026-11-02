@@ -10,8 +10,10 @@ import org.unitedsoftware.alexandrite.sdk.chat.ChatAddress
 import org.unitedsoftware.alexandrite.sdk.model.ModelErrorKind
 import org.unitedsoftware.alexandrite.sdk.model.ModelException
 import org.unitedsoftware.alexandrite.sdk.model.ModelRequest
+import org.unitedsoftware.alexandrite.sdk.model.ReasoningEffort
 import org.unitedsoftware.alexandrite.sdk.model.ToolChoice
 import org.unitedsoftware.alexandrite.sdk.model.Usage
+import org.unitedsoftware.alexandrite.sdk.model.rebuild
 import org.unitedsoftware.alexandrite.sdk.transcript.TextPart
 import org.unitedsoftware.alexandrite.sdk.transcript.TranscriptEntry
 import org.unitedsoftware.alexandrite.sdk.transcript.UserEntry
@@ -51,8 +53,11 @@ class SideQuestionsTest {
     private fun PluginHarness.Running.receive(text: String): Admission.Accepted =
         channel().receive(text, sender = channel().user("operator")) as Admission.Accepted
 
-    private suspend fun PluginHarness.Running.ask(question: String, chat: ChatAddress = channel().chat()): String? =
-        get<SideQuestions>().ask(chat, question, channel().user("operator"))
+    private suspend fun PluginHarness.Running.ask(
+        question: String,
+        chat: ChatAddress = channel().chat(),
+        reasoning: ReasoningEffort? = null,
+    ): String? = get<SideQuestions>().ask(chat, question, channel().user("operator"), reasoning)
 
     private suspend fun stored(): List<TranscriptEntry> = store.transcripts.entries(store.conversations.current(key).id)
 
@@ -87,6 +92,24 @@ class SideQuestionsTest {
             assertEquals(2, channel().replies.size)
             assertEquals(emptyList(), channel().sent)
             assertEquals(before.size + 2, stored().size)
+        }
+    }
+
+    @Test
+    fun `a side question asks with the effort it is given, else with the chat's`() {
+        model.reply { text("One.") }.reply { text("A title") }.reply { text("A title") }
+
+        harness(""", "reasoning": "high"""").execute {
+            receive("Hi").ticket.outcome()
+
+            ask("Name this conversation.", reasoning = ReasoningEffort.MINIMAL)
+            ask("Name this conversation.")
+
+            val (turn, lowered, kept) = model.requests
+            assertEquals(ReasoningEffort.HIGH, turn.options.reasoning)
+            assertEquals(turn.options.rebuild { reasoning(ReasoningEffort.MINIMAL) }, lowered.options)
+            assertEquals(turn.options, kept.options)
+            assertEquals(lowered.history, kept.history)
         }
     }
 

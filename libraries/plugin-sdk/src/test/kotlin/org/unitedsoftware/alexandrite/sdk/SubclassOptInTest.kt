@@ -412,6 +412,7 @@ class SubclassOptInTest {
                 chat: org.unitedsoftware.alexandrite.sdk.chat.ChatAddress,
                 question: String,
                 by: org.unitedsoftware.alexandrite.sdk.chat.ChatUser?,
+                reasoning: org.unitedsoftware.alexandrite.sdk.model.ReasoningEffort?,
             ) = TODO()
         }
     """.trimIndent()

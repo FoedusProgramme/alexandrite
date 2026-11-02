@@ -38,6 +38,7 @@ import org.unitedsoftware.alexandrite.sdk.di.Binds
 import org.unitedsoftware.alexandrite.sdk.di.Singleton
 import org.unitedsoftware.alexandrite.sdk.media.ImageCodec
 import org.unitedsoftware.alexandrite.sdk.model.ModelRequest
+import org.unitedsoftware.alexandrite.sdk.model.ReasoningEffort
 import org.unitedsoftware.alexandrite.sdk.store.ConversationStore
 import org.unitedsoftware.alexandrite.sdk.store.MediaStore
 import org.unitedsoftware.alexandrite.sdk.store.TranscriptStore
@@ -77,7 +78,7 @@ internal class SideQuestionsImpl(
     private val budgets: Budgets,
     private val clock: Clock,
 ) : SideQuestions {
-    override suspend fun ask(chat: ChatAddress, question: String, by: ChatUser?): String? {
+    override suspend fun ask(chat: ChatAddress, question: String, by: ChatUser?, reasoning: ReasoningEffort?): String? {
         require(question.isNotBlank()) { "A side question is not blank." }
         val key = runner.key(chat)
         val conversation = conversations.existing(key) ?: return null
@@ -100,7 +101,7 @@ internal class SideQuestionsImpl(
         val view = contextView(settled(transcripts.entries(conversation)))
         val summaryModel = agent.summaryModel ?: model
         val window = compactor.open(turn, agent.config.compaction, model, selected.info, summaryModel, view)
-        val options = requestOptions(agent, selected.info, settings.reasoning(key) ?: agent.reasoning)
+        val options = requestOptions(agent, selected.info, reasoning ?: settings.reasoning(key) ?: agent.reasoning)
         val parts = RequestParts(selected, options, window, sections, definitions, NO_CONTEXT)
         val media = TurnMedia(turn.id, mediaStore, agentSettings.maxMediaBytes, inbox, mediaReader, imageCodec)
         val plan = routing.plan(agent.id, selected.info)
