@@ -78,6 +78,7 @@ class BuiltInRuntimeTest {
             "alexandrite-engine-okhttp",
             "alexandrite-engine-jsoup",
             "alexandrite-engine-sqlite-bundled",
+            "alexandrite-engine-sqlite-android",
         )
     }
 }
