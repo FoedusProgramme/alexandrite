@@ -72,7 +72,10 @@ internal val driverIndex: PluginIndex = when (
     else -> error("No SQLite driver $name.")
 }
 
-internal val driver: SqliteDriver = boundBy(driverIndex)
+internal val engineDriver: SqliteDriver = boundBy(driverIndex)
+
+/** [engineDriver], failing the SQL that SQLite 3.18 cannot run. */
+internal val driver: SqliteDriver = FloorDriver(engineDriver)
 
 internal class TestStore(directory: Path, val clock: MutableClock) {
     val database = StoreDatabase(TestFiles(directory), clock, driver)

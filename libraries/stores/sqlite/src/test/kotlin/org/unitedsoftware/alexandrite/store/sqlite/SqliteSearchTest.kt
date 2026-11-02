@@ -72,13 +72,34 @@ class SqliteSearchTest {
     }
 
     @Test
+    fun `a word is found only where it stands whole, in any case`() {
+        withStore(directory) {
+            val (foreign, split) = append(message("ÜBER Straße, zz z9 🚀go"), message("xabc bcdy")).map {
+                it.record!!.id
+            }
+
+            suspend fun found(query: String) = transcripts.search(query, setOf(main), 10).map { it.entry.record!!.id }
+
+            assertEquals(listOf(foreign), found("über straße,"))
+            assertEquals(listOf(foreign), found("üB"))
+            assertEquals(listOf(foreign), found("Z"))
+            assertEquals(listOf(foreign), found("zz z9"))
+            assertEquals(listOf(foreign), found("🚀GO"))
+            assertEquals(emptyList(), found("zzz"))
+            assertEquals(emptyList(), found(",z"))
+            assertEquals(listOf(split), found("xabc bcdy"))
+            assertEquals(emptyList(), found("abcd"))
+        }
+    }
+
+    @Test
     fun `the index loses the entries of a deleted message`() {
         withStore(directory) {
-            append(message("kept"), message("gone"))
+            val (kept) = append(message("kept"), message("gone"))
 
             transcripts.deleteMessage(ChannelMessageRef(chat, "m-gone"))
 
-            assertEquals(listOf(listOf<Any?>("kept")), rows("SELECT text FROM entry_text"))
+            assertEquals(listOf(listOf<Any?>(kept.record!!.id.value)), rows("SELECT docid FROM entry_grams"))
         }
     }
 }

@@ -30,8 +30,8 @@ internal val ENGINE_PORTS: List<EnginePort> = listOf(
     EnginePort(ImageCodec::class, "alexandrite-engine-awt-images on a desktop JVM"),
     EnginePort(
         SqliteDriver::class,
-        "alexandrite-engine-sqlite-xerial on a desktop JVM, or alexandrite-engine-sqlite-bundled on Android and on a " +
-            "desktop JVM",
+        "alexandrite-engine-sqlite-xerial on a desktop JVM, alexandrite-engine-sqlite-android on Android, or " +
+            "alexandrite-engine-sqlite-bundled on either",
     ),
 )
 

@@ -1,4 +1,4 @@
-PRAGMA user_version = 6;
+PRAGMA user_version = 7;
 
 CREATE TABLE chat_states (
     plugin TEXT NOT NULL,
@@ -63,6 +63,18 @@ CREATE INDEX entries_message ON entries (message_chat_id, message_id) WHERE mess
 
 CREATE INDEX entries_turn ON entries (turn);
 
+CREATE VIRTUAL TABLE entry_grams USING fts4(grams, tokenize = simple);
+
+CREATE TABLE 'entry_grams_content'(docid INTEGER PRIMARY KEY, 'c0grams');
+
+CREATE TABLE 'entry_grams_docsize'(docid INTEGER PRIMARY KEY, size BLOB);
+
+CREATE TABLE 'entry_grams_segdir'(level INTEGER,idx INTEGER,start_block INTEGER,leaves_end_block INTEGER,end_block INTEGER,root BLOB,PRIMARY KEY(level, idx));
+
+CREATE TABLE 'entry_grams_segments'(blockid INTEGER PRIMARY KEY, block BLOB);
+
+CREATE TABLE 'entry_grams_stat'(id INTEGER PRIMARY KEY, value BLOB);
+
 CREATE TABLE entry_media (
     entry_id INTEGER NOT NULL REFERENCES entries (id),
     media_id TEXT NOT NULL REFERENCES media (id),
@@ -70,18 +82,6 @@ CREATE TABLE entry_media (
 ) WITHOUT ROWID;
 
 CREATE INDEX entry_media_media ON entry_media (media_id);
-
-CREATE VIRTUAL TABLE entry_text USING fts5(text, tokenize = 'trigram case_sensitive 0');
-
-CREATE TABLE 'entry_text_config'(k PRIMARY KEY, v) WITHOUT ROWID;
-
-CREATE TABLE 'entry_text_content'(id INTEGER PRIMARY KEY, c0);
-
-CREATE TABLE 'entry_text_data'(id INTEGER PRIMARY KEY, block BLOB);
-
-CREATE TABLE 'entry_text_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
-
-CREATE TABLE 'entry_text_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
 
 CREATE TABLE media (
     id TEXT PRIMARY KEY,

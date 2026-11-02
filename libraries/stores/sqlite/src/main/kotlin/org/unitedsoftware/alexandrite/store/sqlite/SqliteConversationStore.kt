@@ -192,14 +192,22 @@ internal class SqliteConversationStore(private val database: StoreDatabase) : Co
     ) { ConversationId(getString(1)) }
 
     private fun Tx.point(agent: AgentId, chat: Long, kind: ConversationKind, conversation: ConversationId) {
-        execute(
-            "INSERT INTO current_conversations (agent, chat_id, kind, conversation) VALUES (?, ?, ?, ?) " +
-                "ON CONFLICT (agent, chat_id, kind) DO UPDATE SET conversation = excluded.conversation",
+        val moved = execute(
+            "UPDATE current_conversations SET conversation = ? WHERE agent = ? AND chat_id = ? AND kind = ?",
+            conversation.value,
             agent.value,
             chat,
             kind.id,
-            conversation.value,
         )
+        if (moved == 0) {
+            execute(
+                "INSERT INTO current_conversations (agent, chat_id, kind, conversation) VALUES (?, ?, ?, ?)",
+                agent.value,
+                chat,
+                kind.id,
+                conversation.value,
+            )
+        }
     }
 
     private fun Tx.insert(

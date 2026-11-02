@@ -33,15 +33,25 @@ internal class SqliteChatStateStore(private val database: StoreDatabase) : ChatS
                     id,
                 )
             } else {
-                execute(
-                    "INSERT INTO chat_states (plugin, name, agent, chat_id, value) VALUES (?, ?, ?, ?, ?) " +
-                        "ON CONFLICT (plugin, name, agent, chat_id) DO UPDATE SET value = excluded.value",
+                val id = chatId(chat)
+                val updated = execute(
+                    "UPDATE chat_states SET value = ? WHERE plugin = ? AND name = ? AND agent = ? AND chat_id = ?",
+                    json,
                     plugin,
                     name,
                     agent.column,
-                    chatId(chat),
-                    json,
+                    id,
                 )
+                if (updated == 0) {
+                    execute(
+                        "INSERT INTO chat_states (plugin, name, agent, chat_id, value) VALUES (?, ?, ?, ?, ?)",
+                        plugin,
+                        name,
+                        agent.column,
+                        id,
+                        json,
+                    )
+                }
             }
         }
     }

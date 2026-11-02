@@ -42,8 +42,10 @@ internal val STORE_MIGRATIONS: List<Migration> = listOf(
         execute("ALTER TABLE conversations ADD COLUMN tainted_at INTEGER")
         execute("ALTER TABLE conversations ADD COLUMN taint_reason TEXT")
     },
-    Migration("a full-text index of the entries' text") {
-        execute("CREATE VIRTUAL TABLE entry_text USING fts5(text, tokenize = 'trigram case_sensitive 0')")
+    Migration("a full-text index of the entries' text on FTS5, which version 7 replaces") {},
+    Migration("a full-text index of the entries' text on FTS4") {
+        dropFts5Index()
+        execute("CREATE VIRTUAL TABLE entry_grams USING fts4(grams, tokenize = simple)")
         indexAllText()
     },
 )

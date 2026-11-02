@@ -58,7 +58,7 @@ entry 15: UserEntry(record=EntryRecord(id=15, conversation=RzJyZFkR2YBYKr3Ta-OS8
 message ChannelMessageRef(chat=test:main:chat, id=m-hello): [1]
 message ChannelMessageRef(chat=test:main:dev#7, id=m-fix): [15]
 search 'rocket': [1 main@test:main:chat Hello rocket, 4 main@test:main:chat Saved the rocket., 3 main@test:main:chat A rocket, I think., 14 main@test:main:chat A new rocket conversation, 9 main@test:main:chat A second rocket, ünïcode and emoji 🚀]
-search 'ro': [14 main@test:main:chat A new rocket conversation, 9 main@test:main:chat A second rocket, ünïcode and emoji 🚀, 4 main@test:main:chat Saved the rocket., 3 main@test:main:chat A rocket, I think., 1 main@test:main:chat Hello rocket]
+search 'ro': [1 main@test:main:chat Hello rocket, 4 main@test:main:chat Saved the rocket., 3 main@test:main:chat A rocket, I think., 14 main@test:main:chat A new rocket conversation, 9 main@test:main:chat A second rocket, ünïcode and emoji 🚀]
 search 'fix the build': [15 coder@test:main:dev#7 Please fix the build]
 media eBjBScKIlbdQqyIPcSNg6Q: MediaInfo(id=eBjBScKIlbdQqyIPcSNg6Q, kind=image, mediaType=image/png, size=8, sha256=4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6, createdAt=2026-01-01T00:00:00Z)
 media bytes eBjBScKIlbdQqyIPcSNg6Q: 4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6

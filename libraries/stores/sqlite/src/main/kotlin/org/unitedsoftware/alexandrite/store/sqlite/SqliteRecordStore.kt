@@ -26,19 +26,35 @@ internal class SqliteRecordStore(private val database: StoreDatabase) : RecordSt
         json: String,
         by: UserAddress?,
     ): StoredRecord<String> = database.transaction {
-        queryOne(
-            "INSERT INTO records (plugin, collection, record_key, value, created_at, created_by, updated_at, " +
-                "updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (plugin, collection, record_key) DO UPDATE " +
-                "SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by " +
-                "RETURNING $COLUMNS",
-            plugin,
-            collection,
-            key,
+        val updated = execute(
+            "UPDATE records SET value = ?, updated_at = ?, updated_by = ? " +
+                "WHERE plugin = ? AND collection = ? AND record_key = ?",
             json,
             now,
             by?.toString(),
-            now,
-            by?.toString(),
+            plugin,
+            collection,
+            key,
+        )
+        if (updated == 0) {
+            execute(
+                "INSERT INTO records (plugin, collection, record_key, value, created_at, created_by, updated_at, " +
+                    "updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                plugin,
+                collection,
+                key,
+                json,
+                now,
+                by?.toString(),
+                now,
+                by?.toString(),
+            )
+        }
+        queryOne(
+            "SELECT $COLUMNS FROM records WHERE plugin = ? AND collection = ? AND record_key = ?",
+            plugin,
+            collection,
+            key,
         ) { record() } ?: throw IllegalStateException("The store kept no record $key of $plugin's $collection.")
     }
 
