@@ -590,22 +590,15 @@ download_jre() {
     tick java_found "$JAVA_MAJOR" "$JAVA_PIN"
 }
 
-# The release whose assets this run installs: a pinned version, else the CI build, else the latest release.
-release_tag() {
-    if [ -n "$VERSION" ]; then
-        printf 'v%s' "$VERSION"
-    elif [ "$CHANNEL" = ci ]; then
-        printf 'ci'
-    else
-        printf 'latest'
-    fi
-}
-
 # Sets TAG, VERSION, ARCHIVE and ARCHIVE_SHA from the release's SHA256SUMS.
 resolve_release() {
-    SUMS_TAG=$(release_tag)
-    TAG=$SUMS_TAG
-    sums="$RELEASES/$SUMS_TAG/download/SHA256SUMS"
+    if [ -n "$VERSION" ]; then
+        sums="$RELEASES/download/v$VERSION/SHA256SUMS"
+    elif [ "$CHANNEL" = ci ]; then
+        sums="$RELEASES/download/ci/SHA256SUMS"
+    else
+        sums="$RELEASES/latest/download/SHA256SUMS"
+    fi
     fetch "$sums" "$TMP/SHA256SUMS" || die no_release "$sums"
     tr -d '\r' <"$TMP/SHA256SUMS" >"$TMP/sums"
     line=$(sed -n 's/^\([0-9a-fA-F]\{64\}\) [ *]\(alexandrite-[^ /]*\.tar\.gz\)$/\1 \2/p' "$TMP/sums" | head -n 1)
@@ -619,8 +612,7 @@ resolve_release() {
     case $VERSION in
         '' | .* | *[!0-9A-Za-z.+_-]*) die no_version "$VERSION" ;;
     esac
-    # The latest checksums come from `latest`, but a stable archive lives under its version's tag.
-    if [ "$SUMS_TAG" != ci ]; then TAG=v$VERSION; fi
+    if [ "$CHANNEL" = ci ] && [ "$PINNED" = 0 ]; then TAG=ci; else TAG=v$VERSION; fi
 }
 
 sums_hash() {
@@ -636,7 +628,7 @@ link_version() {
 
 stage_release() {
     step "$(text downloading "$VERSION")" "$(text downloaded "$ARCHIVE")" \
-        fetch "$RELEASES/$TAG/download/$ARCHIVE" "$TMP/$ARCHIVE" || die cannot_download "$ARCHIVE"
+        fetch "$RELEASES/download/$TAG/$ARCHIVE" "$TMP/$ARCHIVE" || die cannot_download "$ARCHIVE"
     verify "$TMP/$ARCHIVE" "$ARCHIVE_SHA" "$ARCHIVE"
     mkdir "$TMP/release"
     step "$(text unpacking "$ARCHIVE")" "$(text unpacked "$ARCHIVE")" tar -xzf "$TMP/$ARCHIVE" -C "$TMP/release" ||
@@ -647,7 +639,7 @@ stage_release() {
     mv "$1" "$ROOT/versions/$VERSION"
     hash=$(sums_hash install.sh)
     if [ -n "$hash" ]; then
-        fetch "$RELEASES/$TAG/download/install.sh" "$TMP/install.sh" || die cannot_download install.sh
+        fetch "$RELEASES/download/$TAG/install.sh" "$TMP/install.sh" || die cannot_download install.sh
         verify "$TMP/install.sh" "$hash" install.sh
     elif [ -f "$0" ] && [ "${0##*/}" = install.sh ]; then
         cp "$0" "$TMP/install.sh"

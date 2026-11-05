@@ -510,16 +510,15 @@ function Switch-To([string]$Current, [string]$Previous) {
     Set-Pointer 'previous' $Previous
 }
 
-# The release whose assets this run installs: a pinned version, else the CI build, else the latest release.
-function Get-ReleaseTag {
-    if ($script:Version) { "v$script:Version" } elseif ($script:Channel -eq 'ci') { 'ci' } else { 'latest' }
-}
-
 # Sets $script:Tag, $script:Version, $script:Archive and $script:ArchiveSha from the release's SHA256SUMS.
 function Resolve-Release {
-    $sumsTag = Get-ReleaseTag
-    $script:Tag = $sumsTag
-    $sums = "$Releases/$sumsTag/download/SHA256SUMS"
+    $sums = if ($script:Version) {
+        "$Releases/download/v$script:Version/SHA256SUMS"
+    } elseif ($script:Channel -eq 'ci') {
+        "$Releases/download/ci/SHA256SUMS"
+    } else {
+        "$Releases/latest/download/SHA256SUMS"
+    }
     $file = Join-Path $Tmp 'SHA256SUMS'
     try { Get-Url $sums $file } catch {
         Fail 'no_release' $sums
@@ -533,8 +532,7 @@ function Resolve-Release {
     if ($script:Version -and $found -ne $script:Version) { Fail 'wrong_archive' $script:Version $script:Archive }
     if ($found -notmatch '^[0-9A-Za-z][0-9A-Za-z.+_-]*$') { Fail 'no_version' $found }
     $script:Version = $found
-    # The latest checksums come from `latest`, but a stable archive lives under its version's tag.
-    if ($sumsTag -ne 'ci') { $script:Tag = "v$found" }
+    $script:Tag = if ($script:Channel -eq 'ci' -and -not $script:Pinned) { 'ci' } else { "v$found" }
 }
 
 function Get-SumsHash([string]$Name) {
@@ -559,7 +557,7 @@ function Install-Release {
     $zip = Join-Path $Tmp $Archive
     try {
         Invoke-Step (Msg 'downloading' $Version) (Msg 'downloaded' $Archive) {
-            Get-Url "$Releases/$script:Tag/download/$Archive" $zip
+            Get-Url "$Releases/download/$script:Tag/$Archive" $zip
         }
     } catch {
         Fail 'cannot_download' $Archive
@@ -582,7 +580,7 @@ function Install-Release {
     Move-Item -LiteralPath $top[0].FullName $target
     $hash = Get-SumsHash 'install.ps1'
     if ($hash) {
-        Get-Url "$Releases/$script:Tag/download/install.ps1" (Join-Path $Tmp 'install.ps1')
+        Get-Url "$Releases/download/$script:Tag/install.ps1" (Join-Path $Tmp 'install.ps1')
         Assert-Checksum (Join-Path $Tmp 'install.ps1') $hash 'install.ps1'
     } elseif ($PSCommandPath -and (Split-Path -Leaf $PSCommandPath) -eq 'install.ps1') {
         Copy-Item -LiteralPath $PSCommandPath (Join-Path $Tmp 'install.ps1')
