@@ -25,7 +25,8 @@ private val CACHE_AGE = Duration.ofDays(1)
 /** Where updates come from: a released version, or the rolling build of `master`. */
 internal enum class ReleaseChannel(val id: String) {
     STABLE("stable"),
-    CI("ci");
+    CI("ci"),
+    ;
 
     /** The release whose assets this channel installs. */
     val tag: String get() = if (this == CI) "ci" else "latest"
@@ -119,11 +120,10 @@ internal fun ciRelease(machine: Machine, base: String): String? {
 }
 
 /** The latest release of [channel] under [base], null when it names none. */
-internal fun latestRelease(machine: Machine, base: String, channel: ReleaseChannel): String? =
-    when (channel) {
-        ReleaseChannel.STABLE -> latestRelease(machine, base)
-        ReleaseChannel.CI -> ciRelease(machine, base)
-    }
+internal fun latestRelease(machine: Machine, base: String, channel: ReleaseChannel): String? = when (channel) {
+    ReleaseChannel.STABLE -> latestRelease(machine, base)
+    ReleaseChannel.CI -> ciRelease(machine, base)
+}
 
 @Serializable
 private class CachedRelease(
