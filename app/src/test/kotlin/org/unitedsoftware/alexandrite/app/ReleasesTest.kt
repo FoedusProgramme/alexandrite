@@ -98,6 +98,38 @@ class ReleasesTest {
     }
 
     @Test
+    fun `the CI channel reads the version of the rolling ci release's checksums`() {
+        val sums = "a".repeat(64) + "  alexandrite-1.0.0-ci.42.tar.gz\n"
+        server.createContext("/releases/download/ci/SHA256SUMS") { exchange ->
+            exchange.sendResponseHeaders(200, sums.toByteArray().size.toLong())
+            exchange.responseBody.use { it.write(sums.toByteArray()) }
+        }
+
+        assertEquals("1.0.0-ci.42", latestRelease(LocalMachine, base, ReleaseChannel.CI))
+        assertNull(latestRelease(LocalMachine, "http://127.0.0.1:${server.address.port}/none", ReleaseChannel.CI))
+    }
+
+    @Test
+    fun `the channels parse by name and cache their answers apart`() {
+        assertEquals(ReleaseChannel.STABLE, ReleaseChannel.parse("STABLE"))
+        assertEquals(ReleaseChannel.CI, ReleaseChannel.parse("ci"))
+        assertNull(ReleaseChannel.parse("nightly"))
+
+        val machine = FakeMachine()
+        machine.redirects["$base/latest"] = "$base/tag/v1.0.0-alpha.2"
+        machine.web["$base/download/ci/SHA256SUMS"] =
+            Fetched(200, "a".repeat(64) + "  alexandrite-1.0.0-ci.7.tar.gz\n")
+        val now = Clock.fixed(Instant.parse("2026-10-20T08:00:00Z"), ZoneOffset.UTC)
+        val stable = LatestRelease(machine, base, directory, now)
+        val ci = LatestRelease(machine, base, directory, now, ReleaseChannel.CI)
+
+        assertEquals("1.0.0-alpha.2", stable.get())
+        assertEquals("1.0.0-ci.7", ci.get())
+        assertEquals("1.0.0-alpha.2", stable.get())
+        assertEquals("1.0.0-ci.7", ci.get())
+    }
+
+    @Test
     fun `the releases are where the install script's variable says`() {
         assertEquals("https://github.com/FoedusProgramme/alexandrite/releases", releasesBase(emptyMap()))
         val mirror = mapOf("ALEXANDRITE_INSTALL_BASE" to "https://mirror.test/r/")
@@ -141,6 +173,23 @@ class ReleasesTest {
         assertTrue(status.out.contains("Alexandrite 999.0.0 is available: alexandrite update"), status.out)
         assertEquals(JsonPrimitive("999.0.0"), json["update"])
         assertTrue(doctor.out.contains("update: Alexandrite 999.0.0 is available: alexandrite update"), doctor.out)
+        assertEquals(emptyList(), cli.machine.redirected)
+    }
+
+    @Test
+    fun `status follows the channel the install script recorded`() {
+        val root = directory.resolve("install")
+        Files.createDirectories(root)
+        Files.writeString(root.resolve("channel"), "ci\n")
+        val cli = Commands(directory, environment = mapOf("ALEXANDRITE_INSTALL_DIR" to "$root"))
+        cli.config("{}")
+        cli.machine.web["${releasesBase(emptyMap())}/download/ci/SHA256SUMS"] =
+            Fetched(200, "b".repeat(64) + "  alexandrite-999.0.0-ci.3.tar.gz\n")
+
+        val status = cli("status")
+
+        assertTrue(status.out.contains("Alexandrite 999.0.0-ci.3 is available"), status.out)
+        assertTrue(cli.machine.fetched.any { it.first.endsWith("/download/ci/SHA256SUMS") })
         assertEquals(emptyList(), cli.machine.redirected)
     }
 

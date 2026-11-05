@@ -22,6 +22,20 @@ private const val CACHE_FILE = "latest-release.json"
 
 private val CACHE_AGE = Duration.ofDays(1)
 
+/** Where updates come from: a released version, or the rolling build of `master`. */
+internal enum class ReleaseChannel(val id: String) {
+    STABLE("stable"),
+    CI("ci");
+
+    /** The release whose assets this channel installs. */
+    val tag: String get() = if (this == CI) "ci" else "latest"
+
+    companion object {
+        /** The channel [text] names, ignoring case, null when it names none. */
+        fun parse(text: String): ReleaseChannel? = entries.firstOrNull { it.id.equals(text, ignoreCase = true) }
+    }
+}
+
 private val VERSION = Regex(
     "v?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)" +
         "(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?",
@@ -80,7 +94,8 @@ internal fun isNewer(release: String, running: String): Boolean {
 internal fun releasesBase(environment: Map<String, String>): String =
     (environment[INSTALL_BASE]?.takeIf { it.isNotEmpty() } ?: RELEASES).trimEnd('/')
 
-internal fun releasePage(base: String, release: String): String = "$base/tag/v$release"
+internal fun releasePage(base: String, release: String, channel: ReleaseChannel = ReleaseChannel.STABLE): String =
+    if (channel == ReleaseChannel.CI) "$base/tag/${channel.tag}" else "$base/tag/v$release"
 
 /** The latest release under [base] by where its `latest` page redirects, null when it names none. */
 internal fun latestRelease(machine: Machine, base: String): String? {
@@ -89,8 +104,34 @@ internal fun latestRelease(machine: Machine, base: String): String? {
     return tag.removePrefix("v").takeIf { ReleaseVersion.parse(it) != null }
 }
 
+private val ARCHIVE = Regex("(?m)^[0-9a-fA-F]{64} [ *]alexandrite-(.+)\\.tar\\.gz$")
+
+/** The version of the archive that [sums] lists, null when it lists none. */
+internal fun archiveRelease(sums: String): String? =
+    ARCHIVE.find(sums)?.groupValues?.get(1)?.takeIf { ReleaseVersion.parse(it) != null }
+
+/** The latest CI build under [base], from the rolling `ci` release's checksums, null when there is none. */
+internal fun ciRelease(machine: Machine, base: String): String? {
+    val answer = machine.get("$base/download/ci/SHA256SUMS")
+    if (answer.status == 404) return null
+    if (answer.status !in 200..299) throw IOException("HTTP ${answer.status}")
+    return archiveRelease(answer.body)
+}
+
+/** The latest release of [channel] under [base], null when it names none. */
+internal fun latestRelease(machine: Machine, base: String, channel: ReleaseChannel): String? =
+    when (channel) {
+        ReleaseChannel.STABLE -> latestRelease(machine, base)
+        ReleaseChannel.CI -> ciRelease(machine, base)
+    }
+
 @Serializable
-private class CachedRelease(val base: String, val latest: String?, val checkedAt: String)
+private class CachedRelease(
+    val base: String,
+    val latest: String?,
+    val checkedAt: String,
+    val channel: String = ReleaseChannel.STABLE.id,
+)
 
 /** The latest release under [base], kept in [cacheDir] for a day. */
 internal class LatestRelease(
@@ -98,6 +139,7 @@ internal class LatestRelease(
     private val base: String,
     cacheDir: Path,
     private val clock: Clock = Clock.systemUTC(),
+    private val channel: ReleaseChannel = ReleaseChannel.STABLE,
 ) {
     private val file = cacheDir.resolve(CACHE_FILE)
 
@@ -106,10 +148,10 @@ internal class LatestRelease(
         val cached = cached()
         if (cached != null && fresh(cached)) return cached.latest
         val latest = try {
-            latestRelease(machine, base)
+            latestRelease(machine, base, channel)
         } catch (e: IOException) {
             logger.debug("Cannot tell the latest release of {}: {}", base, "$e")
-            return cached?.latest
+            return cached?.takeIf { it.base == base && it.channel == channel.id }?.latest
         }
         store(latest)
         return latest
@@ -122,7 +164,7 @@ internal class LatestRelease(
             return false
         }
         val age = Duration.between(checked, clock.instant())
-        return cached.base == base && !age.isNegative && age < CACHE_AGE
+        return cached.base == base && cached.channel == channel.id && !age.isNegative && age < CACHE_AGE
     }
 
     private fun cached(): CachedRelease? = try {
@@ -136,7 +178,10 @@ internal class LatestRelease(
     }
 
     private fun store(latest: String?) {
-        val text = JSON.encodeToString(CachedRelease.serializer(), CachedRelease(base, latest, "${clock.instant()}"))
+        val text = JSON.encodeToString(
+            CachedRelease.serializer(),
+            CachedRelease(base, latest, "${clock.instant()}", channel.id),
+        )
         try {
             Files.createDirectories(file.parent)
             writeAtomically(file) { it.write(text.toByteArray()) }
@@ -153,7 +198,13 @@ internal class LatestRelease(
 /** The release newer than this Alexandrite, null when there is none, no answer or the config turns the checks off. */
 internal fun availableRelease(cli: Cli): String? {
     if (!updatesChecked(cli)) return null
-    val latest = LatestRelease(cli.machine, releasesBase(cli.environment), cli.locations.cacheDir).get() ?: return null
+    val channel = installedChannel(cli.environment, cli.install, cli.platform)
+    val latest = LatestRelease(
+        cli.machine,
+        releasesBase(cli.environment),
+        cli.locations.cacheDir,
+        channel = channel,
+    ).get() ?: return null
     return latest.takeIf { isNewer(it, alexandriteVersion) }
 }
 

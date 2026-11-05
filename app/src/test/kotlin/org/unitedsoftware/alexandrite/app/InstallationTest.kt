@@ -37,6 +37,8 @@ class InstallationTest {
                 "sh",
                 "${root.resolve("install.sh")}",
                 "--update",
+                "--channel",
+                "stable",
                 "--version",
                 "1.3.0",
                 "--config",
@@ -63,6 +65,35 @@ class InstallationTest {
     }
 
     @Test
+    fun `update follows the recorded channel, and --channel switches it`() {
+        val cli = Commands(directory, environment = mapOf("ALEXANDRITE_INSTALL_DIR" to "$root"))
+        Files.createDirectories(root)
+        Files.writeString(root.resolve("channel"), "ci\n")
+
+        cli("update")
+        cli("update", "--channel", "stable")
+        val unknown = cli("update", "--channel", "nightly")
+
+        assertEquals(
+            listOf(
+                "sh",
+                "${root.resolve("install.sh")}",
+                "--update",
+                "--channel",
+                "ci",
+                "--config",
+                "${cli.configFile.toAbsolutePath()}",
+                "--data-dir",
+                "${cli.dataDir.toAbsolutePath()}",
+            ),
+            cli.machine.attached[0],
+        )
+        assertEquals("stable", cli.machine.attached[1][cli.machine.attached[1].indexOf("--channel") + 1])
+        assertEquals(1, unknown.code)
+        assertContains(unknown.err, "is no release channel")
+    }
+
+    @Test
     fun `update on Windows runs the PowerShell script, and a malformed release is refused`() {
         val cli = Commands(directory, environment = mapOf("ALEXANDRITE_INSTALL_DIR" to "$root"), osName = "Windows 11")
 
@@ -78,7 +109,15 @@ class InstallationTest {
                 "-File",
                 "${root.resolve("install.ps1")}",
             ) +
-                listOf("-Update", "-Version", "v1.3.0", "-Config", "${cli.configFile.toAbsolutePath()}") +
+                listOf(
+                    "-Update",
+                    "-Channel",
+                    "stable",
+                    "-Version",
+                    "v1.3.0",
+                    "-Config",
+                    "${cli.configFile.toAbsolutePath()}",
+                ) +
                 listOf("-DataDir", "${cli.dataDir.toAbsolutePath()}"),
             cli.machine.attached.single(),
         )

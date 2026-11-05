@@ -135,9 +135,14 @@ internal val COMMANDS: List<CliCommand> = listOf(
         noArguments(given, "doctor")
         CliAction.Act { doctor(it, given.flag(JSON)) }
     },
-    CliCommand(listOf("update"), "[--version <release>]", SETUP, options = setOf("--version")) { given ->
+    CliCommand(
+        listOf("update"),
+        "[--version <release>] [--channel <stable|ci>]",
+        SETUP,
+        options = setOf("--version", "--channel"),
+    ) { given ->
         noArguments(given, "update")
-        CliAction.Act { update(it, given.option("--version")) }
+        CliAction.Act { update(it, given.option("--version"), given.option("--channel")) }
     },
     CliCommand(listOf("uninstall"), "[--keep-data] [--yes]", SETUP, flags = setOf("--keep-data", "--yes")) { given ->
         noArguments(given, "uninstall")

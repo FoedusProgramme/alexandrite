@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A CI channel: every build of `master` is published as the rolling `ci` release, and
+  `curl -fsSL https://alexandrite.unitedsoftware.org/install.sh | sh -s -- --channel ci` installs it.
+- `alexandrite update --channel stable|ci` switches channels, and the install script records the channel beside the
+  installed versions so status checks and automatic updates follow it.
+
 ## 1.0.0-alpha.3
 
 - `alexandrite init` walks through ten steps: language and time zone, model (offering side models for images, audio

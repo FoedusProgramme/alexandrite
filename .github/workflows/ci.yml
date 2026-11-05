@@ -43,6 +43,71 @@ jobs:
             **/build/test-results/
           if-no-files-found: ignore
 
+  ci-artifact:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: ci-artifact
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # A CI build comes after the latest release: its core version is the next one, and its run number orders it.
+      - name: Version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force --quiet
+          latest_tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || echo v0.0.0)
+          latest=${latest_tag#v}
+          core=${latest%%-*}
+          IFS=. read -r major minor patch <<<"$core"
+          if [ "$latest" = "$core" ]; then
+            patch=$((10#$patch + 1))
+          fi
+          echo "version=$major.$minor.$patch-ci.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: >-
+          ./gradlew --console=plain
+          :app:distTar :app:distZip
+          -Palexandrite.version=${{ steps.version.outputs.version }}
+
+      - name: Package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir ci
+          cp "app/build/distributions/alexandrite-$VERSION.tar.gz" "app/build/distributions/alexandrite-$VERSION.zip" ci/
+          cp website/install.sh website/install.ps1 ci/
+          cd ci
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish the rolling CI release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The tag stays `ci`, so `--channel ci` always finds the newest build of master.
+          gh release delete ci --cleanup-tag --yes || true
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/ci" >/dev/null 2>&1 || true
+          gh release create ci ci/* --target "$GITHUB_SHA" --prerelease \
+            --title "Alexandrite CI" \
+            --notes "The latest build of master, commit $GITHUB_SHA. Install it with --channel ci; it may be rough."
+
   windows:
     runs-on: windows-latest
     steps:

@@ -3,6 +3,7 @@
 #   & ([scriptblock]::Create((irm https://alexandrite.unitedsoftware.org/install.ps1))) -Version 0.2.0 -NoInit
 param(
     [string]$Version = '',
+    [string]$Channel = 'stable',
     [switch]$NoInit,
     [switch]$NoModifyPath,
     [switch]$Update,
@@ -28,13 +29,14 @@ $Chinese = [Globalization.CultureInfo]::CurrentUICulture.Name -like 'zh*'
 # The English texts by key, as format strings whose {0}, {1} … take the arguments of Msg.
 $TextsEn = @{
     usage = @'
-Usage: install.ps1 [-Version <v>] [-NoInit] [-NoModifyPath] [-Update] [-DownloadJre] [-Config <file>] [-DataDir <dir>]
+Usage: install.ps1 [-Version <v>] [-Channel <stable|ci>] [-NoInit] [-NoModifyPath] [-Update] [-DownloadJre] [-Config <file>] [-DataDir <dir>]
 
 Installs Alexandrite into {0} and adds its bin directory to your PATH.
 Running it again upgrades in place; two versions are kept.
 When no config file exists yet, it then runs 'alexandrite init' in this console.
 
   -Version <v>     install release <v> instead of the latest
+  -Channel <c>     follow stable releases (the default) or CI builds of master
   -NoInit          do not run 'alexandrite init' after installing
   -NoModifyPath    do not add the bin directory to your PATH
   -Update          update an existing installation (what 'alexandrite update' runs)
@@ -123,13 +125,14 @@ ALEXANDRITE_INSTALL_BASE and ALEXANDRITE_ADOPTIUM_BASE replace the download site
 
 $TextsZh = @{
     usage = @'
-用法：install.ps1 [-Version <版本>] [-NoInit] [-NoModifyPath] [-Update] [-DownloadJre] [-Config <文件>] [-DataDir <目录>]
+用法：install.ps1 [-Version <版本>] [-Channel <stable|ci>] [-NoInit] [-NoModifyPath] [-Update] [-DownloadJre] [-Config <文件>] [-DataDir <目录>]
 
 把 Alexandrite 安装到 {0}，并把其 bin 目录加入 PATH。
 再次运行即原地升级；保留两个版本。
 如果还没有配置文件，随后在此控制台中运行 'alexandrite init'。
 
   -Version <版本>   安装指定版本，而不是最新版本
+  -Channel <频道>   跟随稳定发布（默认）或 master 的 CI 构建
   -NoInit           安装后不运行 'alexandrite init'
   -NoModifyPath     不把 bin 目录加入 PATH
   -Update           更新已有的安装（'alexandrite update' 运行的就是它）
@@ -507,9 +510,15 @@ function Switch-To([string]$Current, [string]$Previous) {
     Set-Pointer 'previous' $Previous
 }
 
-# Sets $script:Version, $script:Archive and $script:ArchiveSha from the release's SHA256SUMS.
+# The release whose assets this run installs: a pinned version, else the CI build, else the latest release.
+function Get-ReleaseTag {
+    if ($script:Version) { "v$script:Version" } elseif ($script:Channel -eq 'ci') { 'ci' } else { 'latest' }
+}
+
+# Sets $script:Tag, $script:Version, $script:Archive and $script:ArchiveSha from the release's SHA256SUMS.
 function Resolve-Release {
-    $sums = if ($script:Version) { "$Releases/download/v$script:Version/SHA256SUMS" } else { "$Releases/latest/download/SHA256SUMS" }
+    $script:Tag = Get-ReleaseTag
+    $sums = "$Releases/$script:Tag/download/SHA256SUMS"
     $file = Join-Path $Tmp 'SHA256SUMS'
     try { Get-Url $sums $file } catch {
         Fail 'no_release' $sums
@@ -539,6 +548,7 @@ function Show-Environment {
     Show-Value 'key_root' $Root
     Show-Value 'key_command' "$Root\bin\alexandrite.cmd"
     Show-Value 'key_installed' $(if ($Prev) { $Prev } else { Msg 'none' })
+    Show-Value 'key_channel' $script:Channel
     if ($Pinned) { Show-Value 'key_release' $Version } else { Show-Value 'key_latest' $Version }
 }
 
@@ -546,7 +556,7 @@ function Install-Release {
     $zip = Join-Path $Tmp $Archive
     try {
         Invoke-Step (Msg 'downloading' $Version) (Msg 'downloaded' $Archive) {
-            Get-Url "$Releases/download/v$Version/$Archive" $zip
+            Get-Url "$Releases/$script:Tag/download/$Archive" $zip
         }
     } catch {
         Fail 'cannot_download' $Archive
@@ -569,7 +579,7 @@ function Install-Release {
     Move-Item -LiteralPath $top[0].FullName $target
     $hash = Get-SumsHash 'install.ps1'
     if ($hash) {
-        Get-Url "$Releases/download/v$Version/install.ps1" (Join-Path $Tmp 'install.ps1')
+        Get-Url "$Releases/$script:Tag/download/install.ps1" (Join-Path $Tmp 'install.ps1')
         Assert-Checksum (Join-Path $Tmp 'install.ps1') $hash 'install.ps1'
     } elseif ($PSCommandPath -and (Split-Path -Leaf $PSCommandPath) -eq 'install.ps1') {
         Copy-Item -LiteralPath $PSCommandPath (Join-Path $Tmp 'install.ps1')
@@ -778,12 +788,15 @@ function Install-New {
         Remove-OldVersions
     }
     if (Test-Path -LiteralPath (Join-Path $Tmp 'install.ps1')) { Save-Installer }
+    Set-Pointer 'channel' $script:Channel
     Add-ToPath
     Show-Summary
 }
 
 function Invoke-Install {
     if ($env:OS -ne 'Windows_NT') { Fail 'only_windows' }
+    $script:Channel = $Channel.ToLowerInvariant()
+    if ($script:Channel -notin @('stable', 'ci')) { Fail 'no_channel' $Channel }
     $script:Version = $Version.TrimStart('v')
     $script:Pinned = [bool]$script:Version
     $script:OnPath = $true
@@ -803,6 +816,8 @@ function Invoke-Install {
         New-Item -ItemType Directory -Path $Tmp | Out-Null
         $script:Prev = Get-Pointer 'current'
         $script:OldPrevious = Get-Pointer 'previous'
+        $prevChannel = Get-Pointer 'channel'
+        if (-not $prevChannel) { $prevChannel = 'stable' }
         if ($Update -and -not $Prev) { Fail 'not_installed' $Root }
         Resolve-Release
         Show-Environment
@@ -812,9 +827,10 @@ function Invoke-Install {
             Show-Stage 4 'stage_install'
             Write-Launcher
             Add-ToPath
+            Set-Pointer 'channel' $script:Channel
             Ok 'installed_already' $Version
             $initAfter = -not $NoInit -and -not $Update
-        } elseif ($Update -and -not $Pinned -and (Test-VersionBefore $Version $Prev)) {
+        } elseif ($Update -and -not $Pinned -and $script:Channel -eq $prevChannel -and (Test-VersionBefore $Version $Prev)) {
             Info 'newer' $Prev $Version
         } else {
             Install-New

@@ -13,6 +13,8 @@ TTY=${ALEXANDRITE_INSTALL_TTY:-/dev/tty}
 SYSTEMD_UNIT=alexandrite.service
 LAUNCHD_LABEL=org.unitedsoftware.alexandrite
 JAVA_MAJOR=21
+CHANNEL=${ALEXANDRITE_CHANNEL:-stable}
+TAG=
 MARK_BEGIN='# >>> alexandrite >>>'
 MARK_END='# <<< alexandrite <<<'
 STAGES=4
@@ -20,13 +22,14 @@ STAGES=4
 # The English texts by key, as printf formats whose %s take the arguments of `text`.
 texts_en() {
     case $1 in
-        usage) T="Usage: install.sh [--version <v>] [--no-init] [--no-modify-path] [--update] [--download-jre] [--config <file>] [--data-dir <dir>]
+        usage) T="Usage: install.sh [--version <v>] [--channel <stable|ci>] [--no-init] [--no-modify-path] [--update] [--download-jre] [--config <file>] [--data-dir <dir>]
 
 Installs Alexandrite into %s and links the command into %s.
 Running it again upgrades in place; two versions are kept.
 When no config file exists yet, it then runs 'alexandrite init' on the terminal.
 
   --version <v>      install release <v> instead of the latest
+  --channel <c>      follow stable releases (the default) or CI builds of master
   --no-init          do not run 'alexandrite init' after installing
   --no-modify-path   do not add %s to PATH in the shell's startup files
   --update           update an existing installation (what 'alexandrite update' runs)
@@ -50,6 +53,7 @@ ALEXANDRITE_INSTALL_TTY replaces the terminal device init reads from (for testin
         key_installed) T="Installed version:" ;;
         key_release) T="Release:" ;;
         key_latest) T="Latest release:" ;;
+        key_channel) T="Channel:" ;;
         key_version) T="Version:" ;;
         key_location) T="Location:" ;;
         key_java) T="Java:" ;;
@@ -84,6 +88,7 @@ ALEXANDRITE_INSTALL_TTY replaces the terminal device init reads from (for testin
         no_archive) T="%s lists no alexandrite-<version>.tar.gz." ;;
         wrong_archive) T="Release %s holds %s." ;;
         no_version) T="'%s' is no version." ;;
+        no_channel) T="'%s' is no release channel; use stable or ci." ;;
         downloading) T="Downloading Alexandrite %s" ;;
         downloaded) T="Downloaded %s" ;;
         unpacking) T="Unpacking %s" ;;
@@ -132,13 +137,14 @@ ALEXANDRITE_INSTALL_TTY replaces the terminal device init reads from (for testin
 
 texts_zh() {
     case $1 in
-        usage) T="用法：install.sh [--version <版本>] [--no-init] [--no-modify-path] [--update] [--download-jre] [--config <文件>] [--data-dir <目录>]
+        usage) T="用法：install.sh [--version <版本>] [--channel <stable|ci>] [--no-init] [--no-modify-path] [--update] [--download-jre] [--config <文件>] [--data-dir <目录>]
 
 把 Alexandrite 安装到 %s，并把命令链接到 %s。
 再次运行即原地升级；保留两个版本。
 如果还没有配置文件，随后在终端上运行 'alexandrite init'。
 
   --version <版本>   安装指定版本，而不是最新版本
+  --channel <频道>   跟随稳定发布（默认）或 master 的 CI 构建
   --no-init          安装后不运行 'alexandrite init'
   --no-modify-path   不在 shell 的启动文件中把 %s 加入 PATH
   --update           更新已有的安装（'alexandrite update' 运行的就是它）
@@ -161,6 +167,7 @@ ALEXANDRITE_INSTALL_TTY 可替换 init 读取的终端设备（用于测试）�
         key_installed) T="已安装版本：" ;;
         key_release) T="发布版本：" ;;
         key_latest) T="最新版本：" ;;
+        key_channel) T="频道：" ;;
         key_version) T="版本：" ;;
         key_location) T="位置：" ;;
         key_java) T="运行时：" ;;
@@ -195,6 +202,7 @@ ALEXANDRITE_INSTALL_TTY 可替换 init 读取的终端设备（用于测试）�
         no_archive) T="%s 中没有 alexandrite-<版本>.tar.gz。" ;;
         wrong_archive) T="版本 %s 中的压缩包是 %s。" ;;
         no_version) T="'%s' 不是版本号。" ;;
+        no_channel) T="'%s' 不是发布频道；请使用 stable 或 ci。" ;;
         downloading) T="正在下载 Alexandrite %s" ;;
         downloaded) T="已下载 %s" ;;
         unpacking) T="正在解压 %s" ;;
@@ -504,6 +512,7 @@ show_environment() {
     kv key_root "$ROOT"
     kv key_command "$BIN_DIR/alexandrite"
     kv key_installed "${PREV:-$(text none)}"
+    kv key_channel "$CHANNEL"
     if [ "$PINNED" = 1 ]; then kv key_release "$VERSION"; else kv key_latest "$VERSION"; fi
 }
 
@@ -581,13 +590,21 @@ download_jre() {
     tick java_found "$JAVA_MAJOR" "$JAVA_PIN"
 }
 
-# Sets VERSION, ARCHIVE and ARCHIVE_SHA from the release's SHA256SUMS.
-resolve_release() {
+# The release whose assets this run installs: a pinned version, else the CI build, else the latest release.
+release_tag() {
     if [ -n "$VERSION" ]; then
-        sums="$RELEASES/download/v$VERSION/SHA256SUMS"
+        printf 'v%s' "$VERSION"
+    elif [ "$CHANNEL" = ci ]; then
+        printf 'ci'
     else
-        sums="$RELEASES/latest/download/SHA256SUMS"
+        printf 'latest'
     fi
+}
+
+# Sets TAG, VERSION, ARCHIVE and ARCHIVE_SHA from the release's SHA256SUMS.
+resolve_release() {
+    TAG=$(release_tag)
+    sums="$RELEASES/$TAG/download/SHA256SUMS"
     fetch "$sums" "$TMP/SHA256SUMS" || die no_release "$sums"
     tr -d '\r' <"$TMP/SHA256SUMS" >"$TMP/sums"
     line=$(sed -n 's/^\([0-9a-fA-F]\{64\}\) [ *]\(alexandrite-[^ /]*\.tar\.gz\)$/\1 \2/p' "$TMP/sums" | head -n 1)
@@ -616,7 +633,7 @@ link_version() {
 
 stage_release() {
     step "$(text downloading "$VERSION")" "$(text downloaded "$ARCHIVE")" \
-        fetch "$RELEASES/download/v$VERSION/$ARCHIVE" "$TMP/$ARCHIVE" || die cannot_download "$ARCHIVE"
+        fetch "$RELEASES/$TAG/download/$ARCHIVE" "$TMP/$ARCHIVE" || die cannot_download "$ARCHIVE"
     verify "$TMP/$ARCHIVE" "$ARCHIVE_SHA" "$ARCHIVE"
     mkdir "$TMP/release"
     step "$(text unpacking "$ARCHIVE")" "$(text unpacked "$ARCHIVE")" tar -xzf "$TMP/$ARCHIVE" -C "$TMP/release" ||
@@ -627,7 +644,7 @@ stage_release() {
     mv "$1" "$ROOT/versions/$VERSION"
     hash=$(sums_hash install.sh)
     if [ -n "$hash" ]; then
-        fetch "$RELEASES/download/v$VERSION/install.sh" "$TMP/install.sh" || die cannot_download install.sh
+        fetch "$RELEASES/$TAG/download/install.sh" "$TMP/install.sh" || die cannot_download install.sh
         verify "$TMP/install.sh" "$hash" install.sh
     elif [ -f "$0" ] && [ "${0##*/}" = install.sh ]; then
         cp "$0" "$TMP/install.sh"
@@ -671,6 +688,12 @@ check_release() {
     warn check_fails "$VERSION"
     printf '%s\n' "$out" >&2
     return 1
+}
+
+# Records the channel this installation follows for `alexandrite update` and its checks.
+write_channel() {
+    printf '%s\n' "$CHANNEL" >"$TMP/channel"
+    mv -f "$TMP/channel" "$ROOT/channel"
 }
 
 write_launcher() {
@@ -881,16 +904,18 @@ main() {
     DATA_DIR=
     while [ $# -gt 0 ]; do
         case $1 in
-            --version | --config | --data-dir)
+            --version | --channel | --config | --data-dir)
                 [ $# -ge 2 ] || die needs_value "$1"
                 case $1 in
                     --version) VERSION=$2 ;;
+                    --channel) CHANNEL=$2 ;;
                     --config) CONFIG_FILE=$2 ;;
                     *) DATA_DIR=$2 ;;
                 esac
                 shift 2
                 ;;
             --version=*) VERSION=${1#*=} && shift ;;
+            --channel=*) CHANNEL=${1#*=} && shift ;;
             --config=*) CONFIG_FILE=${1#*=} && shift ;;
             --data-dir=*) DATA_DIR=${1#*=} && shift ;;
             --no-init) NO_INIT=1 && shift ;;
@@ -903,6 +928,11 @@ main() {
     done
     VERSION=${VERSION#v}
     if [ -n "$VERSION" ]; then PINNED=1; fi
+    CHANNEL=$(printf '%s' "$CHANNEL" | tr '[:upper:]' '[:lower:]')
+    case $CHANNEL in
+        stable | ci) ;;
+        *) usage >&2 && die no_channel "$CHANNEL" ;;
+    esac
     case $ROOT in
         /*) ;;
         *) die relative_root ;;
@@ -918,6 +948,8 @@ main() {
 
     PREV=$(link_version current)
     OLD_PREVIOUS=$(link_version previous)
+    PREV_CHANNEL=stable
+    if [ -f "$ROOT/channel" ]; then PREV_CHANNEL=$(cat "$ROOT/channel" 2>/dev/null || printf stable); fi
     if [ "$UPDATE" = 1 ] && [ -z "$PREV" ]; then die not_installed "$ROOT"; fi
     resolve_release
     show_environment
@@ -927,13 +959,15 @@ main() {
         stage 4 stage_install
         write_launcher
         link_launcher
+        write_channel
         ok installed_already "$VERSION"
         cleanup
         trap - EXIT
         maybe_init
         return 0
     fi
-    if [ "$UPDATE" = 1 ] && [ "$PINNED" = 0 ] && version_lt "$VERSION" "$PREV"; then
+    if [ "$UPDATE" = 1 ] && [ "$PINNED" = 0 ] && [ "$CHANNEL" = "$PREV_CHANNEL" ] &&
+        version_lt "$VERSION" "$PREV"; then
         info newer "$PREV" "$VERSION"
         return 0
     fi
@@ -968,6 +1002,7 @@ main() {
         mv -f "$TMP/install.sh" "$ROOT/install.sh"
     fi
     link_launcher
+    write_channel
     summary
     cleanup
     trap - EXIT

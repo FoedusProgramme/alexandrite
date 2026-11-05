@@ -119,6 +119,7 @@ internal class UpdateWatch(
     /** Starts the update to a release, false when it does not; null for an app the install script did not install. */
     private val update: ((String) -> Boolean)?,
     private val clock: Clock,
+    private val channel: ReleaseChannel = ReleaseChannel.STABLE,
 ) {
     private val announced = records.collection<Announced>("announced")
     private val attempts = records.collection<Attempt>("updates")
@@ -216,13 +217,13 @@ internal class UpdateWatch(
             ""
         }
         return "Alexandrite $release is available; this host runs $version. Its release notes, for the admins: " +
-            "${releasePage(base, release)}. The operator updates with the command `alexandrite update` on the host." +
-            "$itself $TELL"
+            "${releasePage(base, release, channel)}. The operator updates with the command `alexandrite update` on " +
+            "the host.$itself $TELL"
     }
 
     private fun updatedPrompt(from: String): String =
         "Alexandrite updated itself from $from to $version, as app.updates.install asks. Its release notes, for " +
-            "the admins: ${releasePage(base, version)}. $TELL"
+            "the admins: ${releasePage(base, version, channel)}. $TELL"
 
     private companion object {
         const val TELL = "Tell the admins briefly when it suits, with chat.send to \"home\" or to a chat from " +
@@ -236,12 +237,13 @@ internal fun scriptedUpdate(
     environment: Map<String, String>,
     platform: Platform,
     locations: Locations,
+    channel: ReleaseChannel,
 ): ((String) -> Boolean)? {
-    updateCommand(environment, platform, locations, null) ?: return null
+    updateCommand(environment, platform, locations, null, channel) ?: return null
     val input = File(if (platform == Platform.WINDOWS) "NUL" else "/dev/null")
     val log = serviceLog(locations).resolveSibling("update.log")
     return { release ->
-        val update = checkNotNull(updateCommand(environment, platform, locations, release))
+        val update = checkNotNull(updateCommand(environment, platform, locations, release, channel))
         val command = detached(update, platform, environment)
         try {
             Files.createDirectories(log.parent)

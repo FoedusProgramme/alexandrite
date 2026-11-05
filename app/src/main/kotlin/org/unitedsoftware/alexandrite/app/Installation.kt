@@ -16,6 +16,7 @@ internal const val INSTALL_DIR = "ALEXANDRITE_INSTALL_DIR"
 
 private const val VERSIONS = "versions"
 private const val LAUNCHER = "alexandrite"
+private const val CHANNEL_FILE = "channel"
 
 /** The marks around the lines the install script adds to a shell's startup file, as in install.sh. */
 private const val PATH_BEGIN = "# >>> alexandrite >>>"
@@ -27,18 +28,39 @@ private const val DATA_LOCK = "runtime.lock"
 private val RELEASE = Regex("v?[0-9]+(\\.[0-9]+)*([-+.][0-9A-Za-z.]+)?")
 
 /** The directory the install script installed into, else where it installs by default. */
-internal fun installRoot(cli: Cli): Path {
-    cli.environment[INSTALL_DIR]?.takeIf { it.isNotEmpty() }?.let { return Path.of(it) }
-    val running = cli.install?.toAbsolutePath()?.normalize()
+internal fun installRoot(cli: Cli): Path = installRoot(cli.environment, cli.platform, cli.home, cli.install)
+
+/** The directory the install script installed into, else where it installs by default. */
+internal fun installRoot(environment: Map<String, String>, platform: Platform, home: Path, install: Path?): Path {
+    environment[INSTALL_DIR]?.takeIf { it.isNotEmpty() }?.let { return Path.of(it) }
+    val running = install?.toAbsolutePath()?.normalize()
     running?.parent?.takeIf { it.fileName?.toString() == VERSIONS }?.parent?.let { return it }
-    return when (cli.platform) {
+    return when (platform) {
         Platform.WINDOWS -> {
-            val local = cli.environment["LOCALAPPDATA"]?.takeIf { it.isNotEmpty() }?.let { Path.of(it) }
-                ?: cli.home.resolve("AppData").resolve("Local")
+            val local = environment["LOCALAPPDATA"]?.takeIf { it.isNotEmpty() }?.let { Path.of(it) }
+                ?: home.resolve("AppData").resolve("Local")
             local.resolve("Programs").resolve("Alexandrite")
         }
 
-        else -> cli.home.resolve(".local").resolve("lib").resolve("alexandrite")
+        else -> home.resolve(".local").resolve("lib").resolve("alexandrite")
+    }
+}
+
+/** The channel the install script recorded for the installation that runs [install], stable when it recorded none. */
+internal fun installedChannel(environment: Map<String, String>, install: Path?, platform: Platform): ReleaseChannel {
+    val named = try {
+        environment[INSTALL_DIR]?.takeIf { it.isNotEmpty() }?.let { Path.of(it) }
+    } catch (e: InvalidPathException) {
+        null
+    }
+    val running = install?.toAbsolutePath()?.normalize()
+    val root = named ?: running?.parent?.takeIf { it.fileName?.toString() == VERSIONS }?.parent
+        ?: return ReleaseChannel.STABLE
+    val file = root.resolve(if (platform == Platform.WINDOWS) "$CHANNEL_FILE.txt" else CHANNEL_FILE)
+    return try {
+        ReleaseChannel.parse(Files.readString(file).trim()) ?: ReleaseChannel.STABLE
+    } catch (e: IOException) {
+        ReleaseChannel.STABLE
     }
 }
 
@@ -58,9 +80,13 @@ internal fun installPlaces(environment: Map<String, String>, install: Path?): Li
 }
 
 /** Runs the installed install script in its update mode for this command's config file and data directory. */
-internal fun update(cli: Cli, version: String?): Int {
+internal fun update(cli: Cli, version: String?, channel: String?): Int {
     if (version != null && !RELEASE.matches(version)) return cli.fail(cli.t("update.no_release", "version" to version))
-    val command = updateCommand(cli.environment, cli.platform, cli.locations, version)
+    val requested = channel?.let {
+        ReleaseChannel.parse(it) ?: return cli.fail(cli.t("update.no_channel", "channel" to it))
+    }
+    val target = requested ?: installedChannel(cli.environment, cli.install, cli.platform)
+    val command = updateCommand(cli.environment, cli.platform, cli.locations, version, target)
         ?: return cli.fail(cli.t("update.not_scripted"))
     return try {
         cli.machine.attach(command)
@@ -70,24 +96,25 @@ internal fun update(cli: Cli, version: String?): Int {
 }
 
 /**
- * The install script's update of the instance at [locations] to [version], else to the latest release; null when the
- * install script did not install the running Alexandrite.
+ * The install script's update of the instance at [locations] to [version], else to the latest release of [channel];
+ * null when the install script did not install the running Alexandrite.
  */
 internal fun updateCommand(
     environment: Map<String, String>,
     platform: Platform,
     locations: Locations,
     version: String?,
+    channel: ReleaseChannel = ReleaseChannel.STABLE,
 ): List<String>? {
     val root = environment[INSTALL_DIR]?.takeIf { it.isNotEmpty() }?.let { Path.of(it) } ?: return null
     val config = "${locations.configFile.toAbsolutePath()}"
     val data = "${locations.dataDir.toAbsolutePath()}"
     return if (platform == Platform.WINDOWS) {
         listOf("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${root.resolve("install.ps1")}") +
-            listOf("-Update") + (version?.let { listOf("-Version", it) } ?: emptyList()) +
+            listOf("-Update", "-Channel", channel.id) + (version?.let { listOf("-Version", it) } ?: emptyList()) +
             listOf("-Config", config, "-DataDir", data)
     } else {
-        listOf("sh", "${root.resolve("install.sh")}", "--update") +
+        listOf("sh", "${root.resolve("install.sh")}", "--update", "--channel", channel.id) +
             (version?.let { listOf("--version", it) } ?: emptyList()) + listOf("--config", config, "--data-dir", data)
     }
 }

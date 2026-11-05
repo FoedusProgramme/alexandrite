@@ -20,16 +20,19 @@ places (`~/.config/alexandrite/alexandrite.json` on Linux).
 - `alexandrite logs [-f] [-n <lines>]` — print the service's log, and follow it.
 - `alexandrite doctor` — check Java, the config, the endpoints and the context windows of the agents' models,
   Telegram, the secrets, the disk and the service.
-- `alexandrite update [--version <release>]` — install the latest release, or the one named, checking it against the
-  config before switching and restarting the service; the release before is kept, and a failed update switches back.
+- `alexandrite update [--version <release>] [--channel <stable|ci>]` — install the latest release, or the one named,
+  checking it against the config before switching and restarting the service; the release before is kept, and a failed
+  update switches back. `--channel ci` installs the latest build of `master` and remembers the channel, and
+  `--channel stable` switches back.
 - `alexandrite uninstall [--keep-data] [--yes]` — remove the service, the program, the PATH lines the install script added
   to shell startup files and, unless kept, config and data.
 
 ## Updates
 
-Once a day the running Alexandrite asks GitHub for the latest release. When one is newer, `status` and `doctor` show
-it, and the default agent gets a heartbeat turn that asks it to tell the admins, once per release. The `app.updates`
-keys of the config:
+Once a day the running Alexandrite asks GitHub for the latest release of its channel. When one is newer, `status` and
+`doctor` show it, and the default agent gets a heartbeat turn that asks it to tell the admins, once per release. The
+install script records the channel (`stable` or `ci`) beside the installed versions; `alexandrite update --channel`
+switches it. The `app.updates` keys of the config:
 
 - `check` (default `true`) — whether to ask at all; `false` makes no request for updates.
 - `install` (default `false`) — whether to run `alexandrite update` by itself once nobody wrote to any chat for

@@ -274,16 +274,18 @@ private fun host(
                     if (settings.updates.check && !isDevelopmentBuild(alexandriteVersion)) {
                         services.getOrNull<UpdateDesk>()?.let { desk ->
                             val base = releasesBase(environment)
+                            val channel = installedChannel(environment, install, platform)
                             val watch = UpdateWatch(
                                 alexandriteVersion,
                                 settings.updates,
-                                LatestRelease(machine, base, locations.cacheDir)::get,
+                                LatestRelease(machine, base, locations.cacheDir, channel = channel)::get,
                                 base,
                                 desk,
                                 desk.initiator,
                                 desk.records,
-                                scriptedUpdate(environment, platform, locations),
+                                scriptedUpdate(environment, platform, locations, channel),
                                 Clock.systemUTC(),
+                                channel,
                             )
                             launch { watch.run() }
                         }
