@@ -517,8 +517,9 @@ function Get-ReleaseTag {
 
 # Sets $script:Tag, $script:Version, $script:Archive and $script:ArchiveSha from the release's SHA256SUMS.
 function Resolve-Release {
-    $script:Tag = Get-ReleaseTag
-    $sums = "$Releases/$script:Tag/download/SHA256SUMS"
+    $sumsTag = Get-ReleaseTag
+    $script:Tag = $sumsTag
+    $sums = "$Releases/$sumsTag/download/SHA256SUMS"
     $file = Join-Path $Tmp 'SHA256SUMS'
     try { Get-Url $sums $file } catch {
         Fail 'no_release' $sums
@@ -532,6 +533,8 @@ function Resolve-Release {
     if ($script:Version -and $found -ne $script:Version) { Fail 'wrong_archive' $script:Version $script:Archive }
     if ($found -notmatch '^[0-9A-Za-z][0-9A-Za-z.+_-]*$') { Fail 'no_version' $found }
     $script:Version = $found
+    # The latest checksums come from `latest`, but a stable archive lives under its version's tag.
+    if ($sumsTag -ne 'ci') { $script:Tag = "v$found" }
 }
 
 function Get-SumsHash([string]$Name) {

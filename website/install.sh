@@ -603,8 +603,9 @@ release_tag() {
 
 # Sets TAG, VERSION, ARCHIVE and ARCHIVE_SHA from the release's SHA256SUMS.
 resolve_release() {
-    TAG=$(release_tag)
-    sums="$RELEASES/$TAG/download/SHA256SUMS"
+    SUMS_TAG=$(release_tag)
+    TAG=$SUMS_TAG
+    sums="$RELEASES/$SUMS_TAG/download/SHA256SUMS"
     fetch "$sums" "$TMP/SHA256SUMS" || die no_release "$sums"
     tr -d '\r' <"$TMP/SHA256SUMS" >"$TMP/sums"
     line=$(sed -n 's/^\([0-9a-fA-F]\{64\}\) [ *]\(alexandrite-[^ /]*\.tar\.gz\)$/\1 \2/p' "$TMP/sums" | head -n 1)
@@ -618,6 +619,8 @@ resolve_release() {
     case $VERSION in
         '' | .* | *[!0-9A-Za-z.+_-]*) die no_version "$VERSION" ;;
     esac
+    # The latest checksums come from `latest`, but a stable archive lives under its version's tag.
+    if [ "$SUMS_TAG" != ci ]; then TAG=v$VERSION; fi
 }
 
 sums_hash() {
