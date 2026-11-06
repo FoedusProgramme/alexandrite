@@ -19,10 +19,12 @@ class QqBotMarkdownTest {
     }
 
     @Test
-    fun `a superscript and a subscript become the inline HTML the client renders`() {
-        assertEquals("E = mc<sup>2</sup>", QqBotMarkdown.render("E = mc^2^"))
-        assertEquals("H<sub>2</sub>O", QqBotMarkdown.render("H~2~O"))
+    fun `a superscript and a subscript are left as written`() {
+        assertEquals("E = mc^2^", QqBotMarkdown.render("E = mc^2^"))
+        assertEquals("H~2~O", QqBotMarkdown.render("H~2~O"))
         assertEquals("~~removed~~", QqBotMarkdown.render("~~removed~~"))
+        assertEquals("2^10 and 3^5", QqBotMarkdown.render("2^10 and 3^5"))
+        assertEquals("\$x^2\$ and \$y^2\$", QqBotMarkdown.render("\$x^2\$ and \$y^2\$"))
     }
 
     @Test
@@ -35,6 +37,14 @@ class QqBotMarkdownTest {
         val text = "[TOC]\n\n[^note]: a footnote\n\nA paragraph."
 
         assertEquals("\n\nA paragraph.", QqBotMarkdown.render(text))
+    }
+
+    @Test
+    fun `the tags the platform renders itself are kept`() {
+        val mention = "hi <qqbot-at-user id=\"ABC\" /> there"
+        assertEquals(mention, QqBotMarkdown.render(mention))
+        assertEquals("<qqbot-at-everyone />", QqBotMarkdown.render("<qqbot-at-everyone />"))
+        assertEquals("<qqbot-cmd-enter text=\"hi\" />", QqBotMarkdown.render("<qqbot-cmd-enter text=\"hi\" />"))
     }
 
     @Test

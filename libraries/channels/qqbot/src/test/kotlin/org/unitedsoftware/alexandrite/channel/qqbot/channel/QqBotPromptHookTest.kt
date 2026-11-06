@@ -25,6 +25,8 @@ class QqBotPromptHookTest {
         val payload = assertIs<HookDecision.Replace<PromptSections>>(decision).payload
         val section = payload.sections.single { it.id == "qqbot.platform" }
         assertTrue("GFM tables" in section.text)
+        assertTrue("LaTeX math" in section.text)
+        assertTrue("qqbot-at-user" in section.text)
         assertTrue("[TOC]" in section.text)
     }
 

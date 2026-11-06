@@ -5,9 +5,14 @@ package org.unitedsoftware.alexandrite.channel.qqbot.mapping
  *
  * The client renders headings, emphasis, lists, code, tables and most of what the model writes, so supported Markdown
  * is passed through as it is. What the client only shows as raw text is adapted to the nearest form it does render:
- * `==highlight==` becomes bold, `^sup^` and `~sub~` become the client's inline HTML, definition lists become plain
- * "term: definition" lines, and HTML blocks lose their tags. A link the client cannot open is left as its label, and a
- * local image path becomes its alt text. The inside of a code fence or an inline code span is never changed.
+ * `==highlight==` becomes bold, definition lists become plain "term: definition" lines, and HTML blocks lose their
+ * tags; the tags the platform renders itself (`<sub>`, `<sup>`, `<qqbot-at-user>`, `<qqbot-at-everyone>`,
+ * `<qqbot-cmd-…>`) are kept. A link the client cannot open is left as its label, and a local image path becomes its
+ * alt text. The inside of a code fence or an inline code span is never changed.
+ *
+ * A superscript (`^…^`) or a subscript (`~…~`) is left as written: the client shows those markers as text, and
+ * adapting them rewrote ordinary text that happened to hold two carets or tildes, such as `2^10 and 3^5` or the math
+ * `$x^2$ and $y^2$`.
  */
 internal object QqBotMarkdown {
     private val FENCE = Regex("^\\s*(`{3,}|~{3,}).*")
@@ -19,8 +24,6 @@ internal object QqBotMarkdown {
     private val HTML_RULE = Regex("<hr\\s*/?>", RegexOption.IGNORE_CASE)
     private val HTML_TAG = Regex("</?[A-Za-z][A-Za-z0-9-]*(?:\\s[^<>]*)?/?>")
     private val HIGHLIGHT = Regex("==([^=\\n]+)==")
-    private val SUPERSCRIPT = Regex("\\^([^^\\n]+)\\^")
-    private val SUBSCRIPT = Regex("(?<!~)~([^~\\n]+)~(?!~)")
     private val FOOTNOTE_REFERENCE = Regex("\\[\\^[^]]+]")
 
     /** [text] with the unsupported Markdown adapted to what the client renders; [stripUrls] drops links and URLs. */
@@ -103,15 +106,13 @@ internal object QqBotMarkdown {
             text = text.replace(Regex("https?://\\S+"), "")
         }
         text = text.replace(HIGHLIGHT, "**$1**")
-        text = text.replace(SUPERSCRIPT, "<sup>$1</sup>")
-        text = text.replace(SUBSCRIPT, "<sub>$1</sub>")
         text = text.replace(FOOTNOTE_REFERENCE, "")
         text = text.replace(HTML_BREAK, "\n")
         text = text.replace(HTML_RULE, "\n---")
         text = text.replace(HTML_TAG) { match ->
             val tag = match.value.lowercase()
             if (tag.startsWith("<sub") || tag.startsWith("</sub") || tag.startsWith("<sup") ||
-                tag.startsWith("</sup")
+                tag.startsWith("</sup") || tag.startsWith("<qqbot-")
             ) {
                 match.value
             } else {

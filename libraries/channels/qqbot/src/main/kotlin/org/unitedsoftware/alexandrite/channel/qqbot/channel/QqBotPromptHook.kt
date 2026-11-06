@@ -35,10 +35,12 @@ internal class QqBotPromptHook : InterceptorHook<PromptSections> {
         const val SECTION_ID = "qqbot.platform"
 
         const val PROMPT = "This chat is a QQ official bot. Write the Markdown the QQ client renders: headings, " +
-            "paragraphs, emphasis, lists, blockquotes, fenced code, GFM tables, task lists and links. Do not use " +
-            "HTML blocks such as <details>, <table>, <kbd> or <mark>, Mermaid diagrams, [TOC], ==highlight== or " +
-            "definition lists; the client shows those as raw text. An image needs a public http(s) URL; a local path " +
-            "is not shown. In a group, do not make a link the only way to say something: the platform may refuse a " +
-            "message holding a URL. A command starts with a slash, such as /model."
+            "paragraphs, emphasis, lists, blockquotes, fenced code, GFM tables, task lists, links and LaTeX math " +
+            "(inline \$…\$ and block \$\$…\$\$). Do not use HTML blocks such as <details>, <table>, <kbd> or <mark>, " +
+            "Mermaid diagrams, [TOC], ==highlight== or definition lists; the client shows those as raw text. An " +
+            "image needs a public http(s) URL; a local path is not shown. In a group, do not make a link the only " +
+            "way to say something: the platform may refuse a message holding a URL. A command starts with a slash, " +
+            "such as /model. To mention someone in a group, write " +
+            "<qqbot-at-user id=\"OPENID\" />, with the openid the group_members action of qqbot.read gives them."
     }
 }
