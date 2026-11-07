@@ -85,6 +85,21 @@ class QqBotMessagesTest {
     }
 
     @Test
+    fun `a picture in the message that was quoted reaches the model marked as quoted`() {
+        val message = QqBotMessages.incoming(
+            instance,
+            eventOf(framed("C2C_MESSAGE_CREATE", quoted())),
+            false,
+            media,
+        )
+
+        val picture = message.media.single { it.fromQuote }
+        assertEquals(MediaKind.IMAGE, picture.kind)
+        assertEquals("q.jpg", picture.name)
+        assertEquals("image/jpeg", picture.mediaType)
+    }
+
+    @Test
     fun `a quote resolves its reference to the message id`() {
         val index = QqBotMessageIndex()
         val chat = ChatAddress(instance, "private:u1")
@@ -163,7 +178,19 @@ class QqBotMessagesTest {
           "message_type": 103,
           "message_scene": {"source": "default", "ext": ["msg_idx=REF3", "ref_msg_idx=REF2"]},
           "msg_elements": [
-            {"msg_idx": "REF2", "message_type": 0, "content": "每天坚持阅读半小时"}
+            {
+              "msg_idx": "REF2",
+              "message_type": 0,
+              "content": "每天坚持阅读半小时",
+              "attachments": [
+                {
+                  "url": "https://multimedia.example.com/q.jpg",
+                  "filename": "q.jpg",
+                  "content_type": "image/jpeg",
+                  "size": 20
+                }
+              ]
+            }
           ],
           "timestamp": "2026-07-21T10:03:00+08:00"
         }

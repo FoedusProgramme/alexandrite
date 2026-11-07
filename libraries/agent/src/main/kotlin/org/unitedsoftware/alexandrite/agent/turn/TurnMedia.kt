@@ -140,7 +140,13 @@ internal class TurnMedia(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            logger.debug("Turn {} cannot load an attachment: {}", turn, e.toString())
+            logger.warn(
+                "Turn {} cannot load an attachment of type {}{}: {}",
+                turn,
+                attachment.mediaType,
+                attachment.name?.let { " \"$it\"" } ?: "",
+                e.toString(),
+            )
             return notSaved(attachment, "it could not be loaded")
         }
         if (bytes.size > maxBytes) return notSaved(attachment, tooLarge, bytes.size.toLong())

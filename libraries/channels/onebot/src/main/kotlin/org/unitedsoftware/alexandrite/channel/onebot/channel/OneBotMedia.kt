@@ -41,6 +41,7 @@ internal class OneBotMedia(private val link: OneBotLink, engine: HttpEngine) :
         is OneBotSegment.Image -> content(segment.url, segment.file, "get_image")
         is OneBotSegment.Record -> content(segment.url, segment.file, "get_record")
         is OneBotSegment.Video -> content(segment.url, segment.file, null)
+        is OneBotSegment.File -> content(segment.url, null, null)
         else -> null
     }
 

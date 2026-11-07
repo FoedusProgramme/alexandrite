@@ -62,7 +62,7 @@ internal object QqBotMessages {
             forwarded = null,
         )
             .text(text(event))
-            .media(attachments(event, media))
+            .media(attachments(event, media) + quotedAttachments(event.msgElements, media))
             .quote(quote)
             .facts(facts(event))
             .build()
@@ -80,8 +80,25 @@ internal object QqBotMessages {
     private fun attachments(event: QqBotMessageEvent, media: QqBotMedia): List<MediaAttachment> =
         event.attachments.map { attachment -> mediaOf(attachment, media) }
 
+    /**
+     * The media of the messages [elements] quote, each marked as belonging to the quoted message.
+     *
+     * A quote nests what it gathers as elements, and each element may carry attachments of its own; the quoted
+     * message's own attachments are not repeated among [QqBotMessageEvent.attachments].
+     */
+    private fun quotedAttachments(elements: List<QqBotMsgElement>, media: QqBotMedia): List<MediaAttachment> =
+        elements.flatMap { element ->
+            element.attachments.map { attachment -> mediaOf(attachment, media, fromQuote = true) } +
+                quotedAttachments(element.msgElements, media)
+        }
+
     /** The media of [attachment], with the kind its content type names. */
-    private fun mediaOf(attachment: QqBotAttachment, media: QqBotMedia): MediaAttachment {
+    private fun mediaOf(
+        attachment: QqBotAttachment,
+        media: QqBotMedia,
+        /** Whether the attachment belongs to the message this one quotes. */
+        fromQuote: Boolean = false,
+    ): MediaAttachment {
         val contentType = attachment.contentType
         val kind = when {
             contentType == "voice" -> MediaKind.AUDIO
@@ -96,11 +113,12 @@ internal object QqBotMessages {
             else -> contentType
         }
         val url = attachment.voiceWavUrl ?: attachment.url
-        val builder = MediaAttachment.builder(kind, mediaType, media.content(url.orEmpty()))
+        val builder = MediaAttachment.builder(kind, mediaType, url?.let(media::content))
             .size(attachment.size)
             .width(attachment.width)
             .height(attachment.height)
             .name(attachment.filename)
+            .fromQuote(fromQuote)
         if (url == null) builder.unavailable("the platform named no address for it")
         return builder.build()
     }

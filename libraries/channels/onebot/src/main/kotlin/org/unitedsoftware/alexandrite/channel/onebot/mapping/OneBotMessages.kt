@@ -127,7 +127,7 @@ public object OneBotMessages {
         event: OneBotEvent.Message,
         admins: Set<String> = emptySet(),
         quoted: QuotedMessage? = null,
-        /** How the bytes of a reported image, voice or video are read, null when they cannot be. */
+        /** How the bytes of a reported image, voice, video or file are read, null when they cannot be. */
         reader: MediaReader? = null,
     ): IncomingMessage {
         val chat = OneBotChats.addressOf(instance, event)
@@ -142,7 +142,7 @@ public object OneBotMessages {
             .text(segments.filterIsInstance<OneBotSegment.Text>().joinToString("") { it.text })
             // The quoted message's own media too, since a person who quotes a picture and asks about it is asking
             // about that picture: without this the quote reaches the model as the marker for an image and no image.
-            .media(media(segments, reader) + media(quoted?.segments.orEmpty(), reader))
+            .media(media(segments, reader) + media(quoted?.segments.orEmpty(), reader, fromQuote = true))
             .quote(quote(event, chat, quoted))
             .facts(facts(event, segments))
             .build()
@@ -260,21 +260,34 @@ public object OneBotMessages {
         is OneBotEvent.Message.Group -> ChatInfo(ChatKind.GROUP, null, null)
     }
 
-    private fun media(segments: List<OneBotSegment>, reader: MediaReader?): List<MediaAttachment> =
-        segments.mapNotNull { segment ->
-            val attachment = when (segment) {
-                is OneBotSegment.Image -> MediaKind.IMAGE to (segment.url ?: segment.file)
-                is OneBotSegment.Record -> MediaKind.AUDIO to (segment.url ?: segment.file)
-                is OneBotSegment.Video -> MediaKind.VIDEO to (segment.url ?: segment.file)
-                else -> return@mapNotNull null
-            }
-            val (kind, reference) = attachment
-            if (reference.isNullOrEmpty()) return@mapNotNull null
-            val content = reader?.content(segment) ?: unread(reference)
-            MediaAttachment.builder(kind, mediaType(kind), content)
-                .name(reference.substringAfterLast('/').takeIf { it.isNotEmpty() })
-                .build()
+    private fun media(
+        segments: List<OneBotSegment>,
+        reader: MediaReader?,
+        /** Whether the segments belong to the message this one quotes. */
+        fromQuote: Boolean = false,
+    ): List<MediaAttachment> = segments.mapNotNull { segment ->
+        val (kind, reference) = when (segment) {
+            is OneBotSegment.Image -> MediaKind.IMAGE to (segment.url ?: segment.file)
+            is OneBotSegment.Record -> MediaKind.AUDIO to (segment.url ?: segment.file)
+            is OneBotSegment.Video -> MediaKind.VIDEO to (segment.url ?: segment.file)
+            is OneBotSegment.File -> MediaKind.FILE to (segment.url ?: segment.file)
+            else -> return@mapNotNull null
         }
+        if (reference.isNullOrEmpty()) return@mapNotNull null
+        val name = if (segment is OneBotSegment.File) {
+            segment.name ?: segment.file
+        } else {
+            reference.substringAfterLast('/').takeIf { it.isNotEmpty() }
+        }
+        val content = reader?.content(segment)
+        val builder = if (content == null && segment is OneBotSegment.File) {
+            MediaAttachment.builder(kind, mediaType(kind), null)
+                .unavailable("the implementation named no address to read it from")
+        } else {
+            MediaAttachment.builder(kind, mediaType(kind), content ?: unread(reference))
+        }
+        builder.name(name).fromQuote(fromQuote).build()
+    }
 
     /**
      * The bytes of [reference], which this reader does not read.
@@ -291,6 +304,7 @@ public object OneBotMessages {
     private fun mediaType(kind: MediaKind): String = when (kind) {
         MediaKind.IMAGE -> "image/*"
         MediaKind.AUDIO -> "audio/*"
+        MediaKind.FILE -> "application/octet-stream"
         else -> "video/*"
     }
 
@@ -396,6 +410,7 @@ public object OneBotMessages {
                 is OneBotSegment.Image -> add(DisplayFact("image", segment.file ?: segment.url ?: "unnamed"))
                 is OneBotSegment.Record -> add(DisplayFact("voice", segment.file ?: segment.url ?: "unnamed"))
                 is OneBotSegment.Video -> add(DisplayFact("video", segment.file ?: segment.url ?: "unnamed"))
+                is OneBotSegment.File -> add(DisplayFact("file", segment.name ?: segment.file))
                 is OneBotSegment.Face -> add(DisplayFact("emoji", segment.id))
                 is OneBotSegment.Share -> add(DisplayFact("link", segment.url))
                 else -> Unit

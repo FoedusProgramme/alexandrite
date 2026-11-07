@@ -12,6 +12,7 @@ import org.unitedsoftware.alexandrite.sdk.channel.ChannelDirectory
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelInstanceId
 import org.unitedsoftware.alexandrite.sdk.chat.ChannelType
 import org.unitedsoftware.alexandrite.sdk.di.key
+import org.unitedsoftware.alexandrite.sdk.transcript.MediaKind
 import org.unitedsoftware.alexandrite.sdk.turn.Submission
 import org.unitedsoftware.alexandrite.testkit.PluginHarness
 import org.unitedsoftware.alexandrite.testkit.PluginHarness.Running
@@ -75,7 +76,22 @@ class OneBotMediaIntegrationTest {
             // reaches the turn only because what was read of the quoted message is kept beside its text.
             val attachment = message.media.single()
             assertEquals("image/*", attachment.mediaType)
+            assertTrue(attachment.fromQuote, "a picture of the quoted message is not marked as quoted")
             assertContentEquals(picture, waiting { runBlocking { checkNotNull(attachment.content).read(1024) } })
+        }
+    }
+
+    @Test
+    fun `a file a report names is read and marked as a file`() {
+        withPicture { url, peer, submitter ->
+            peer.report(fileMessage(url))
+            val message = assertIs<Submission.Message>(waiting { awaitSubmission(submitter) }).message
+            val attachment = message.media.single()
+            assertEquals(MediaKind.FILE, attachment.kind)
+            assertEquals("application/octet-stream", attachment.mediaType)
+            assertEquals("a.pdf", attachment.name)
+            assertContentEquals(picture, waiting { runBlocking { checkNotNull(attachment.content).read(1024) } })
+            assertEquals("a.pdf", message.facts.single { it.label == "file" }.value)
         }
     }
 
@@ -167,6 +183,26 @@ class OneBotMediaIntegrationTest {
             {"type": "image", "data": {"url": "$url", "file": "a.jpg"}}
           ],
           "raw_message": "[image]",
+          "sender": {"user_id": 12345678, "nickname": "someone", "role": "member"}
+        }
+    """.trimIndent()
+
+    /** A group report that names the bot and carries a file at [url]. */
+    private fun fileMessage(url: String): String = """
+        {
+          "time": 1515204256,
+          "self_id": 10001000,
+          "post_type": "message",
+          "message_type": "group",
+          "sub_type": "normal",
+          "message_id": 14,
+          "group_id": 987654,
+          "user_id": 12345678,
+          "message": [
+            {"type": "at", "data": {"qq": 10001000}},
+            {"type": "file", "data": {"file": "f1", "name": "a.pdf", "url": "$url"}}
+          ],
+          "raw_message": "[file]",
           "sender": {"user_id": 12345678, "nickname": "someone", "role": "member"}
         }
     """.trimIndent()
